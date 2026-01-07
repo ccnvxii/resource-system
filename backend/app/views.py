@@ -14,8 +14,7 @@ from .serializers import (
 from .optimizer.distribute import calculate_distribution
 
 
-# --- CRUD ViewSets ---
-
+# --- CRUD ViewSets (Стандартні дії: отримати, створити, змінити, видалити) ---
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
@@ -45,22 +44,28 @@ class UserRequestViewSet(viewsets.ModelViewSet):
 
 class DistributeResourcesView(APIView):
     def get(self, request):
+        """
+        Повертає інструкцію. Потрібен для того, щоб у браузері
+        з'явилася кнопка POST.
+        """
         return Response({
             "info": "Ендпоінт розподілу ресурсів",
-            "instruction": "Натисніть POST для запуску алгоритму.",
+            "instruction": "Натисніть кнопку POST внизу, щоб запустити алгоритм.",
             "method": "POST only"
         })
 
     def post(self, request):
         with transaction.atomic():
             # 1. ПІДГОТОВКА ДАНИХ
-            # Беремо тільки активні заявки
+            # Беремо тільки активні заявки (не виконані)
             active_requests_qs = UserRequest.objects.exclude(status='done')
             # Беремо склади, де є запаси
             stocks_qs = Stock.objects.filter(amount__gt=0)
 
+            # Перетворюємо дані з БД у список словників для алгоритму
             requests_data = []
             for r in active_requests_qs:
+                # Рахуємо, скільки ще залишилося видати
                 needed = float(r.quantity_requested - r.quantity_allocated)
                 if needed > 0:
                     requests_data.append({
@@ -80,35 +85,35 @@ class DistributeResourcesView(APIView):
             ]
 
             # 2. ЗАПУСК АЛГОРИТМУ
+            # (Функція лежить у backend/app/optimizer/distribute.py)
             plan_items_data = calculate_distribution(requests_data, stocks_data)
 
             if not plan_items_data:
-                return Response({"message": "Немає доступних ресурсів або заявок."}, status=200)
+                return Response({"message": "Немає доступних ресурсів або активних заявок."}, status=200)
 
             # 3. ЗБЕРЕЖЕННЯ РЕЗУЛЬТАТУ
             new_plan = DistributionPlan.objects.create()
             items_to_create = []
 
-            # Кешуємо заявки
+            # Кешуємо заявки, щоб не смикати БД зайвий раз
             requests_map = {req.id: req for req in active_requests_qs}
 
             for item in plan_items_data:
                 amount_decimal = Decimal(str(item['amount']))
                 req = requests_map[item['request_id']]
 
-                # Створення запису в БД
+                # Створюємо запис у плані
                 items_to_create.append(DistributionItem(
                     plan=new_plan,
                     request=req,
                     warehouse_id=item['warehouse_id'],
-                    # resource_id БІЛЬШЕ НЕМАЄ ТУТ (3NF: ми беремо ресурс із заявки)
                     amount=amount_decimal
                 ))
 
-                # Оновлення статусу заявки
+                # Оновлюємо статус заявки (віртуальне резервування)
                 req.quantity_allocated += amount_decimal
 
-                # Оновлення статусу (враховуємо дрібні похибки float)
+                # Перевіряємо статус (з урахуванням похибки float)
                 if req.quantity_allocated >= req.quantity_requested - Decimal('0.01'):
                     req.status = 'done'
                 else:
@@ -116,9 +121,9 @@ class DistributeResourcesView(APIView):
 
                 req.save()
 
-            # Масове створення записів (швидше, ніж по одному)
+            # Зберігаємо всі елементи плану одним запитом
             DistributionItem.objects.bulk_create(items_to_create)
 
-            # 4. ВІДПОВІДЬ
+            # Повертаємо красивий JSON із планом
             serializer = DistributionPlanSerializer(new_plan)
             return Response(serializer.data, status=201)
