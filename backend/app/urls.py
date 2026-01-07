@@ -2,20 +2,17 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     ResourceViewSet, WarehouseViewSet, StockViewSet,
-    UserRequestViewSet, DistributeResourcesView
+    UserRequestViewSet, DistributeResourcesView, CategoryViewSet
 )
 
-# Создаем роутер и регистрируем в нем наши ViewSets
 router = DefaultRouter()
-router.register(r'resources', ResourceViewSet)  # /api/resources/
-router.register(r'warehouses', WarehouseViewSet)  # /api/warehouses/
-router.register(r'stocks', StockViewSet)  # /api/stocks/
-router.register(r'requests', UserRequestViewSet)  # /api/requests/
+router.register(r'categories', CategoryViewSet)
+router.register(r'resources', ResourceViewSet)
+router.register(r'warehouses', WarehouseViewSet)
+router.register(r'stocks', StockViewSet)
+router.register(r'requests', UserRequestViewSet)
 
 urlpatterns = [
-    # Автоматические маршруты от роутера
     path('', include(router.urls)),
-
-    # Отдельный маршрут для запуска распределения (POST запрос)
-    path('distribute/', DistributeResourcesView.as_view(), name='distribute-resources'),
+    path('distribute/', DistributeResourcesView.as_view(), name='distribute'),
 ]
