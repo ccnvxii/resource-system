@@ -1,0 +1,62 @@
+# ===============================
+# Python / Django
+# ===============================
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.log
+.env
+.env.*
+venv/
+.venv/
+backend/venv/
+backend/.venv/
+
+# Django
+backend/staticfiles/
+backend/media/
+
+# ===============================
+# Node / React
+# ===============================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+frontend/build/
+frontend/.env
+frontend/.env.*
+
+# ===============================
+# Docker
+# ===============================
+*.pid
+docker-data/
+docker-volumes/
+
+# ===============================
+# IDE / OS
+# ===============================
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ===============================
+# Database
+# ===============================
+*.dump
+*.sql
+
+# ===============================
+# Tests / coverage
+# ===============================
+.coverage
+htmlcov/
+pytest_cache/
+
+# ===============================
+# Misc
+# ===============================
+.cache/
