@@ -5,16 +5,20 @@ from django.db import transaction
 from decimal import Decimal
 
 # Імпорт моделей та серіалайзерів
-from .models import Resource, Warehouse, Stock, UserRequest, DistributionPlan, DistributionItem, Category
+from .models import Resource, Warehouse, Stock, UserRequest, DistributionPlan, DistributionItem, Category, User
 from .serializers import (
     ResourceSerializer, WarehouseSerializer, StockSerializer,
-    UserRequestSerializer, DistributionPlanSerializer, CategorySerializer
+    UserRequestSerializer, DistributionPlanSerializer, CategorySerializer, UserSerializer
 )
 # Імпорт алгоритму
 from .optimizer.distribute import calculate_distribution
 
 
 # --- CRUD ViewSets (Стандартні дії: отримати, створити, змінити, видалити) ---
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer

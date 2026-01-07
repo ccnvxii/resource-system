@@ -1,5 +1,10 @@
 from rest_framework import serializers
-from .models import Resource, Warehouse, Stock, UserRequest, Category, DistributionPlan, DistributionItem
+from .models import Resource, Warehouse, Stock, UserRequest, Category, DistributionPlan, DistributionItem, User
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email']
 
 
 class CategorySerializer(serializers.ModelSerializer):

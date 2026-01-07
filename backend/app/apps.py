@@ -14,28 +14,24 @@ class AppConfig(AppConfig):
 
 def create_initial_data(sender, **kwargs):
     """
-    Автоматичне наповнення бази даних (версія 3NF - українська локалізація).
+    Автоматичне наповнення бази даних.
     Створює Категорії -> Ресурси -> Склади -> Запаси -> Заявки.
     """
-    # Перевірка, що міграція стосується саме нашого додатку 'app'
     if sender.name != 'app':
         return
 
-    # Безпечна перевірка наявності таблиць у БД (щоб код не впав на старті)
     try:
         if 'app_resource' not in connection.introspection.table_names():
             return
     except Exception:
         return
 
-    # Імпорти робимо всередині функції, щоб уникнути помилки раннього завантаження Django
     from django.contrib.auth.models import User
     from .models import Resource, Warehouse, Stock, UserRequest, Category
 
     print("--- [Auto-Populate] Починаємо наповнення (Українська версія) ---")
 
     # --- 1. Створення Категорій ---
-    # slug - технічний код (латиницею), name - назва для людей
     categories_data = [
         ('meds', 'Медицина'),
         ('food', 'Їжа'),
@@ -44,7 +40,7 @@ def create_initial_data(sender, **kwargs):
         ('other', 'Інше'),
     ]
 
-    cats_objs = {}  # Словник для швидкого пошуку об'єктів категорій
+    cats_objs = {}
     for slug, name in categories_data:
         cat, _ = Category.objects.get_or_create(
             slug=slug,
@@ -71,7 +67,6 @@ def create_initial_data(sender, **kwargs):
         users_map[u_data['username']] = user
 
     # --- 3. Створення Ресурсів ---
-    # Використовуємо 'cat_slug' для прив'язки до категорії
     resources_data = [
         {'name': 'Аспірин', 'unit': 'упак', 'cat_slug': 'meds'},
         {'name': 'Бинти', 'unit': 'шт', 'cat_slug': 'meds'},
@@ -84,10 +79,7 @@ def create_initial_data(sender, **kwargs):
 
     resource_objects = {}
     for res in resources_data:
-        # Отримуємо об'єкт категорії зі словника
         cat_obj = cats_objs.get(res['cat_slug'])
-
-        # Страховка: якщо категорію не знайдено, ставимо "Інше"
         if not cat_obj:
             cat_obj = cats_objs['other']
 
@@ -95,7 +87,7 @@ def create_initial_data(sender, **kwargs):
             name=res['name'],
             defaults={
                 'unit': res['unit'],
-                'category': cat_obj  # <-- Передаємо об'єкт Category (ForeignKey)
+                'category': cat_obj
             }
         )
         resource_objects[res['name']] = obj
@@ -116,7 +108,6 @@ def create_initial_data(sender, **kwargs):
         warehouse_objects[wh['name']] = obj
 
     # --- 5. Створення Запасів (Stock) ---
-    # Формат: (Назва Складу, Назва Ресурсу, Кількість)
     stocks_list = [
         ('Медичний Склад', 'Аспірин', 500),
         ('Медичний Склад', 'Бинти', 1000),
@@ -130,7 +121,6 @@ def create_initial_data(sender, **kwargs):
     ]
 
     for wh_name, res_name, amount in stocks_list:
-        # Використовуємо update_or_create, щоб не дублювати запаси при перезапуску
         Stock.objects.update_or_create(
             warehouse=warehouse_objects[wh_name],
             resource=resource_objects[res_name],
@@ -139,20 +129,32 @@ def create_initial_data(sender, **kwargs):
 
     # --- 6. Створення Заявок (UserRequest) ---
     requests_list = [
+        # Стандартні заявки
         {'user': 'volunteer_1', 'res': 'Вода питна (5л)', 'qty': 500, 'pri': 10},
         {'user': 'doctor_1', 'res': 'Бинти', 'qty': 200, 'pri': 8},
         {'user': 'volunteer_1', 'res': 'Ковдра', 'qty': 10, 'pri': 5},
+
+        # --- ДОДАТКОВІ ЗАЯВКИ (Щоб було що розподіляти) ---
+        # Запит на Аспірин (на складі є 600)
+        {'user': 'doctor_1', 'res': 'Аспірин', 'qty': 150, 'pri': 9},
+
+        # Запит на Тушонку (на складі є 300)
+        {'user': 'volunteer_1', 'res': 'Тушонка', 'qty': 50, 'pri': 4},
+
+        # ВЕЛИКИЙ запит на бинти, щоб перевірити часткове виконання (на складі 1000, просимо 2000)
+        {'user': 'volunteer_1', 'res': 'Бинти', 'qty': 2000, 'pri': 6},
     ]
 
     for req in requests_list:
-        UserRequest.objects.get_or_create(
+        UserRequest.objects.update_or_create(
             user=users_map[req['user']],
             resource=resource_objects[req['res']],
             quantity_requested=req['qty'],
             defaults={
                 'priority': req['pri'],
-                'status': 'new'
+                'status': 'new',  # Скидаємо статус
+                'quantity_allocated': 0  # Скидаємо виділене
             }
         )
 
-    print("--- [Auto-Populate] Дані успішно завантажено (UA)! ---")
+    print("--- [Auto-Populate] Дані успішно завантажено (UA)! Заявки оновлено. ---")

@@ -12,7 +12,6 @@ venv/
 backend/venv/
 backend/.venv/
 
-# Django
 backend/staticfiles/
 backend/media/
 
