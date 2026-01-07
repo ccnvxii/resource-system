@@ -1,65 +1,82 @@
-from typing import List, Dict, Any
-from copy import deepcopy
+import pulp
 
 
-def calculate_distribution(
-        requests: List[Dict[str, Any]],
-        stocks: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+def calculate_distribution(requests, stocks):
     """
-    Чистая функция реализации мат. модели.
-
-    Args:
-        requests: Список заявок [{'id': 1, 'resource_id': 2, 'amount_needed': 100, 'priority': 5}, ...]
-        stocks: Список запасов [{'warehouse_id': 1, 'resource_id': 2, 'amount': 500}, ...]
-
-    Returns:
-        Список транзакций (Plan items): [{'request_id': 1, 'warehouse_id': 1, 'amount': 100}, ...]
+    Реалізація 'Weighted Max-Min Fairness' через Linear Programming (PuLP).
+    Мета: Максимізувати рівень задоволення найменш щасливого користувача,
+    зважений на його пріоритет.
     """
+    plan_items = []
 
-    # 1. Глубокое копирование, чтобы не мутировать входные данные в процессе расчетов
-    available_stocks = deepcopy(stocks)
-    distribution_plan = []
+    # Групуємо по ресурсах (алгоритм запускається окремо для кожного типу)
+    resource_ids = set(r['resource_id'] for r in requests)
 
-    # 2. Сортировка (реализация шага 4.2: Сортировка по приоритету DESC)
-    # Если приоритеты равны, можно добавить вторичную сортировку по количеству или дате
-    sorted_requests = sorted(requests, key=lambda x: x['priority'], reverse=True)
+    for res_id in resource_ids:
+        reqs_sub = [r for r in requests if r['resource_id'] == res_id]
+        stocks_sub = [s for s in stocks if s['resource_id'] == res_id]
 
-    # 3. Алгоритм распределения (Greedy)
-    for req in sorted_requests:
-        needed = req['amount_needed']
-        resource_id = req['resource_id']
-        req_id = req['id']
-
-        if needed <= 0:
+        if not reqs_sub or not stocks_sub:
             continue
 
-        # Ищем склады, где есть этот ресурс
-        relevant_stocks = [
-            s for s in available_stocks
-            if s['resource_id'] == resource_id and s['amount'] > 0
-        ]
+        # --- 1. СТВОРЕННЯ МОДЕЛІ ---
+        prob = pulp.LpProblem(f"Fair_Dist_{res_id}", pulp.LpMaximize)
 
-        # Можно добавить сортировку складов (например, сначала с самых загруженных)
-        # relevant_stocks.sort(key=lambda s: s['amount'], reverse=True)
+        # --- 2. ЗМІННІ ---
+        # x[(warehouse, request)] = кількість товару
+        x = {}
+        for s in stocks_sub:
+            for r in reqs_sub:
+                x[(s['warehouse_id'], r['id'])] = pulp.LpVariable(
+                    f"x_{s['warehouse_id']}_{r['id']}",
+                    lowBound=0,
+                    cat='Integer'  # Або 'Continuous', якщо це рідина
+                )
 
-        for stock in relevant_stocks:
-            if needed <= 0:
-                break
+        # Z - це "рівень справедливості" (допоміжна змінна)
+        # Ми будемо намагатися зробити Z якомога більшим
+        Z = pulp.LpVariable("Min_Satisfaction_Level", lowBound=0)
 
-            # Определяем x_ijl (сколько берем с этого склада)
-            take_amount = min(needed, stock['amount'])
+        # --- 3. ЦІЛЬОВА ФУНКЦІЯ ---
+        # Максимізуємо Z (мінімальний рівень) + маленький бонус за загальну кількість
+        # (0.0001 * sum(x) потрібен, щоб розподілити залишки, коли рівність досягнута)
+        prob += Z + 0.0001 * pulp.lpSum([x[(s['warehouse_id'], r['id'])] for s in stocks_sub for r in reqs_sub])
 
-            # Добавляем в план
-            distribution_plan.append({
-                'request_id': req_id,
-                'resource_id': resource_id,
-                'warehouse_id': stock['warehouse_id'],
-                'amount': take_amount
-            })
+        # --- 4. ОБМЕЖЕННЯ (CONSTRAINTS) ---
 
-            # Обновляем локальные счетчики
-            stock['amount'] -= take_amount
-            needed -= take_amount
+        # А) Не взяти зі складу більше, ніж є
+        for s in stocks_sub:
+            prob += pulp.lpSum([x[(s['warehouse_id'], r['id'])] for r in reqs_sub]) <= s['amount']
 
-    return distribution_plan
+        # Б) Не дати заявці більше, ніж просили
+        for r in reqs_sub:
+            prob += pulp.lpSum([x[(s['warehouse_id'], r['id'])] for s in stocks_sub]) <= r['amount_needed']
+
+        # В) ГОЛОВНЕ ОБМЕЖЕННЯ СПРАВЕДЛИВОСТІ
+        # Для кожної заявки: (Отримано / Треба) * Пріоритет >= Z
+        # Тобто Z не може бути більшим за найгірший показник у системі.
+        # Максимізуючи Z, ми підтягуємо найгіршого вгору.
+        for r in reqs_sub:
+            total_allocated_to_req = pulp.lpSum([x[(s['warehouse_id'], r['id'])] for s in stocks_sub])
+
+            # Математика: Allocated >= Z * (Needed / Priority)
+            # Чим вищий пріоритет, тим менший дільник, тим більше треба дати, щоб задовольнити Z.
+            if r['priority'] > 0:
+                prob += total_allocated_to_req >= Z * (r['amount_needed'] / r['priority'])
+
+        # --- 5. ВИРІШЕННЯ ---
+        prob.solve(pulp.PULP_CBC_CMD(msg=False))
+
+        # --- 6. ЗБІР РЕЗУЛЬТАТІВ ---
+        if pulp.LpStatus[prob.status] == 'Optimal':
+            for s in stocks_sub:
+                for r in reqs_sub:
+                    val = x[(s['warehouse_id'], r['id'])].varValue
+                    if val and val > 0:
+                        plan_items.append({
+                            'request_id': r['id'],
+                            'warehouse_id': s['warehouse_id'],
+                            'amount': val
+                        })
+
+    return plan_items

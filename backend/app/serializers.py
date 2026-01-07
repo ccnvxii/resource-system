@@ -58,9 +58,12 @@ class DistributionItemSerializer(serializers.ModelSerializer):
     resource_name = serializers.CharField(source='request.resource.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
 
+    recipient_name = serializers.CharField(source='request.user.username', read_only=True)
+    purpose = serializers.CharField(source='request.purpose', read_only=True)
+
     class Meta:
         model = DistributionItem
-        fields = ['id', 'resource_name', 'warehouse_name', 'amount', 'request']
+        fields = ['id', 'resource_name', 'warehouse_name', 'amount', 'recipient_name', 'purpose', 'request']
 
 
 class DistributionPlanSerializer(serializers.ModelSerializer):

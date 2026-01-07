@@ -376,22 +376,57 @@ function App() {
 
         {plan && plan.items && (
           <div className="animate-fade-in-up bg-green-50 rounded-2xl border-2 border-green-200 p-8 shadow-sm mb-10">
-            <h3 className="text-2xl font-bold text-green-800 mb-6 flex items-center gap-2">✅ План розподілу сформовано</h3>
+            <h3 className="text-2xl font-bold text-green-800 mb-6 flex items-center gap-2">
+              ✅ План розподілу сформовано
+              <span className="text-sm font-normal bg-green-200 text-green-800 px-3 py-1 rounded-full">{plan.items.length} трансферів</span>
+            </h3>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {plan.items.map((item) => (
-                <div key={item.id} className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-green-500 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start">
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Трансфер #{item.id}</div>
-                    <div className="text-green-600 font-bold text-xl">+{Number(item.amount).toFixed(0)}</div>
-                  </div>
-                  <div className="mt-3">
-                    <div className="text-lg font-bold text-slate-800">{item.resource_name}</div>
-                    <div className="text-sm text-slate-500 mt-1 flex items-center gap-1">
-                      <span>📤</span> Звідки: <span className="font-semibold text-slate-700 bg-slate-100 px-1 rounded">{item.warehouse_name}</span>
+              {plan.items.map((item) => {
+                // Отримуємо іконку та назву призначення
+                const purposeInfo = PURPOSE_MAP[item.purpose] || { label: item.purpose, icon: '📦', color: 'bg-gray-100' };
+
+                return (
+                  <div key={item.id} className="bg-white p-5 rounded-xl shadow-sm border-l-4 border-green-500 hover:shadow-md transition-shadow flex flex-col justify-between">
+
+                    {/* Заголовок картки */}
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Трансфер #{item.id}</div>
+                        <div className="text-green-600 font-bold text-xl bg-green-50 px-2 rounded">+{Number(item.amount).toFixed(0)}</div>
+                      </div>
+
+                      <div className="text-lg font-bold text-slate-800 mb-4">{item.resource_name}</div>
+                    </div>
+
+                    {/* Логістика: Звідки -> Куди */}
+                    <div className="space-y-3 text-sm border-t border-slate-100 pt-3">
+
+                      {/* Звідки */}
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <span className="text-lg">📤</span>
+                        <span className="text-xs text-slate-400 uppercase font-bold">Звідки:</span>
+                        <span className="font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                          {item.warehouse_name}
+                        </span>
+                      </div>
+                      {/* Куди */}
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <span className="text-lg">📥</span>
+                        <span className="text-xs text-slate-400 uppercase font-bold">Куди:</span>
+
+                        <div className="flex flex-col">
+                           <span className={`text-xs font-bold px-1.5 py-0.5 rounded w-fit mb-0.5 ${purposeInfo.color}`}>
+                             {purposeInfo.icon} {purposeInfo.label}
+                           </span>
+                           <span className="font-medium text-slate-800">{item.recipient_name}</span>
+                        </div>
+                      </div>
+
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
