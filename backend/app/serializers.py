@@ -1,6 +1,9 @@
 from rest_framework import serializers
-from .models import Resource, Warehouse, Stock, UserRequest, Category, DistributionPlan, DistributionItem, User
+from django.contrib.auth.models import User
+from .models import Resource, Warehouse, Stock, UserRequest, Category, DistributionPlan, DistributionItem
 
+
+# --- Серіалайзер для користувачів (щоб Фронтенд бачив список) ---
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -35,9 +38,14 @@ class StockSerializer(serializers.ModelSerializer):
         fields = ['id', 'warehouse', 'warehouse_name', 'resource', 'amount']
 
 
+# --- ГОЛОВНИЙ СЕРІАЛАЙЗЕР ЗАЯВКИ ---
 class UserRequestSerializer(serializers.ModelSerializer):
     resource_name = serializers.CharField(source='resource.name', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
+
+    # ВАЖЛИВО: Пріоритет тепер Read-Only.
+    # Його рахує модель (models.py), клієнт його не надсилає.
+    priority = serializers.FloatField(read_only=True)
 
     class Meta:
         model = UserRequest
@@ -47,7 +55,6 @@ class UserRequestSerializer(serializers.ModelSerializer):
 # --- Серіалайзери для Плану Розподілу ---
 
 class DistributionItemSerializer(serializers.ModelSerializer):
-    # Отримуємо назви через зв'язки (3NF)
     resource_name = serializers.CharField(source='request.resource.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
 

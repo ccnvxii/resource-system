@@ -14,44 +14,50 @@ class AppConfig(AppConfig):
 
 def create_initial_data(sender, **kwargs):
     """
-    Автоматичне наповнення бази даних.
-    Створює Категорії -> Ресурси -> Склади -> Запаси -> Заявки.
+    Автоматичне наповнення бази даних для Магістерської роботи.
+    Реалізує сценарії для "Матриці Пріоритетів" (Priority Matrix).
     """
+    # Перевірка, що це наш додаток
     if sender.name != 'app':
         return
 
+    # Перевірка, чи створені таблиці (щоб не впало при першому запуску)
     try:
         if 'app_resource' not in connection.introspection.table_names():
             return
     except Exception:
         return
 
+    # Імпорти всередині функції (щоб уникнути помилок завантаження Django)
     from django.contrib.auth.models import User
     from .models import Resource, Warehouse, Stock, UserRequest, Category
 
-    print("--- [Auto-Populate] Починаємо наповнення (Українська версія) ---")
+    print("--- [System Init] Починаємо наповнення даних (Матриця Пріоритетів) ---")
 
-    # --- 1. Створення Категорій ---
+    # --- 1. КАТЕГОРІЇ З КРИТИЧНІСТЮ (K_res) ---
+    # Медицина найважливіша (1.0), солодощі найменш важливі (0.1)
     categories_data = [
-        ('meds', 'Медицина'),
-        ('food', 'Їжа'),
-        ('water', 'Вода'),
-        ('clothes', 'Одяг'),
-        ('other', 'Інше'),
+        ('meds', 'Медицина / Ліки', 1.0),
+        ('water', 'Вода питна', 0.9),
+        ('food', 'Продукти харчування', 0.7),
+        ('clothes', 'Одяг та Тепло', 0.5),
+        ('hygiene', 'Гігієна', 0.4),
+        ('other', 'Інше / Комфорт', 0.1),
     ]
 
     cats_objs = {}
-    for slug, name in categories_data:
-        cat, _ = Category.objects.get_or_create(
+    for slug, name, crit in categories_data:
+        cat, _ = Category.objects.update_or_create(
             slug=slug,
-            defaults={'name': name}
+            defaults={'name': name, 'criticality': crit}
         )
         cats_objs[slug] = cat
 
-    # --- 2. Створення Користувачів ---
+    # --- 2. КОРИСТУВАЧІ ---
     users_data = [
-        {'username': 'volunteer_1', 'email': 'v1@test.com', 'pass': '1234'},
-        {'username': 'doctor_1', 'email': 'd1@test.com', 'pass': '1234'},
+        {'username': 'coord_military', 'email': 'mil@test.com'},  # Координатор військових
+        {'username': 'doc_hospital', 'email': 'doc@test.com'},  # Головний лікар
+        {'username': 'vol_civilian', 'email': 'vol@test.com'},  # Волонтер по цивільних
     ]
 
     users_map = {}
@@ -61,100 +67,122 @@ def create_initial_data(sender, **kwargs):
             defaults={'email': u_data['email']}
         )
         if created:
-            user.set_password(u_data['pass'])
+            user.set_password('1234')
             user.save()
-            print(f"Створено користувача: {u_data['username']}")
         users_map[u_data['username']] = user
 
-    # --- 3. Створення Ресурсів ---
+    # --- 3. РЕСУРСИ ---
     resources_data = [
-        {'name': 'Аспірин', 'unit': 'упак', 'cat_slug': 'meds'},
-        {'name': 'Бинти', 'unit': 'шт', 'cat_slug': 'meds'},
-        {'name': 'Хліб', 'unit': 'шт', 'cat_slug': 'food'},
-        {'name': 'Тушонка', 'unit': 'банка', 'cat_slug': 'food'},
-        {'name': 'Вода питна (5л)', 'unit': 'бут', 'cat_slug': 'water'},
-        {'name': 'Куртка тепла', 'unit': 'шт', 'cat_slug': 'clothes'},
-        {'name': 'Ковдра', 'unit': 'шт', 'cat_slug': 'clothes'},
+        {'name': 'Аспірин', 'unit': 'упак', 'cat': 'meds'},
+        {'name': 'Бинти стерильні', 'unit': 'шт', 'cat': 'meds'},
+        {'name': 'Турнікет', 'unit': 'шт', 'cat': 'meds'},
+        {'name': 'Вода (6л)', 'unit': 'бут', 'cat': 'water'},
+        {'name': 'Тушонка', 'unit': 'банка', 'cat': 'food'},
+        {'name': 'Хліб', 'unit': 'шт', 'cat': 'food'},
+        {'name': 'Ковдра тепла', 'unit': 'шт', 'cat': 'clothes'},
+        {'name': 'Шоколад', 'unit': 'шт', 'cat': 'other'},
     ]
 
     resource_objects = {}
     for res in resources_data:
-        cat_obj = cats_objs.get(res['cat_slug'])
-        if not cat_obj:
-            cat_obj = cats_objs['other']
-
+        cat_obj = cats_objs.get(res['cat'])
         obj, _ = Resource.objects.update_or_create(
             name=res['name'],
-            defaults={
-                'unit': res['unit'],
-                'category': cat_obj
-            }
+            defaults={'unit': res['unit'], 'category': cat_obj}
         )
         resource_objects[res['name']] = obj
 
-    # --- 4. Створення Складів ---
-    warehouses_data = [
-        {'name': 'Центральний Хаб', 'location': 'Центр міста'},
-        {'name': 'Медичний Склад', 'location': 'Лікарня №1'},
-        {'name': 'Продуктовий', 'location': 'Промзона'},
-    ]
+    # --- 4. СКЛАДИ ---
+    w_main, _ = Warehouse.objects.get_or_create(name='Центральний Хаб (Київ)')
+    w_east, _ = Warehouse.objects.get_or_create(name='Східний Склад (Харків)')
+    w_west, _ = Warehouse.objects.get_or_create(name='Західний Склад (Львів)')
 
-    warehouse_objects = {}
-    for wh in warehouses_data:
-        obj, _ = Warehouse.objects.update_or_create(
-            name=wh['name'],
-            defaults={'location': wh['location']}
-        )
-        warehouse_objects[wh['name']] = obj
-
-    # --- 5. Створення Запасів (Stock) ---
+    # --- 5. ЗАПАСИ (STOCKS) ---
+    # Створюємо ситуацію дефіциту для цікавого розподілу
     stocks_list = [
-        ('Медичний Склад', 'Аспірин', 500),
-        ('Медичний Склад', 'Бинти', 1000),
-        ('Продуктовий', 'Хліб', 200),
-        ('Продуктовий', 'Тушонка', 300),
-        ('Продуктовий', 'Вода питна (5л)', 1000),
-        ('Центральний Хаб', 'Вода питна (5л)', 100),
-        ('Центральний Хаб', 'Куртка тепла', 50),
-        ('Центральний Хаб', 'Ковдра', 50),
-        ('Центральний Хаб', 'Аспірин', 100),
+        # Медицина (Дефіцит)
+        (w_east, 'Аспірин', 200),
+        (w_west, 'Аспірин', 500),
+        (w_east, 'Турнікет', 50),  # Дуже мало!
+        (w_main, 'Бинти стерильні', 2000),
+
+        # Їжа та Вода (Є в наявності)
+        (w_main, 'Вода (6л)', 1000),
+        (w_east, 'Вода (6л)', 500),
+        (w_main, 'Тушонка', 300),
+        (w_west, 'Шоколад', 100),
     ]
 
-    for wh_name, res_name, amount in stocks_list:
+    for warehouse, res_name, amount in stocks_list:
         Stock.objects.update_or_create(
-            warehouse=warehouse_objects[wh_name],
+            warehouse=warehouse,
             resource=resource_objects[res_name],
             defaults={'amount': amount}
         )
 
-    # --- 6. Створення Заявок (UserRequest) ---
-    requests_list = [
-        # Стандартні заявки
-        {'user': 'volunteer_1', 'res': 'Вода питна (5л)', 'qty': 500, 'pri': 10},
-        {'user': 'doctor_1', 'res': 'Бинти', 'qty': 200, 'pri': 8},
-        {'user': 'volunteer_1', 'res': 'Ковдра', 'qty': 10, 'pri': 5},
+    # --- 6. ЗАЯВКИ (SCENARIOS) ---
+    # Очищаємо старі заявки при перезапуску, щоб бачити чистий експеримент
+    UserRequest.objects.all().delete()
+    print("🧹 Старі заявки очищено для чистоти експерименту.")
 
-        # --- ДОДАТКОВІ ЗАЯВКИ (Щоб було що розподіляти) ---
-        # Запит на Аспірин (на складі є 600)
-        {'user': 'doctor_1', 'res': 'Аспірин', 'qty': 150, 'pri': 9},
+    requests_scenarios = [
+        # --- СЦЕНАРІЙ 1: Високий пріоритет (Військові + Медицина) ---
+        # Турнікет (Meds 1.0) * Військові (10.0) = Пріоритет 10.0
+        {
+            'user': 'coord_military',
+            'res': 'Турнікет',
+            'qty': 100,
+            'purpose': 'military'
+        },
 
-        # Запит на Тушонку (на складі є 300)
-        {'user': 'volunteer_1', 'res': 'Тушонка', 'qty': 50, 'pri': 4},
+        # --- СЦЕНАРІЙ 2: Середній пріоритет (Лікарня + Вода) ---
+        # Вода (Water 0.9) * Лікарня (9.0) = Пріоритет 8.1
+        {
+            'user': 'doc_hospital',
+            'res': 'Вода (6л)',
+            'qty': 200,
+            'purpose': 'hospital'
+        },
 
-        # ВЕЛИКИЙ запит на бинти, щоб перевірити часткове виконання (на складі 1000, просимо 2000)
-        {'user': 'volunteer_1', 'res': 'Бинти', 'qty': 2000, 'pri': 6},
+        # --- СЦЕНАРІЙ 3: ВПО + Їжа ---
+        # Тушонка (Food 0.7) * ВПО (6.0) = Пріоритет 4.2
+        {
+            'user': 'vol_civilian',
+            'res': 'Тушонка',
+            'qty': 50,
+            'purpose': 'refugees'
+        },
+
+        # --- СЦЕНАРІЙ 4: Низький пріоритет (Школа + Інше) ---
+        # Шоколад (Other 0.1) * Школа (4.0) = Пріоритет 0.4
+        {
+            'user': 'vol_civilian',
+            'res': 'Шоколад',
+            'qty': 50,
+            'purpose': 'school'
+        },
+
+        # --- СЦЕНАРІЙ 5: Конкуренція за дефіцит ---
+        # Особисте прохання про турнікет (Meds 1.0 * Personal 1.0 = 1.0)
+        # Має програти військовим (Пріоритет 10.0)
+        {
+            'user': 'vol_civilian',
+            'res': 'Турнікет',
+            'qty': 5,
+            'purpose': 'personal'
+        },
     ]
 
-    for req in requests_list:
-        UserRequest.objects.update_or_create(
+    for req in requests_scenarios:
+        # Створюємо об'єкт. Метод .save() у моделі автоматично порахує priority!
+        UserRequest.objects.create(
             user=users_map[req['user']],
             resource=resource_objects[req['res']],
             quantity_requested=req['qty'],
-            defaults={
-                'priority': req['pri'],
-                'status': 'new',  # Скидаємо статус
-                'quantity_allocated': 0  # Скидаємо виділене
-            }
+            purpose=req['purpose'],
+            status='new',
+            quantity_allocated=0
         )
 
-    print("--- [Auto-Populate] Дані успішно завантажено (UA)! Заявки оновлено. ---")
+    print(f"✅ Успішно створено {len(requests_scenarios)} тестових сценаріїв.")
+    print("--- [System Init] Готово! ---")
