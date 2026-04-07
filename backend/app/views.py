@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from django.db import transaction
 from decimal import Decimal
 from django.contrib.auth.models import User
+from rest_framework.decorators import action
+from rest_framework import permissions
 
 from .models import Resource, Warehouse, Stock, UserRequest, DistributionPlan, DistributionItem, Category
 from .serializers import (
@@ -14,9 +16,18 @@ from .serializers import (
 from .optimizer.distribute import calculate_distribution
 
 
-# --- ViewSets (CRUD для API) ---
+class StockViewSet(viewsets.ModelViewSet):
+    # Тільки адміни можуть редагувати склад
+    def get_permissions(self):
+        if self.action in ['update_amount', 'add_resource', 'create', 'update', 'destroy']:
+            return [permissions.IsAdminUser()]
+        return [permissions.AllowAny()]
 
-# ВАЖЛИВО: Додали цей клас, щоб Фронтенд міг завантажити список юзерів
+class DistributeResourcesView(APIView):
+    # Тільки адмін може запускати алгоритм розподілу
+    permission_classes = [permissions.IsAdminUser]
+
+# --- ViewSets (CRUD для API) ---
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -45,6 +56,58 @@ class StockViewSet(viewsets.ModelViewSet):
 class UserRequestViewSet(viewsets.ModelViewSet):
     queryset = UserRequest.objects.all()
     serializer_class = UserRequestSerializer
+
+
+class StockViewSet(viewsets.ModelViewSet):
+    queryset = Stock.objects.filter(amount__gt=0)  # показуємо лише ті ресурси, яких більше 0
+    serializer_class = StockSerializer
+
+    # Додаємо метод для швидкого редагування (PATCH запит)
+    @action(detail=True, methods=['patch'])
+    def update_amount(self, request, pk=None):
+        stock = self.get_object()
+        new_amount = request.data.get('amount')
+
+        try:
+            stock.amount = Decimal(str(new_amount))
+            stock.save()
+            return Response({"status": "success", "new_amount": stock.amount})
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+    # Цей метод оброблятиме POST запит на /api/stocks/add_resource/
+    @action(detail=False, methods=['post'])
+    def add_resource(self, request):
+        warehouse_id = request.data.get('warehouse')
+        resource_id = request.data.get('resource')
+        amount_to_add = request.data.get('amount')
+
+        if not all([warehouse_id, resource_id, amount_to_add]):
+            return Response({"error": "Необхідно вказати склад, ресурс та кількість"}, status=400)
+
+        try:
+            amount_decimal = Decimal(str(amount_to_add))
+
+            # get_or_create знайде існуючий запис або створить новий, якщо такого ресурсу ще немає на складі
+            stock, created = Stock.objects.get_or_create(
+                warehouse_id=warehouse_id,
+                resource_id=resource_id,
+                defaults={'amount': 0}
+            )
+
+            stock.amount += amount_decimal
+            stock.save()
+
+            return Response({
+                "status": "success",
+                "message": f"Додано {amount_decimal}. Новий залишок: {stock.amount}",
+                "warehouse": stock.warehouse.name,
+                "resource": stock.resource.name
+            }, status=200)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
 
 
 # --- Головна логіка розподілу (Алгоритм) ---

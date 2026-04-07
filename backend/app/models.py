@@ -108,7 +108,6 @@ class UserRequest(models.Model):
 
     def save(self, *args, **kwargs):
         """
-        Магічний метод: Автоматичний розрахунок пріоритету перед збереженням.
         Формула: P = K_dest * K_res
         """
         # 1. Вага призначення (Hardcoded policy)

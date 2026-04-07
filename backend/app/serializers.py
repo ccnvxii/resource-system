@@ -43,17 +43,14 @@ class UserRequestSerializer(serializers.ModelSerializer):
     resource_name = serializers.CharField(source='resource.name', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
 
-    # ВАЖЛИВО: Пріоритет тепер Read-Only.
-    # Його рахує модель (models.py), клієнт його не надсилає.
-    priority = serializers.FloatField(read_only=True)
-
     class Meta:
         model = UserRequest
         fields = '__all__'
+        # Обов'язково додаємо це:
+        read_only_fields = ['priority', 'quantity_allocated', 'status']
 
 
 # --- Серіалайзери для Плану Розподілу ---
-
 class DistributionItemSerializer(serializers.ModelSerializer):
     resource_name = serializers.CharField(source='request.resource.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
