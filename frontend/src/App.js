@@ -157,8 +157,19 @@ function App() {
     } finally { setLoading(false); }
   };
 
+  const totalItemsAmount = stocks.reduce((sum, item) => sum + Number(item.amount), 0);
+
   if (isLandingMode) {
-    return <Landing onEnter={() => setIsLandingMode(false)} stats={{ stocks: stocks.length, requests: requests.length, warehouses: warehouses.length }} />;
+    return (
+      <Landing
+        onEnter={() => setIsLandingMode(false)}
+        stats={{
+          stocks: totalItemsAmount,
+          requests: requests.length,
+          warehouses: warehouses.length
+        }}
+      />
+    );
   }
 
   return (
