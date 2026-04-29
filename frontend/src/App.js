@@ -1,6 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { Home } from 'lucide-react';
+import {
+  Home,
+  PlusCircle,
+  ShieldAlert,
+  Stethoscope,
+  Flame,
+  Footprints,
+  GraduationCap,
+  User,
+  FileText,
+  ArrowDownCircle,
+  PackagePlus
+} from 'lucide-react';
 
 // Імпорт компонентів
 import Header from './components/Header/Header';
@@ -11,16 +23,18 @@ import DistributionPlan from './components/DistributionPlan/DistributionPlan';
 import Popup from './components/Popup/Popup';
 import StockInForm from './components/StockInForm/StockInForm';
 import Landing from './components/Landing';
+import AddResourceForm from './components/AddResourceForm';
+import Modal from './components/Modal'; // Наш новий спільний компонент
 
 const API_URL = '/api';
 
 const PURPOSE_MAP = {
-  'military': { label: 'Військові', icon: '⚔️', color: 'bg-red-100 text-red-800' },
-  'hospital': { label: 'Лікарня', icon: '🏥', color: 'bg-blue-100 text-blue-800' },
-  'disaster': { label: 'Катастрофа', icon: '🔥', color: 'bg-orange-100 text-orange-800' },
-  'refugees': { label: 'ВПО', icon: '🏃', color: 'bg-yellow-100 text-yellow-800' },
-  'school':   { label: 'Школа', icon: '🏫', color: 'bg-purple-100 text-purple-800' },
-  'personal': { label: 'Особисте', icon: '👤', color: 'bg-gray-100 text-gray-800' },
+  'military': { label: 'Військові', icon: <ShieldAlert size={14} />, color: 'bg-red-100 text-red-800' },
+  'hospital': { label: 'Лікарня', icon: <Stethoscope size={14} />, color: 'bg-blue-100 text-blue-800' },
+  'disaster': { label: 'Катастрофа', icon: <Flame size={14} />, color: 'bg-orange-100 text-orange-800' },
+  'refugees': { label: 'ВПО', icon: <Footprints size={14} />, color: 'bg-yellow-100 text-yellow-800' },
+  'school':   { label: 'Школа', icon: <GraduationCap size={14} />, color: 'bg-purple-100 text-purple-800' },
+  'personal': { label: 'Особисте', icon: <User size={14} />, color: 'bg-gray-100 text-gray-800' },
 };
 
 function App() {
@@ -38,17 +52,14 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isStockInOpen, setIsStockInOpen] = useState(false);
+  const [isAddResourceOpen, setIsAddResourceOpen] = useState(false);
   const [requestTab, setRequestTab] = useState('active');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [popup, setPopup] = useState({ isOpen: false, type: 'info', title: '', message: '' });
 
   const [formRows, setFormRows] = useState([{ resource: '', quantity: '', purpose: 'personal' }]);
 
-  // --- ДОПОМІЖНІ ФУНКЦІЇ ---
-  const showPopup = (title, message, type = 'info') =>
-    setPopup({ isOpen: true, title, message, type });
-
-  // --- API ЗАПИТИ (Виправлено нескінченний цикл) ---
+  // --- API ЗАПИТИ ---
   const fetchData = useCallback(async () => {
     try {
       const [stockRes, reqRes, resRes, userRes, whRes] = await Promise.all([
@@ -69,18 +80,20 @@ function App() {
       setStocks(stockRes.data);
       setRequests(reqRes.data);
 
-      // Встановлюємо початкового юзера ТІЛЬКИ якщо він ще не обраний
       if (userRes.data.length > 0) {
         setSelectedUserId(prev => prev || userRes.data[0].id);
       }
     } catch (error) {
-      console.error("Помилка API:", error);
+      console.error("Помилка завантаження даних:", error);
     }
-  }, []); // Порожній масив залежностей - функція стабільна
+  }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const showPopup = (title, message, type = 'info') =>
+    setPopup({ isOpen: true, title, message, type });
 
   // Створення заявок
   const handleSubmitRequest = async () => {
@@ -97,18 +110,18 @@ function App() {
           status: 'new'
         });
       }));
-      showPopup("Успіх", "Заявки успішно зареєстровані!", "success");
+      showPopup("Успіх", "Заявки зареєстровані!", "success");
       setIsFormOpen(false);
       setFormRows([{ resource: '', quantity: '', purpose: 'personal' }]);
       fetchData();
     } catch (e) {
-      showPopup("Помилка", "Перевірте правильність заповнення полів.", "error");
+      showPopup("Помилка", "Перевірте правильність заповнення.", "error");
     } finally {
       setLoading(false);
     }
   };
 
-  // Поставка на склад
+  // Поповнення складу
   const handleAddStock = async (formData) => {
     setLoading(true);
     try {
@@ -119,7 +132,7 @@ function App() {
           amount: parseFloat(item.amount)
         })
       ));
-      showPopup("Успіх", "Запаси на складі оновлено!", "success");
+      showPopup("Успіх", "Запаси оновлено!", "success");
       setIsStockInOpen(false);
       fetchData();
     } catch (e) {
@@ -129,7 +142,7 @@ function App() {
     }
   };
 
-  // Запуск розподілу
+  // Запуск алгоритму
   const handleDistribute = async () => {
     setLoading(true);
     try {
@@ -148,52 +161,78 @@ function App() {
     }
   };
 
-  // --- ВІДОБРАЖЕННЯ ЛЕНДІНГУ ---
   if (isLandingMode) {
     return (
       <Landing
         onEnter={() => setIsLandingMode(false)}
-        stats={{
-          stocks: stocks.length,
-          requests: requests.length,
-          warehouses: warehouses.length
-        }}
+        stats={{ stocks: stocks.length, requests: requests.length, warehouses: warehouses.length }}
       />
     );
   }
 
-  // --- ВІДОБРАЖЕННЯ DASHBOARD ---
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 p-4 md:p-10 relative overflow-x-hidden">
       <Popup {...popup} onClose={() => setPopup({...popup, isOpen: false})} />
 
-      <RequestForm
+      {/* МОДАЛКА: НОВА ЗАЯВКА */}
+      <Modal
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
-        usersList={usersList}
-        resourcesList={resourcesList}
-        selectedUserId={selectedUserId}
-        setSelectedUserId={setSelectedUserId}
-        formRows={formRows}
-        handleFormChange={(idx, f, v) => {
-          const newRows = [...formRows];
-          newRows[idx][f] = v;
-          setFormRows(newRows);
-        }}
-        addFormRow={() => setFormRows([...formRows, { resource: '', quantity: '', purpose: 'personal' }])}
-        removeFormRow={(idx) => setFormRows(formRows.filter((_, i) => i !== idx))}
-        handleSubmitRequest={handleSubmitRequest}
-        loading={loading}
-      />
+        title="Нова заявка"
+        subtitle="Режим: Матриця пріоритетів"
+        icon={FileText}
+      >
+        <RequestForm
+          usersList={usersList}
+          resourcesList={resourcesList}
+          selectedUserId={selectedUserId}
+          setSelectedUserId={setSelectedUserId}
+          formRows={formRows}
+          handleFormChange={(idx, f, v) => {
+            const newRows = [...formRows];
+            newRows[idx][f] = v;
+            setFormRows(newRows);
+          }}
+          addFormRow={() => setFormRows([...formRows, { resource: '', quantity: '', purpose: 'personal' }])}
+          removeFormRow={(idx) => setFormRows(formRows.filter((_, i) => i !== idx))}
+          handleSubmitRequest={handleSubmitRequest}
+          loading={loading}
+          onClose={() => setIsFormOpen(false)}
+        />
+      </Modal>
 
-      <StockInForm
+      {/* МОДАЛКА: ПОПОВНЕННЯ СКЛАДУ */}
+      <Modal
         isOpen={isStockInOpen}
         onClose={() => setIsStockInOpen(false)}
-        warehouses={warehouses}
-        resources={resourcesList}
-        onSubmit={handleAddStock}
-        loading={loading}
-      />
+        title="Поповнення складів"
+        subtitle="Масове зарахування ресурсів"
+        icon={ArrowDownCircle}
+        maxWidth="max-w-3xl"
+      >
+        <StockInForm
+          warehouses={warehouses}
+          resources={resourcesList}
+          onSubmit={handleAddStock}
+          loading={loading}
+          onClose={() => setIsStockInOpen(false)}
+        />
+      </Modal>
+
+      {/* МОДАЛКА: НОВИЙ ТИП РЕСУРСУ */}
+      <Modal
+        isOpen={isAddResourceOpen}
+        onClose={() => setIsAddResourceOpen(false)}
+        title="Новий тип ресурсу"
+        subtitle="Додавання в системний довідник"
+        icon={PackagePlus}
+        maxWidth="max-w-lg"
+      >
+        <AddResourceForm
+          onResourceAdded={() => { fetchData(); setIsAddResourceOpen(false); }}
+          onClose={() => setIsAddResourceOpen(false)}
+        />
+      </Modal>
 
       <div className="max-w-7xl mx-auto space-y-8 pb-24">
         <Header
@@ -201,6 +240,16 @@ function App() {
           onOpenStockIn={() => setIsStockInOpen(true)}
           onRefresh={fetchData}
         />
+
+        <div className="flex justify-end">
+          <button
+            onClick={() => setIsAddResourceOpen(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-white border-2 border-slate-200 rounded-2xl text-slate-600 font-black text-[10px] uppercase tracking-widest hover:border-indigo-500 hover:text-indigo-600 transition-all shadow-sm active:scale-95"
+          >
+            <PlusCircle size={16} />
+            Додати новий тип ресурсу
+          </button>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <StockTable

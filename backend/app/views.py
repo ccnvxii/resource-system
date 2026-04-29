@@ -35,6 +35,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
 class ResourceViewSet(viewsets.ModelViewSet):
     queryset = Resource.objects.all()
     serializer_class = ResourceSerializer
+    permission_classes = [permissions.AllowAny]
 
 
 class WarehouseViewSet(viewsets.ModelViewSet):
