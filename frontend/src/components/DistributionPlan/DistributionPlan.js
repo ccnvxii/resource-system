@@ -1,3 +1,5 @@
+// DistributionPlan.js
+
 import React from 'react';
 import {
   CheckCircle2,
@@ -21,7 +23,7 @@ const DistributionPlan = ({ plan, purposeMap }) => (
             Результати оптимізації розподілу
           </h3>
           <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">
-            Ресурси розподілено згідно з матрицею пріоритетів
+            Алгоритм Weighted Max-Min Fairness за матрицею пріоритетів
           </p>
         </div>
       </div>
@@ -34,36 +36,56 @@ const DistributionPlan = ({ plan, purposeMap }) => (
     {/* Сітка результатів */}
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {plan.items.map((item) => {
-        const purposeInfo = purposeMap[item.purpose] || { label: item.purpose, icon: '📦', color: 'bg-gray-100' };
+        const purposeData = purposeMap[item.purpose] || { label: item.purpose, icon: '📦', color: 'bg-gray-100' };
+
+        // Логіка кольору смужки як у RequestList
+        const isHighPriority = item.priority >= 8;
 
         return (
           <div
             key={item.id}
-            className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-300 transition-all flex flex-col justify-between group"
+            className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col justify-between group relative overflow-hidden"
           >
-            {/* Верхня частина: Ресурс та кількість */}
+            {/* Ліва кольорова смужка-акцент (як у списку заявок) */}
+            <div
+              className="absolute left-0 top-0 bottom-0 w-1.5"
+              style={{ backgroundColor: isHighPriority ? '#ef4444' : '#3b82f6' }}
+            ></div>
+
+            {/* Верхня частина: Пріоритет та Кількість */}
             <div>
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center gap-1.5 text-slate-400">
                   <Fingerprint size={14} />
                   <span className="text-[10px] font-mono font-bold uppercase">Операція #{item.id}</span>
                 </div>
-                <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg font-black text-lg border border-blue-100">
-                  {Number(item.amount).toFixed(0)}
+
+                {/* БЛОК ПРІОРИТЕТУ (стиль 1 в 1 як у списку заявок) */}
+                <div className="text-right">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Пріоритет</div>
+                  <div className="text-xl font-black text-slate-700 leading-none">
+                    {item.priority && !isNaN(item.priority) ? Number(item.priority).toFixed(1) : '0.0'}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 mb-6">
-                <Box size={20} className="text-blue-500" />
-                <h4 className="text-lg font-extrabold text-slate-800 leading-tight">
-                  {item.resource_name}
-                </h4>
+              <div className="flex items-center justify-between gap-3 mb-6">
+                <div className="flex items-center gap-3">
+                  <Box size={20} className="text-blue-500" />
+                  <h4 className="text-lg font-extrabold text-slate-800 leading-tight">
+                    {item.resource_name}
+                  </h4>
+                </div>
+                {/* Кількість у жирному бейджі */}
+                <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg font-black text-lg border border-blue-100">
+                  {Number(item.amount).toFixed(0)}
+                </div>
               </div>
             </div>
 
             {/* Деталі розподілу */}
             <div className="space-y-4 pt-4 border-t border-slate-100">
-              {/* Джерело ресурсу */}
+              {/* Склад */}
               <div className="flex items-start gap-3">
                 <div className="mt-1 text-slate-400">
                   <Database size={14} />
@@ -74,7 +96,7 @@ const DistributionPlan = ({ plan, purposeMap }) => (
                 </div>
               </div>
 
-              {/* Отримувач (Заявка) */}
+              {/* Отримувач */}
               <div className="flex items-start gap-3">
                 <div className="mt-1 text-slate-400">
                   <User size={14} />
@@ -82,11 +104,11 @@ const DistributionPlan = ({ plan, purposeMap }) => (
                 <div className="flex flex-col">
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Призначення (Заявник)</span>
                   <div className="flex flex-col gap-1 mt-0.5">
-                    <span className="font-bold text-slate-800 text-sm leading-none">
+                    <span className="font-bold text-slate-800 text-sm leading-none flex items-center gap-1">
                       {item.recipient_name}
                     </span>
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-md w-fit uppercase mt-1 ${purposeInfo.color}`}>
-                      {purposeInfo.icon} {purposeInfo.label}
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg w-fit uppercase mt-1 ${purposeData.color}`}>
+                      {purposeData.icon} {purposeData.label}
                     </span>
                   </div>
                 </div>

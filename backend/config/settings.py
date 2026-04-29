@@ -70,3 +70,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# backend/config/settings.py
+CORS_ALLOW_ALL_ORIGINS = True  # Дозволити запити з будь-якого порту (наприклад, з 3000)
+CORS_ALLOW_CREDENTIALS = True
