@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { Toaster, toast } from 'react-hot-toast';
 import {
   Home,
   PlusCircle,
@@ -11,7 +12,9 @@ import {
   User,
   FileText,
   ArrowDownCircle,
-  PackagePlus
+  PackagePlus,
+  RefreshCw,
+  ClipboardList
 } from 'lucide-react';
 
 // Імпорт компонентів
@@ -20,14 +23,14 @@ import StockTable from './components/StockTable/StockTable';
 import RequestList from './components/RequestList/RequestList';
 import RequestForm from './components/RequestForm/RequestForm';
 import DistributionPlan from './components/DistributionPlan/DistributionPlan';
-import Popup from './components/Popup/Popup';
 import StockInForm from './components/StockInForm/StockInForm';
 import Landing from './components/Landing';
 import AddResourceForm from './components/AddResourceForm';
-import Modal from './components/Modal'; // Наш новий спільний компонент
+import Modal from './components/Modal';
 
 const API_URL = '/api';
 
+// Мапа призначень для бейджів та іконок
 const PURPOSE_MAP = {
   'military': { label: 'Військові', icon: <ShieldAlert size={14} />, color: 'bg-red-100 text-red-800' },
   'hospital': { label: 'Лікарня', icon: <Stethoscope size={14} />, color: 'bg-blue-100 text-blue-800' },
@@ -48,16 +51,29 @@ function App() {
   const [plan, setPlan] = useState(null);
 
   // --- СТАН UI ---
-  const [isLandingMode, setIsLandingMode] = useState(true);
+  const [isLandingMode, setIsLandingMode] = useState(() => {
+    const saved = localStorage.getItem('isLandingMode');
+    return saved === null ? true : saved === 'true';
+  });
+
   const [loading, setLoading] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isStockInOpen, setIsStockInOpen] = useState(false);
   const [isAddResourceOpen, setIsAddResourceOpen] = useState(false);
   const [requestTab, setRequestTab] = useState('active');
   const [selectedUserId, setSelectedUserId] = useState('');
-  const [popup, setPopup] = useState({ isOpen: false, type: 'info', title: '', message: '' });
-
   const [formRows, setFormRows] = useState([{ resource: '', quantity: '', purpose: 'personal' }]);
+
+  // --- ЕФЕКТИ ---
+  useEffect(() => {
+    localStorage.setItem('isLandingMode', isLandingMode);
+  }, [isLandingMode]);
+
+  const closeAllModals = useCallback(() => {
+    setIsFormOpen(false);
+    setIsStockInOpen(false);
+    setIsAddResourceOpen(false);
+  }, []);
 
   // --- API ЗАПИТИ ---
   const fetchData = useCallback(async () => {
@@ -84,7 +100,8 @@ function App() {
         setSelectedUserId(prev => prev || userRes.data[0].id);
       }
     } catch (error) {
-      console.error("Помилка завантаження даних:", error);
+      console.error("API Error:", error);
+      toast.error("Помилка синхронізації з сервером.");
     }
   }, []);
 
@@ -92,12 +109,10 @@ function App() {
     fetchData();
   }, [fetchData]);
 
-  const showPopup = (title, message, type = 'info') =>
-    setPopup({ isOpen: true, title, message, type });
-
   // Створення заявок
   const handleSubmitRequest = async () => {
-    if (!selectedUserId) return showPopup("Увага", "Оберіть заявника.", "error");
+    if (!selectedUserId) return toast.error("Оберіть заявника!");
+
     setLoading(true);
     try {
       await Promise.all(formRows.map(row => {
@@ -110,12 +125,16 @@ function App() {
           status: 'new'
         });
       }));
-      showPopup("Успіх", "Заявки зареєстровані!", "success");
+
+      toast.success("Заявки успішно додано!", {
+        icon: <ClipboardList className="text-blue-500" size={20} />
+      });
+
       setIsFormOpen(false);
       setFormRows([{ resource: '', quantity: '', purpose: 'personal' }]);
       fetchData();
     } catch (e) {
-      showPopup("Помилка", "Перевірте правильність заповнення.", "error");
+      toast.error("Не вдалося створити заявки.");
     } finally {
       setLoading(false);
     }
@@ -132,30 +151,39 @@ function App() {
           amount: parseFloat(item.amount)
         })
       ));
-      showPopup("Успіх", "Запаси оновлено!", "success");
+
+      toast.success("Склади оновлено!", {
+        icon: <ArrowDownCircle className="text-emerald-500" size={20} />
+      });
+
       setIsStockInOpen(false);
       fetchData();
     } catch (e) {
-      showPopup("Помилка", "Не вдалося оновити склад.", "error");
+      toast.error("Помилка поповнення складу.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Запуск алгоритму
+  // Розподіл
   const handleDistribute = async () => {
+    const loadId = toast.loading("Розрахунок оптимального розподілу...");
     setLoading(true);
     try {
       const response = await axios.post(`${API_URL}/distribute/`);
       if (response.data.message) {
-        showPopup("Інфо", response.data.message, "info");
+        toast(response.data.message, { icon: 'ℹ️', id: loadId });
         setPlan(null);
       } else {
+        toast.success("План розподілу сформовано!", {
+          id: loadId,
+          icon: <GraduationCap className="text-indigo-500" size={20} />
+        });
         setPlan(response.data);
       }
       fetchData();
     } catch (error) {
-      showPopup("Помилка", "Помилка при виконанні алгоритму.", "error");
+      toast.error("Помилка алгоритму розподілу.", { id: loadId });
     } finally {
       setLoading(false);
     }
@@ -172,15 +200,14 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 p-4 md:p-10 relative overflow-x-hidden">
-      <Popup {...popup} onClose={() => setPopup({...popup, isOpen: false})} />
+      <Toaster position="top-center" reverseOrder={false} />
 
-      {/* МОДАЛКА: НОВА ЗАЯВКА */}
+      {/* МОДАЛКИ */}
       <Modal
         isOpen={isFormOpen}
         onClose={() => setIsFormOpen(false)}
         title="Нова заявка"
-        subtitle="Режим: Матриця пріоритетів"
-        icon={FileText}
+        icon={ClipboardList}
       >
         <RequestForm
           usersList={usersList}
@@ -201,12 +228,10 @@ function App() {
         />
       </Modal>
 
-      {/* МОДАЛКА: ПОПОВНЕННЯ СКЛАДУ */}
       <Modal
         isOpen={isStockInOpen}
         onClose={() => setIsStockInOpen(false)}
         title="Поповнення складів"
-        subtitle="Масове зарахування ресурсів"
         icon={ArrowDownCircle}
         maxWidth="max-w-3xl"
       >
@@ -219,37 +244,33 @@ function App() {
         />
       </Modal>
 
-      {/* МОДАЛКА: НОВИЙ ТИП РЕСУРСУ */}
       <Modal
         isOpen={isAddResourceOpen}
         onClose={() => setIsAddResourceOpen(false)}
         title="Новий тип ресурсу"
-        subtitle="Додавання в системний довідник"
         icon={PackagePlus}
         maxWidth="max-w-lg"
       >
         <AddResourceForm
-          onResourceAdded={() => { fetchData(); setIsAddResourceOpen(false); }}
+          onResourceAdded={(newData) => {
+            fetchData();
+            setIsAddResourceOpen(false);
+            toast.success(`Ресурс "${newData.name}" додано!`, {
+              icon: <PackagePlus className="text-indigo-500" size={20} />
+            });
+          }}
           onClose={() => setIsAddResourceOpen(false)}
         />
       </Modal>
 
+      {/* ОСНОВНИЙ КОНТЕНТ */}
       <div className="max-w-7xl mx-auto space-y-8 pb-24">
         <Header
           onOpenForm={() => setIsFormOpen(true)}
           onOpenStockIn={() => setIsStockInOpen(true)}
+          onAddResource={() => setIsAddResourceOpen(true)}
           onRefresh={fetchData}
         />
-
-        <div className="flex justify-end">
-          <button
-            onClick={() => setIsAddResourceOpen(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-white border-2 border-slate-200 rounded-2xl text-slate-600 font-black text-[10px] uppercase tracking-widest hover:border-indigo-500 hover:text-indigo-600 transition-all shadow-sm active:scale-95"
-          >
-            <PlusCircle size={16} />
-            Додати новий тип ресурсу
-          </button>
-        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <StockTable
@@ -279,17 +300,13 @@ function App() {
           </button>
         </div>
 
-        {plan && (
-          <DistributionPlan
-            plan={plan}
-            purposeMap={PURPOSE_MAP}
-          />
-        )}
+        {plan && <DistributionPlan plan={plan} purposeMap={PURPOSE_MAP} />}
       </div>
 
+      {/* Кнопка повернення */}
       <button
         onClick={() => setIsLandingMode(true)}
-        className="fixed bottom-8 left-8 z-[60] flex items-center gap-2 px-6 py-4 bg-white shadow-2xl rounded-2xl border border-slate-100 text-slate-500 hover:text-blue-600 transition-all hover:scale-105 active:scale-95 group"
+        className="fixed bottom-8 left-8 z-[60] flex items-center gap-2 px-6 py-4 bg-white shadow-2xl rounded-2xl border border-slate-100 text-slate-500 hover:text-blue-600 transition-all hover:scale-105 active:scale-95"
       >
         <Home size={20} />
         <span className="text-xs font-black uppercase tracking-widest">Головна</span>

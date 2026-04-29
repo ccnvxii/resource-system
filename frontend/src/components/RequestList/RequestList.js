@@ -115,8 +115,9 @@ const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${purposeData.color}`}>
-                      {purposeData.icon} {purposeData.label}
+                    <span className={`flex items-center gap-1.5 text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${purposeData.color}`}>
+                      {purposeData.icon}
+                      <span>{purposeData.label}</span>
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono">ID: {req.id}</span>
                   </div>

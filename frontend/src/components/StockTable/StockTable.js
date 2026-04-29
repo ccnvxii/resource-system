@@ -56,7 +56,6 @@ const StockTable = ({ stocks, resourcesMap, onRefresh }) => {
           </span>
         </div>
 
-        {/* Filter Controls */}
         <div className="flex gap-3">
           <div className="relative flex-1">
             <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -86,12 +85,12 @@ const StockTable = ({ stocks, resourcesMap, onRefresh }) => {
 
       {/* Table Section */}
       <div className="overflow-y-auto flex-1 custom-scrollbar">
-        <table className="w-full text-sm text-left">
+        <table className="w-full text-sm text-left table-fixed">
           <thead className="bg-slate-50 text-slate-400 uppercase text-[10px] font-bold sticky top-0 z-10">
             <tr>
-              <th className="px-6 py-4">Склад</th>
-              <th className="px-6 py-4">Ресурс</th>
-              <th className="px-6 py-4 text-right">Кількість</th>
+              <th className="px-6 py-4 w-[35%]">Склад</th>
+              <th className="px-6 py-4 w-[45%]">Ресурс</th>
+              <th className="px-6 py-4 w-[20%] text-right">Кількість</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -101,59 +100,61 @@ const StockTable = ({ stocks, resourcesMap, onRefresh }) => {
 
               return (
                 <tr key={stock.id} className="hover:bg-blue-50/30 transition-colors group">
-                  <td className="px-6 py-4 font-medium text-slate-600 italic">
+                  <td className="px-6 py-4 font-medium text-slate-600 italic truncate">
                     {stock.warehouse_name}
                   </td>
                   <td className="px-6 py-4">
-                    <div className="font-bold text-slate-800">{resource.name}</div>
-                    <div className="text-[10px] text-blue-500 font-bold uppercase tracking-tight">{resource.category_name}</div>
+                    <div className="font-bold text-slate-800 truncate">{resource.name}</div>
+                    <div className="text-[10px] text-blue-500 font-bold uppercase tracking-tight truncate">{resource.category_name}</div>
                   </td>
                   <td className="px-6 py-4">
-                    {isEditing ? (
-                      <div className="flex items-center justify-end gap-2">
-                        <input
-                          autoFocus
-                          type="number"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          className="w-20 p-1.5 border-2 border-blue-500 rounded-lg text-right font-mono text-sm outline-none shadow-sm"
-                        />
-                        <button onClick={() => handleSaveEdit(stock.id)} className="p-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors">
-                          <Check size={14} />
-                        </button>
-                        <button onClick={() => setEditingId(null)} className="p-1.5 bg-slate-200 text-slate-600 rounded-md hover:bg-slate-300 transition-colors">
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-end gap-3">
-                        <div className="flex flex-col items-end">
-                          <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-                            {Number(stock.amount).toFixed(0)}
-                          </span>
-                          <span className="text-[9px] text-slate-400 font-bold uppercase mt-1">{resource.unit}</span>
+                    <div className="relative flex flex-col items-end justify-center h-10">
+                      {isEditing ? (
+                        <div className="flex items-center justify-end gap-1 animate-in fade-in zoom-in duration-200">
+                          <input
+                            autoFocus
+                            type="number"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(stock.id)}
+                            className="w-16 p-1 border-2 border-blue-500 rounded-lg text-right font-mono text-sm outline-none"
+                          />
+                          <button
+                            onClick={() => handleSaveEdit(stock.id)}
+                            className="p-1 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+                          >
+                            <Check size={14} />
+                          </button>
                         </div>
-                        <button
-                          onClick={() => handleStartEdit(stock)}
-                          className="opacity-0 group-hover:opacity-100 p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-all"
-                        >
-                          <Edit3 size={16} />
-                        </button>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="relative flex items-center justify-end w-full h-full">
+                          {/* ЧИСЛО ТА ОДИНИЦІ (ЗСУВАЮТЬСЯ РАЗОМ) */}
+                          <div className="flex flex-col items-end transition-all duration-300 transform group-hover:-translate-x-10">
+                            <span className="bg-slate-100 px-3 py-1 rounded-xl font-mono font-bold text-slate-700">
+                              {Number(stock.amount).toFixed(0)}
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-black uppercase mt-0.5 mr-1 tracking-tighter">
+                              {resource.unit}
+                            </span>
+                          </div>
+
+                          {/* КНОПКА-ОЛІВЕЦЬ (ТЕПЕР КЛІКАБЕЛЬНА) */}
+                          <button
+                            onClick={() => handleStartEdit(stock)}
+                            className="absolute right-0 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-4 group-hover:translate-x-0 p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 active:scale-90 z-20"
+                            title="Редагувати"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-
-        {filteredStocks.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-slate-400 space-y-4 py-20">
-            <Search size={48} strokeWidth={1} />
-            <p className="italic text-sm">Запаси відсутні або приховані фільтрами</p>
-          </div>
-        )}
       </div>
     </section>
   );
