@@ -76,12 +76,12 @@ const Landing = ({ onEnter, stats }) => {
                  alt="Humanitarian Aid Ukraine"
                  className="rounded-2xl grayscale-[20%] hover:grayscale-0 transition-all duration-500"
                />
-               <div className="absolute bottom-8 left-8 right-8 bg-white/90 backdrop-blur p-4 rounded-xl border border-slate-100 shadow-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                    <p className="text-[10px] font-black uppercase tracking-tighter text-slate-600">Моніторинг хабів у реальному часі</p>
-                  </div>
-               </div>
+               {/*<div className="absolute bottom-8 left-8 right-8 bg-white/90 backdrop-blur p-4 rounded-xl border border-slate-100 shadow-lg">*/}
+               {/*   <div className="flex items-center gap-3">*/}
+               {/*     <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>*/}
+               {/*     <p className="text-[10px] font-black uppercase tracking-tighter text-slate-600">Моніторинг хабів у реальному часі</p>*/}
+               {/*   </div>*/}
+               {/*</div>*/}
             </div>
           </div>
         </div>

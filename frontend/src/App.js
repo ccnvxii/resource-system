@@ -16,7 +16,8 @@ import {
   ClipboardList,
   Info,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  ShieldCheck
 } from 'lucide-react';
 
 // Імпорт компонентів
@@ -29,6 +30,7 @@ import StockInForm from './components/StockInForm/StockInForm';
 import Landing from './components/Landing';
 import AddResourceForm from './components/AddResourceForm';
 import Modal from './components/Modal';
+import AuthModal from './components/Auth';
 
 const API_URL = '/api';
 
@@ -62,6 +64,7 @@ function App() {
   const [requestTab, setRequestTab] = useState('active');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [formRows, setFormRows] = useState([{ resource: '', quantity: '', purpose: 'personal' }]);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('isLandingMode', isLandingMode);
@@ -91,6 +94,11 @@ function App() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleAuthSuccess = () => {
+    setIsLandingMode(false);
+    toast.success("Доступ дозволено", { icon: <ShieldCheck size={20} className="text-blue-500" /> });
+  };
 
   const handleSubmitRequest = async () => {
     if (!selectedUserId) return toast.error("Оберіть заявника");
@@ -161,14 +169,18 @@ function App() {
 
   if (isLandingMode) {
     return (
-      <Landing
-        onEnter={() => setIsLandingMode(false)}
-        stats={{
-          stocks: totalItemsAmount,
-          requests: requests.length,
-          warehouses: warehouses.length
-        }}
-      />
+      <>
+        <Landing
+          onEnter={() => setIsAuthOpen(true)}
+          stats={{ stocks: totalItemsAmount, requests: requests.length, warehouses: warehouses.length }}
+        />
+        <AuthModal
+          isOpen={isAuthOpen}
+          onClose={() => setIsAuthOpen(false)}
+          onSuccess={handleAuthSuccess}
+        />
+        <Toaster position="top-center" />
+      </>
     );
   }
 
