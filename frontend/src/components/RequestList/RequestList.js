@@ -119,7 +119,6 @@ const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
                       {purposeData.icon}
                       <span>{purposeData.label}</span>
                     </span>
-                    <span className="text-[10px] text-slate-400 font-mono">ID: {req.id}</span>
                   </div>
                   <h3 className={`font-bold text-slate-800 ${isHistory && 'line-through'}`}>{req.resource_name}</h3>
                   <div className="flex items-center gap-1 text-xs text-slate-500">
