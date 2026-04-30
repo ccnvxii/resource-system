@@ -10,20 +10,21 @@ import {
   Package
 } from 'lucide-react';
 
-const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
-  // Локальні стани для фільтрів
+const RequestList = ({ requests = [], purposeMap = {} }) => {
+  // --- ЛОКАЛЬНІ СТАНИ (Виправлення помилок) ---
+  const [requestTab, setRequestTab] = useState('active');
   const [statusFilter, setStatusFilter] = useState('all');
   const [resourceFilter, setResourceFilter] = useState('all');
 
   // 1. Базова фільтрація за вкладкою (Активні / Архів)
-  const baseFiltered = requests.filter(r =>
+  const baseFiltered = (requests || []).filter(r =>
     requestTab === 'active' ? r.status !== 'done' : r.status === 'done'
   );
 
-  // 2. Унікальні назви ресурсів для випадаючого списку (тільки з поточних заявок)
+  // 2. Унікальні назви ресурсів для випадаючого списку
   const availableResources = ['all', ...new Set(baseFiltered.map(r => r.resource_name))];
 
-  // 3. Фінальна фільтрація за статусом та типом ресурсу
+  // 3. Фінальна фільтрація
   const displayedRequests = baseFiltered.filter(r => {
     const matchStatus = statusFilter === 'all' || r.status === statusFilter;
     const matchResource = resourceFilter === 'all' || r.resource_name === resourceFilter;
@@ -42,7 +43,7 @@ const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
   };
 
   return (
-    <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px]">
+    <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px] animate-in fade-in duration-500">
       {/* Шапка списку */}
       <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-4">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
@@ -54,13 +55,13 @@ const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
           <div className="flex bg-slate-200/50 p-1 rounded-xl">
             <button
               onClick={() => { setRequestTab('active'); setStatusFilter('all'); }}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${requestTab === 'active' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${requestTab === 'active' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               Активні <span className="bg-slate-200 px-1.5 py-0.5 rounded text-[10px]">{requests.filter(r => r.status !== 'done').length}</span>
             </button>
             <button
               onClick={() => { setRequestTab('history'); setStatusFilter('all'); }}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${requestTab === 'history' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500'}`}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${requestTab === 'history' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               <History size={14} /> Архів
             </button>
@@ -69,7 +70,6 @@ const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
 
         {/* ПАНЕЛЬ ФІЛЬТРІВ */}
         <div className="grid grid-cols-2 gap-3 pb-1">
-          {/* Фільтр по статусу (показуємо лише в активних) */}
           <div className="relative">
             <Filter size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <select
@@ -84,7 +84,6 @@ const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
             </select>
           </div>
 
-          {/* Фільтр по ресурсу */}
           <div className="relative">
             <Package size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <select
@@ -93,7 +92,7 @@ const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
               className="w-full text-[10px] pl-8 pr-2 py-2 rounded-lg border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-blue-500/20 font-bold uppercase tracking-tight"
             >
               <option value="all">Усі ресурси</option>
-              {availableResources.filter(r => r !== 'all').map(res => (
+              {availableResources.filter(r => r !== 'all' && r).map(res => (
                 <option key={res} value={res}>{res}</option>
               ))}
             </select>
@@ -104,13 +103,21 @@ const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
       {/* Список карток */}
       <div className="overflow-y-auto flex-1 p-4 space-y-3 bg-slate-50/30 custom-scrollbar">
         {displayedRequests.map((req) => {
-          const purposeData = purposeMap[req.purpose] || { label: req.purpose, icon: '❓', color: 'bg-gray-100' };
+          // Виправлено: використання purposeMap для іконок
+          const purposeData = purposeMap[req.purpose] || { label: 'Інше', icon: '❓', color: 'bg-gray-100' };
           const isHistory = req.status === 'done';
           const statusDetails = getStatusDetails(req.status);
 
           return (
-            <div key={req.id} className={`bg-white p-4 rounded-2xl border ${isHistory ? 'border-slate-100 opacity-75' : 'border-slate-200 shadow-sm'} hover:shadow-md transition-all relative overflow-hidden group`}>
-              <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ backgroundColor: isHistory ? '#10b981' : (req.priority >= 8 ? '#ef4444' : '#3b82f6') }}></div>
+            <div
+              key={req.id}
+              className={`bg-white p-4 rounded-2xl border ${isHistory ? 'border-slate-100 opacity-75' : 'border-slate-200 shadow-sm'} hover:shadow-md hover:scale-[1.01] transition-all relative overflow-hidden group`}
+            >
+              {/* Пріоритетна смужка (Додано ефект) */}
+              <div
+                className="absolute left-0 top-0 bottom-0 w-1.5 transition-all duration-300 group-hover:w-2"
+                style={{ backgroundColor: isHistory ? '#10b981' : (req.priority >= 8 ? '#ef4444' : '#3b82f6') }}
+              ></div>
 
               <div className="flex justify-between items-start">
                 <div className="space-y-1">
@@ -120,15 +127,18 @@ const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
                       <span>{purposeData.label}</span>
                     </span>
                   </div>
-                  <h3 className={`font-bold text-slate-800 ${isHistory && 'line-through'}`}>{req.resource_name}</h3>
-                  <div className="flex items-center gap-1 text-xs text-slate-500">
-                    <User size={12} /> <span>Від: {req.user_full_name || req.username}</span>
+                  <h3 className={`font-bold text-slate-800 ${isHistory && 'line-through opacity-50'}`}>{req.resource_name}</h3>
+                  <div className="flex items-center gap-1 text-xs text-slate-500 font-medium">
+                    <User size={12} className="opacity-50" />
+                    <span>Від: {req.user_full_name || req.username}</span>
                   </div>
                 </div>
 
                 <div className="text-right">
                   <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Пріоритет</div>
-                  <div className="text-xl font-black text-slate-700 leading-none">{Number(req.priority).toFixed(1)}</div>
+                  <div className={`text-xl font-black leading-none ${!isHistory && req.priority >= 8 ? 'text-red-500' : 'text-slate-700'}`}>
+                    {Number(req.priority).toFixed(1)}
+                  </div>
                 </div>
               </div>
 
@@ -137,10 +147,12 @@ const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
                   {statusDetails.icon}
                   <span className="text-[10px] font-bold uppercase text-slate-500">{statusDetails.label}</span>
                 </div>
-                <div className="text-sm font-mono font-bold">
-                  <span className="text-blue-600">{Number(req.quantity_allocated).toFixed(0)}</span>
-                  <span className="text-slate-300 mx-1">/</span>
-                  <span className="text-slate-800">{Number(req.quantity_requested).toFixed(0)}</span>
+                <div className="text-sm font-mono font-bold flex flex-col items-end">
+                  <div>
+                    <span className="text-blue-600">{Number(req.quantity_allocated).toFixed(0)}</span>
+                    <span className="text-slate-300 mx-1">/</span>
+                    <span className="text-slate-800">{Number(req.quantity_requested).toFixed(0)}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -149,7 +161,7 @@ const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
 
         {displayedRequests.length === 0 && (
           <div className="text-center py-20 text-slate-400 italic text-sm flex flex-col items-center gap-2">
-            <Filter size={24} className="opacity-20" />
+            <Filter size={24} className="opacity-20 mb-2" />
             За вказаними фільтрами заявок не знайдено
           </div>
         )}
