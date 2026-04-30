@@ -32,6 +32,8 @@ import AddResourceForm from './components/AddResourceForm';
 import Modal from './components/Modal';
 import AuthModal from './components/Auth';
 
+axios.defaults.withCredentials = true;
+
 const API_URL = '/api';
 
 const PURPOSE_MAP = {
@@ -95,9 +97,36 @@ function App() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleAuthSuccess = () => {
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedUser = localStorage.getItem('currentUser');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
+  const handleAuthSuccess = (userData) => {
+    // Визначаємо, чи є користувач адміном на основі email або username
+    const isAdmin = userData.email === 'admin@resq.ua' || userData.email === 'admin';
+
+    const loggedUser = {
+      username: userData.firstName || userData.email.split('@')[0],
+      email: userData.email,
+      is_admin: isAdmin
+    };
+
+    setCurrentUser(loggedUser);
+    localStorage.setItem('currentUser', JSON.stringify(loggedUser));
+
     setIsLandingMode(false);
-    toast.success("Доступ дозволено", { icon: <ShieldCheck size={20} className="text-blue-500" /> });
+    toast.success(isAdmin ? "Вхід виконано (Адмін)" : "Вхід виконано (Волонтер)");
+  };
+
+  const handleStartAction = () => {
+    if (currentUser) {
+      // Якщо користувач вже є, просто переходимо в панель
+      setIsLandingMode(false);
+    } else {
+      // Якщо немає — просимо авторизацію
+      setIsAuthOpen(true);
+    }
   };
 
   const handleSubmitRequest = async () => {
@@ -165,13 +194,20 @@ function App() {
     } finally { setLoading(false); }
   };
 
+  const handleLogout = () => {
+  setCurrentUser(null);
+  localStorage.removeItem('currentUser');
+  setIsLandingMode(true);
+  toast.success("Вихід успішний");
+};
+
   const totalItemsAmount = stocks.reduce((sum, item) => sum + Number(item.amount), 0);
 
   if (isLandingMode) {
     return (
       <>
         <Landing
-          onEnter={() => setIsAuthOpen(true)}
+          onEnter={handleStartAction} // ТУТ: тепер використовуємо нову функцію
           stats={{ stocks: totalItemsAmount, requests: requests.length, warehouses: warehouses.length }}
         />
         <AuthModal
@@ -201,8 +237,14 @@ function App() {
       </Modal>
 
       <div className="max-w-7xl mx-auto space-y-8 pb-24">
-        <Header onOpenForm={() => setIsFormOpen(true)} onOpenStockIn={() => setIsStockInOpen(true)} onAddResource={() => setIsAddResourceOpen(true)} onRefresh={fetchData} />
-
+        <Header
+          onOpenForm={() => setIsFormOpen(true)}
+          onOpenStockIn={() => setIsStockInOpen(true)}
+          onAddResource={() => setIsAddResourceOpen(true)}
+          onRefresh={fetchData}
+          onLogout={handleLogout}
+          currentUser={currentUser}
+        />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <StockTable stocks={stocks} resourcesMap={resourcesMap} onRefresh={fetchData} />
           <RequestList requests={requests} requestTab={requestTab} setRequestTab={setRequestTab} purposeMap={PURPOSE_MAP} />

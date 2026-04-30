@@ -31,7 +31,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOW_ALL_ORIGINS = True
 
 ROOT_URLCONF = 'config.urls'
 
@@ -71,6 +71,22 @@ USE_TZ = True
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# backend/config/settings.py
-CORS_ALLOW_ALL_ORIGINS = True  # Дозволити запити з будь-якого порту (наприклад, з 3000)
+# Дозволяємо передачу кукі через CORS
 CORS_ALLOW_CREDENTIALS = True
+
+# Переконайся, що твій фронтенд у списку дозволених (не використовуй '*')
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+]
+
+# Також важливо для CSRF захисту (Django потребує цього для POST запитів)
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+]
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
+}
