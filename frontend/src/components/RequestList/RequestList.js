@@ -122,7 +122,7 @@ const RequestList = ({ requests, requestTab, setRequestTab, purposeMap }) => {
                   </div>
                   <h3 className={`font-bold text-slate-800 ${isHistory && 'line-through'}`}>{req.resource_name}</h3>
                   <div className="flex items-center gap-1 text-xs text-slate-500">
-                    <User size={12} /> <span>Від: {req.username}</span>
+                    <User size={12} /> <span>Від: {req.user_full_name || req.username}</span>
                   </div>
                 </div>
 

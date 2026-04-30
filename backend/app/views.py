@@ -60,8 +60,12 @@ class ResourceViewSet(viewsets.ModelViewSet):
     """
     queryset = Resource.objects.all()
     serializer_class = ResourceSerializer
-    # Дозволяємо доступ без токена для GET запитів
-    authentication_classes = []
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            # Тільки Staff може змінювати ресурси
+            return [permissions.IsAdminUser()]
+        # Перегляд доступний всім
+        return [permissions.AllowAny()]
 
 
 class WarehouseViewSet(viewsets.ModelViewSet):
@@ -80,16 +84,21 @@ class UserRequestViewSet(viewsets.ModelViewSet):
     """
     queryset = UserRequest.objects.all()
     serializer_class = UserRequestSerializer
-    # Дозволяємо будь-якому авторизованому користувачу (волонтеру) створювати заявки
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        # Якщо користувач не адмін, він створює заявку ТІЛЬКИ для себе
+        # Якщо користувач не адмін, він завжди автор своєї заявки
         if not self.request.user.is_staff:
             serializer.save(user=self.request.user)
         else:
-            # Адмін може обрати будь-якого користувача
-            serializer.save()
+            # Якщо адмін: перевіряємо чи вибрано користувача у формі
+            user_id = self.request.data.get('user')
+            if user_id:
+                # Зберігаємо з тим юзером, якого вибрав адмін
+                serializer.save()
+            else:
+                # Якщо адмін нікого не вибрав — автором стає сам адмін
+                serializer.save(user=self.request.user)
 
 
 class StockViewSet(viewsets.ModelViewSet):

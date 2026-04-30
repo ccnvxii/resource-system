@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
 import {
-  Search,
   Filter,
   Edit3,
   Check,
@@ -9,6 +7,8 @@ import {
   Warehouse as WarehouseIcon,
   PackageSearch
 } from 'lucide-react';
+// Імпортуємо ваш сервіс замість стандартного axios
+import api from '../../services/api';
 
 const StockTable = ({ stocks, resourcesMap, onRefresh }) => {
   const [filterCategory, setFilterCategory] = useState('all');
@@ -16,9 +16,11 @@ const StockTable = ({ stocks, resourcesMap, onRefresh }) => {
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState("");
 
+  // Отримання унікальних значень для фільтрів
   const categories = ['all', ...new Set(Object.values(resourcesMap).map(r => r.category_name))];
   const warehouses = ['all', ...new Set(stocks.map(s => s.warehouse_name))];
 
+  // Логіка фільтрації
   const filteredStocks = stocks.filter(stock => {
     const resource = resourcesMap[stock.resource];
     const isPositive = Number(stock.amount) > 0;
@@ -34,17 +36,23 @@ const StockTable = ({ stocks, resourcesMap, onRefresh }) => {
 
   const handleSaveEdit = async (id) => {
     try {
-      await axios.patch(`/api/stocks/${id}/update_amount/`, { amount: editValue });
+      // Використовуємо api.patch. Шлях відносний, бо baseURL вже містить /api
+      await api.patch(`/stocks/${id}/update_amount/`, {
+        amount: parseFloat(editValue)
+      });
+
       setEditingId(null);
-      onRefresh();
+      // Оновлюємо дані у батьківському компоненті
+      if (onRefresh) onRefresh();
     } catch (e) {
-      alert("Помилка при оновленні");
+      // Помилка автоматично обробиться інтерцептором в api.js (виведе toast)
+      console.error("Failed to update stock amount:", e);
     }
   };
 
   return (
     <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[600px] transition-all hover:shadow-md">
-      {/* Header Section */}
+      {/* Header & Filters */}
       <div className="p-5 border-b border-slate-100 bg-slate-50/50 space-y-4">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2 text-slate-800">
@@ -65,7 +73,9 @@ const StockTable = ({ stocks, resourcesMap, onRefresh }) => {
               className="w-full text-xs pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer font-medium text-slate-600"
             >
               <option value="all">Усі категорії</option>
-              {categories.filter(c => c !== 'all').map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              {categories.filter(c => c !== 'all').map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
             </select>
           </div>
 
@@ -77,13 +87,15 @@ const StockTable = ({ stocks, resourcesMap, onRefresh }) => {
               className="w-full text-xs pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer font-medium text-slate-600"
             >
               <option value="all">Усі склади</option>
-              {warehouses.filter(w => w !== 'all').map(wh => <option key={wh} value={wh}>{wh}</option>)}
+              {warehouses.filter(w => w !== 'all').map(wh => (
+                <option key={wh} value={wh}>{wh}</option>
+              ))}
             </select>
           </div>
         </div>
       </div>
 
-      {/* Table Section */}
+      {/* Table Content */}
       <div className="overflow-y-auto flex-1 custom-scrollbar">
         <table className="w-full text-sm text-left table-fixed">
           <thead className="bg-slate-50 text-slate-400 uppercase text-[10px] font-bold sticky top-0 z-10">
@@ -105,19 +117,21 @@ const StockTable = ({ stocks, resourcesMap, onRefresh }) => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="font-bold text-slate-800 truncate">{resource.name}</div>
-                    <div className="text-[10px] text-blue-500 font-bold uppercase tracking-tight truncate">{resource.category_name}</div>
+                    <div className="text-[10px] text-blue-500 font-bold uppercase tracking-tight truncate">
+                      {resource.category_name}
+                    </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="relative flex flex-col items-end justify-center h-10">
+                  <td className="px-6 py-4 text-right">
+                    <div className="relative flex items-center justify-end h-10">
                       {isEditing ? (
-                        <div className="flex items-center justify-end gap-1 animate-in fade-in zoom-in duration-200">
+                        <div className="flex items-center gap-1 animate-in fade-in zoom-in duration-200">
                           <input
                             autoFocus
                             type="number"
                             value={editValue}
                             onChange={(e) => setEditValue(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(stock.id)}
-                            className="w-16 p-1 border-2 border-blue-500 rounded-lg text-right font-mono text-sm outline-none"
+                            className="w-20 p-1 border-2 border-blue-500 rounded-lg text-right font-mono text-sm outline-none shadow-sm"
                           />
                           <button
                             onClick={() => handleSaveEdit(stock.id)}
@@ -125,23 +139,27 @@ const StockTable = ({ stocks, resourcesMap, onRefresh }) => {
                           >
                             <Check size={14} />
                           </button>
+                          <button
+                            onClick={() => setEditingId(null)}
+                            className="p-1 bg-slate-200 text-slate-600 rounded-md hover:bg-slate-300 transition-colors"
+                          >
+                            <X size={14} />
+                          </button>
                         </div>
                       ) : (
-                        <div className="relative flex items-center justify-end w-full h-full">
-                          {/* ЧИСЛО ТА ОДИНИЦІ (ЗСУВАЮТЬСЯ РАЗОМ) */}
-                          <div className="flex flex-col items-end transition-all duration-300 transform group-hover:-translate-x-10">
+                        <div className="relative flex items-center justify-end w-full group-hover:pr-10 transition-all duration-300">
+                          <div className="flex flex-col items-end">
                             <span className="bg-slate-100 px-3 py-1 rounded-xl font-mono font-bold text-slate-700">
                               {Number(stock.amount).toFixed(0)}
                             </span>
-                            <span className="text-[9px] text-slate-400 font-black uppercase mt-0.5 mr-1 tracking-tighter">
+                            <span className="text-[9px] text-slate-400 font-black uppercase mt-0.5 mr-1">
                               {resource.unit}
                             </span>
                           </div>
 
-                          {/* КНОПКА-ОЛІВЕЦЬ (ТЕПЕР КЛІКАБЕЛЬНА) */}
                           <button
                             onClick={() => handleStartEdit(stock)}
-                            className="absolute right-0 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-4 group-hover:translate-x-0 p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 active:scale-90 z-20"
+                            className="absolute right-0 opacity-0 group-hover:opacity-100 transition-all p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 active:scale-90"
                             title="Редагувати"
                           >
                             <Edit3 size={16} />

@@ -47,13 +47,16 @@ class UserRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserRequest
         fields = '__all__'
-        # Додаємо 'user' у read_only_fields, щоб серіалізатор не вимагав його в POST-запиті
-        read_only_fields = ['priority', 'quantity_allocated', 'status', 'user']
+        # ПРИБИРАЄМО 'user' звідси, щоб адмін міг його передавати
+        read_only_fields = ['priority', 'quantity_allocated', 'status']
+        # Додаємо налаштування, щоб поле не було обов'язковим для волонтера
+        extra_kwargs = {
+            'user': {'required': False}
+        }
 
     def get_user_full_name(self, obj):
-        # Перевірка на випадок, якщо об'єкт користувача ще не прив'язаний
         if not obj.user:
-            return "Невідомий заявник"
+            return "Невідомий"
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
 
 class DistributionItemSerializer(serializers.ModelSerializer):
