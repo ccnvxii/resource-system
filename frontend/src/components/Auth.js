@@ -6,6 +6,8 @@ import { Mail, Lock, User, Phone, Building2, ArrowRight, ShieldCheck } from 'luc
 import Modal from './Modal'; // Імпортуємо твій базовий компонент
 
 // Схема валідації
+const nameRegex = /^[\p{L}\s'-]+$/u;
+
 const schema = z.object({
   email: z.string().email("Некоректний email"),
   password: z.string().min(6, "Пароль має бути мін. 6 символів"),
@@ -15,15 +17,27 @@ const schema = z.object({
   organization: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (!window.isLoginModeGlobal) {
-    if (!data.firstName || data.firstName.length < 2) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Обов'язково", path: ['firstName'] });
+    // Перевірка імені (тільки літери)
+    if (!data.firstName || !nameRegex.test(data.firstName)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Дозволені лише літери",
+        path: ['firstName']
+      });
     }
-    if (!data.lastName || data.lastName.length < 2) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Обов'язково", path: ['lastName'] });
+    // Перевірка прізвища (тільки літери)
+    if (!data.lastName || !nameRegex.test(data.lastName)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Дозволені лише літери",
+        path: ['lastName']
+      });
     }
+    // Телефон
     if (!data.phone || !/^\+?[0-9]{10,12}$/.test(data.phone)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Невірний формат", path: ['phone'] });
     }
+    // Організація
     if (!data.organization) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Вкажіть підрозділ", path: ['organization'] });
     }
@@ -42,7 +56,9 @@ const AuthModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       console.log("Відправка даних:", data);
       await new Promise(resolve => setTimeout(resolve, 1000));
-      onSuccess();
+
+      // Передаємо дані форми у функцію успіху
+      onSuccess(data);
       onClose();
     } catch (e) {
       console.error("Помилка авторизації");
