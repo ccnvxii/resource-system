@@ -7,114 +7,111 @@ from django.db import transaction
 from decimal import Decimal
 from django.contrib.auth.models import User
 
-from .models import Resource, Warehouse, Stock, UserRequest, DistributionPlan, DistributionItem, Category
+from .models import (
+    Resource, Warehouse, Stock, UserRequest,
+    DistributionPlan, DistributionItem, Category,
+    Unit, RequestPurpose
+)
 from .serializers import *
 from .optimizer.distribute import calculate_distribution
 
-# --- КЛАСИ VIEWSETS ---
+# --- НОВІ VIEWSETS ДЛЯ ДОВІДНИКІВ  ---
+
+class UnitViewSet(viewsets.ReadOnlyModelViewSet):
+    """Перегляд доступних одиниць виміру (кг, шт, л)."""
+    queryset = Unit.objects.all()
+    serializer_class = UnitSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+
+class RequestPurposeViewSet(viewsets.ReadOnlyModelViewSet):
+    """Перегляд типів призначення (Військові, Медицина тощо) та їх ваг."""
+    queryset = RequestPurpose.objects.all()
+    serializer_class = RequestPurposeSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+
+# --- КЛАСИ АВТОРИЗАЦІЇ ТА КОРИСТУВАЧІВ ---
+
 class RegisterView(APIView):
-    # Дозволяємо доступ всім, бо це реєстрація
+    """Реєстрація нового користувача з автоматичним створенням профілю."""
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
-        data = request.data
-        try:
-            # Перевіряємо, чи не зайнятий емейл/логін
-            if User.objects.filter(username=data['email']).exists():
-                return Response({'error': 'Користувач з такою поштою вже існує'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response({
+                'message': 'Реєстрація успішна',
+                'user_id': user.id
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            # Створюємо користувача (логін = емейл, як ми домовлялися)
-            user = User.objects.create_user(
-                username=data['email'],
-                email=data['email'],
-                password=data['password'],
-                first_name=data.get('firstName', ''),
-                last_name=data.get('lastName', '')
-            )
-            return Response({'message': 'Реєстрація успішна'}, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 class UserViewSet(viewsets.ModelViewSet):
-    """
-    Керування користувачами. Доступно тільки адміністраторам.
-    """
+    """Керування користувачами (тільки для адмінів)."""
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAdminUser]
 
 
+# --- КЕРУВАННЯ РЕСУРСАМИ ТА СКЛАДАМИ ---
+
 class CategoryViewSet(viewsets.ModelViewSet):
-    """
-    Перегляд категорій доступний всім, редагування — адміну.
-    """
+    """Категорії ресурсів та їх критичність."""
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    # Дозволяємо доступ без токена для GET запитів
-    authentication_classes = []
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
 
 class ResourceViewSet(viewsets.ModelViewSet):
-    """
-    Керування номенклатурою ресурсів.
-    """
+    """Номенклатура ресурсів. Створення/зміна тільки для адмінів."""
     queryset = Resource.objects.all()
     serializer_class = ResourceSerializer
+
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # Тільки Staff може змінювати ресурси
             return [permissions.IsAdminUser()]
-        # Перегляд доступний всім
         return [permissions.AllowAny()]
 
 
 class WarehouseViewSet(viewsets.ModelViewSet):
-    """
-    Інформація про доступні склади та хаби.
-    """
+    """Інформація про логістичні хаби та склади."""
     queryset = Warehouse.objects.all()
     serializer_class = WarehouseSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
 
+# --- ОПЕРАЦІЙНА ЛОГІКА: ЗАЯВКИ ТА ЗАПАСИ ---
+
 class UserRequestViewSet(viewsets.ModelViewSet):
-    """
-    Керування заявками на ресурси.
-    Волонтери можуть створювати, адміни — керувати всіма.
-    """
+    """Керування заявками. Пріоритет розраховується автоматично в моделі."""
     queryset = UserRequest.objects.all()
     serializer_class = UserRequestSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        # Якщо користувач не адмін, він завжди автор своєї заявки
         if not self.request.user.is_staff:
             serializer.save(user=self.request.user)
         else:
-            # Якщо адмін: перевіряємо чи вибрано користувача у формі
             user_id = self.request.data.get('user')
             if user_id:
-                # Зберігаємо з тим юзером, якого вибрав адмін
                 serializer.save()
             else:
-                # Якщо адмін нікого не вибрав — автором стає сам адмін
                 serializer.save(user=self.request.user)
 
 
 class StockViewSet(viewsets.ModelViewSet):
-    """
-    Керування залишками на складах.
-    """
+    """Облік запасів на складах."""
     queryset = Stock.objects.filter(amount__gt=0)
     serializer_class = StockSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     @action(detail=True, methods=['patch'])
     def update_amount(self, request, pk=None):
-        """Ручне коригування залишків (тільки адмін)."""
+        """Ручне коригування (тільки адмін)."""
         if not request.user.is_staff:
             return Response({"error": "Доступ заборонено"}, status=status.HTTP_403_FORBIDDEN)
-
         stock = self.get_object()
         try:
             stock.amount = Decimal(str(request.data.get('amount')))
@@ -125,7 +122,7 @@ class StockViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def add_resource(self, request):
-        """Поповнення складу (Поставка)."""
+        """Реєстрація поставки на склад."""
         if not request.user.is_staff:
             return Response({"error": "Тільки адміністратор може реєструвати поставки"}, status=403)
 
@@ -154,19 +151,15 @@ class StockViewSet(viewsets.ModelViewSet):
             return Response({"error": str(e)}, status=400)
 
 
-# --- API ДЛЯ АЛГОРИТМУ РОЗПОДІЛУ ---
+# --- API ДЛЯ АЛГОРИТМУ ОПТИМІЗАЦІЇ ---
 
 class DistributeResourcesView(APIView):
-    """
-    Запуск математичного алгоритму оптимізації розподілу дефіцитних ресурсів.
-    Доступно виключно для адміністраторів (координаторів).
-    """
+    """Запуск алгоритму справедливого розподілу ресурсів за пріоритетами."""
     permission_classes = [permissions.IsAdminUser]
     authentication_classes = [JWTAuthentication]
 
     def post(self, request):
         with transaction.atomic():
-            # 1. Збір активних заявок та наявних залишків
             active_requests_qs = UserRequest.objects.exclude(status='done').select_for_update()
             stocks_qs = Stock.objects.filter(amount__gt=0).select_for_update()
 
@@ -178,7 +171,7 @@ class DistributeResourcesView(APIView):
                         'id': r.id,
                         'resource_id': r.resource_id,
                         'amount_needed': needed,
-                        'priority': float(r.priority)  # Пріоритет на основі категорії та призначення
+                        'priority': float(r.priority)
                     })
 
             stocks_data = [
@@ -186,15 +179,11 @@ class DistributeResourcesView(APIView):
                 for s in stocks_qs
             ]
 
-            # 2. Виклик алгоритму оптимізації
             plan_items_data = calculate_distribution(requests_data, stocks_data)
 
             if not plan_items_data:
-                return Response({
-                                    "message": "На даний момент неможливо виконати розподіл (недостатньо ресурсів або немає активних заявок)."},
-                                status=200)
+                return Response({"message": "Немає доступних комбінацій для розподілу."}, status=200)
 
-            # 3. Формування плану та оновлення бази даних
             new_plan = DistributionPlan.objects.create()
             items_to_create = []
             requests_map = {req.id: req for req in active_requests_qs}
@@ -211,23 +200,15 @@ class DistributeResourcesView(APIView):
                     amount=amount_dec
                 ))
 
-                # Оновлення статусу заявки
                 req.quantity_allocated += amount_dec
-                # Перевірка на повне задоволення потреби з урахуванням похибки float
                 is_done = req.quantity_allocated >= req.quantity_requested - Decimal('0.001')
                 req.status = 'done' if is_done else 'partial'
                 req.save()
 
-                # Зменшення залишків на складі
-                stock = Stock.objects.get(
-                    warehouse_id=item['warehouse_id'],
-                    resource_id=req.resource_id
-                )
+                stock = Stock.objects.get(warehouse_id=item['warehouse_id'], resource_id=req.resource_id)
                 stock.amount -= amount_dec
                 stock.save()
 
-            # Масове створення записів плану для швидкодії
             DistributionItem.objects.bulk_create(items_to_create)
-
             serializer = DistributionPlanSerializer(new_plan)
             return Response(serializer.data, status=status.HTTP_201_CREATED)

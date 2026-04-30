@@ -4,6 +4,7 @@ import { User, Package, Hash, Target, Plus, Trash2, Save } from 'lucide-react';
 const RequestForm = ({
   usersList,
   resourcesList,
+  purposes, // Додано для 3NF
   selectedUserId,
   setSelectedUserId,
   formRows,
@@ -16,10 +17,9 @@ const RequestForm = ({
   currentUser
 }) => {
 
-  // Автоматично встановлюємо ID поточного користувача, якщо це волонтер
+  // Автоматично встановлюємо ID поточного користувача, якщо це не адмін
   useEffect(() => {
     if (currentUser && !currentUser.is_admin && !selectedUserId) {
-      // Шукаємо профіль поточного юзера в загальному списку, щоб отримати його ID
       const me = usersList.find(u => u.email === currentUser.email);
       if (me) {
         setSelectedUserId(me.id.toString());
@@ -44,7 +44,9 @@ const RequestForm = ({
               <option value="">Оберіть користувача зі списку...</option>
               {usersList.map(u => (
                 <option key={u.id} value={u.id}>
-                  {u.first_name} {u.last_name} ({u.email})
+                  {u.full_name && u.full_name.trim() !== ""
+                    ? u.full_name
+                    : `${u.username} (Логін)`}
                 </option>
               ))}
             </select>
@@ -82,7 +84,9 @@ const RequestForm = ({
               >
                 <option value="">Оберіть ресурс...</option>
                 {resourcesList.map(r => (
-                  <option key={r.id} value={r.id}>{r.name} ({r.unit})</option>
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.unit_name}) {/* 3NF: unit_name замість unit */}
+                  </option>
                 ))}
               </select>
             </div>
@@ -102,7 +106,7 @@ const RequestForm = ({
               />
             </div>
 
-            {/* Призначення */}
+            {/* Призначення (3NF Динамічне) */}
             <div className="w-full md:w-60 text-left">
               <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 mb-1.5 uppercase ml-1">
                 <Target size={12} /> Призначення
@@ -112,12 +116,12 @@ const RequestForm = ({
                 onChange={(e) => handleFormChange(index, 'purpose', e.target.value)}
                 className="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-blue-500/20 text-sm font-medium"
               >
-                <option value="military">Військові потреби (10)</option>
-                <option value="hospital">Медичні заклади (9)</option>
-                <option value="disaster">Зона лиха (8)</option>
-                <option value="refugees">ВПО та біженці (6)</option>
-                <option value="school">Освітні заклади (4)</option>
-                <option value="personal">Особисте споживання (1)</option>
+                <option value="">Оберіть ціль...</option>
+                {purposes.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.weight})
+                  </option>
+                ))}
               </select>
             </div>
 
