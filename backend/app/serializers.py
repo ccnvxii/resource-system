@@ -4,10 +4,15 @@ from .models import Resource, Warehouse, Stock, UserRequest, Category, Distribut
 
 class UserSerializer(serializers.ModelSerializer):
     is_admin = serializers.BooleanField(source='is_staff', read_only=True)
+    # Додаємо повне ім'я для зручного відображення на фронтенді
+    full_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'is_admin']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'full_name', 'is_admin']
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip() or obj.username
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -36,17 +41,26 @@ class StockSerializer(serializers.ModelSerializer):
 
 class UserRequestSerializer(serializers.ModelSerializer):
     resource_name = serializers.CharField(source='resource.name', read_only=True)
-    username = serializers.CharField(source='user.username', read_only=True)
+    user_full_name = serializers.SerializerMethodField()
+    user_email = serializers.EmailField(source='user.email', read_only=True)
 
     class Meta:
         model = UserRequest
         fields = '__all__'
-        read_only_fields = ['priority', 'quantity_allocated', 'status']
+        # Додаємо 'user' у read_only_fields, щоб серіалізатор не вимагав його в POST-запиті
+        read_only_fields = ['priority', 'quantity_allocated', 'status', 'user']
+
+    def get_user_full_name(self, obj):
+        # Перевірка на випадок, якщо об'єкт користувача ще не прив'язаний
+        if not obj.user:
+            return "Невідомий заявник"
+        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
 
 class DistributionItemSerializer(serializers.ModelSerializer):
     resource_name = serializers.CharField(source='request.resource.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
-    recipient_name = serializers.CharField(source='request.user.username', read_only=True)
+    # Тут також замінюємо технічний логін на читабельне ім'я отримувача
+    recipient_name = serializers.SerializerMethodField()
     purpose = serializers.CharField(source='request.purpose', read_only=True)
     priority = serializers.FloatField(source='request.priority', read_only=True)
 
@@ -56,6 +70,9 @@ class DistributionItemSerializer(serializers.ModelSerializer):
             'id', 'resource_name', 'warehouse_name', 'amount',
             'recipient_name', 'purpose', 'request', 'priority'
         ]
+
+    def get_recipient_name(self, obj):
+        return f"{obj.request.user.first_name} {obj.request.user.last_name}".strip() or obj.request.user.username
 
 class DistributionPlanSerializer(serializers.ModelSerializer):
     items = DistributionItemSerializer(many=True, read_only=True)

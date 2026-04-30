@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models import Category, Resource, Warehouse, Stock, UserRequest, DistributionPlan, DistributionItem
 
+#Admin Panel
 
 # 1. Категорії
 @admin.register(Category)
