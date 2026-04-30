@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, Ruler, Layers, Save, ChevronDown } from 'lucide-react';
-import api from '../services/api';
+import api from '../../services/api';
 import { toast } from 'react-hot-toast';
 
 const AddResourceForm = ({ units, onResourceAdded, onClose }) => {

@@ -5,7 +5,7 @@ import * as z from 'zod';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { Mail, Lock, User, Phone, Building2, ArrowRight, ShieldCheck } from 'lucide-react';
-import Modal from './Modal';
+import Modal from '../UI/Modal';
 
 const nameRegex = /^[\p{L}\s'-]+$/u;
 

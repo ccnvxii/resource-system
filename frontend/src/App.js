@@ -9,16 +9,16 @@ import { useModal } from './hooks/useModal';
 import { useFetchData } from './hooks/useFetchData';
 
 // Компоненти
-import Header from './components/Header/Header';
-import StockTable from './components/StockTable/StockTable';
-import RequestList from './components/RequestList/RequestList';
-import RequestForm from './components/RequestForm/RequestForm';
-import DistributionPlan from './components/DistributionPlan/DistributionPlan';
-import StockInForm from './components/StockInForm/StockInForm';
-import Landing from './components/Landing';
-import AddResourceForm from './components/AddResourceForm';
-import Modal from './components/Modal';
-import AuthModal from './components/Auth';
+import Header from './components/Layout/Header';
+import StockTable from './components/Features/StockTable';
+import RequestList from './components/Features/RequestList';
+import RequestForm from './components/Features/RequestForm';
+import DistributionPlan from './components/Features/DistributionPlan';
+import StockInForm from './components/Features/StockInForm';
+import Landing from './components/Layout/Landing';
+import AddResourceForm from './components/Features/AddResourceForm';
+import Modal from './components/UI/Modal';
+import AuthModal from './components/Auth/Auth';
 
 function App() {
   // --- СТАН КОРИСТУВАЧА ТА ІНТЕРФЕЙСУ ---
