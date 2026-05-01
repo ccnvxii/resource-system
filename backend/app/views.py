@@ -15,6 +15,7 @@ from .models import (
 from .serializers import *
 from .optimizer.distribute import calculate_distribution
 
+
 # --- НОВІ VIEWSETS ДЛЯ ДОВІДНИКІВ  ---
 
 class UnitViewSet(viewsets.ReadOnlyModelViewSet):

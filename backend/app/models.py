@@ -85,7 +85,7 @@ class UserRequest(models.Model):
 
     def save(self, *args, **kwargs):
         # Розрахунок тепер бере вагу з бази даних (RequestPurpose)
-        w_dest = self.purpose.weight 
+        w_dest = self.purpose.weight
         w_res = self.resource.category.criticality if self.resource.category else 0.5
         self.priority = float(w_dest) * float(w_res)
         super().save(*args, **kwargs)

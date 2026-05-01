@@ -1,61 +1,80 @@
 import { useState, useCallback } from 'react';
 import api from '../services/api';
-import { PURPOSE_MAP } from '../type/purposes';
+import { PURPOSE_MAP } from '../constants/purposes';
 
 export const useFetchData = (currentUser) => {
-  const [data, setData] = useState({
-    stocks: [],
-    requests: [],
-    warehouses: [],
-    resourcesList: [],
-    resourcesMap: {},
-    usersList: [],
-    units: [],
-    purposes: [],
-    purposeMap: {}
-  });
+    const [data, setData] = useState({
+        stocks: [],
+        requests: [],
+        warehouses: [],
+        resourcesList: [],
+        resourcesMap: {},
+        usersList: [],
+        units: [],
+        purposes: [],
+        purposeMap: {}
+    });
 
-  const fetchData = useCallback(async () => {
-    if (!currentUser) return;
+    const fetchData = useCallback(async () => {
+        if (!currentUser) return;
 
-    try {
-      const endpoints = [
-        '/stocks/', '/requests/', '/resources/',
-        '/warehouses/', '/units/', '/purposes/'
-      ];
+        try {
+            // Визначаємо набір запитів залежно від ролі
+            const requestsToMake = {
+                requests: api.get('/requests/'),
+                resources: api.get('/resources/'),
+                units: api.get('/units/'),
+                purposes: api.get('/purposes/')
+            };
 
-      // Додаємо запит користувачів лише для адміністратора
-      if (currentUser?.is_admin) endpoints.push('/users/');
+            if (currentUser?.is_admin) {
+                requestsToMake.stocks = api.get('/stocks/');
+                requestsToMake.warehouses = api.get('/warehouses/');
+                requestsToMake.users = api.get('/users/');
+            }
 
-      const responses = await Promise.all(endpoints.map(url => api.get(url)));
-      const [stock, req, res, wh, unit, purp, user] = responses.map(r => r.data);
+            const keys = Object.keys(requestsToMake);
+            const responses = await Promise.all(Object.values(requestsToMake));
 
-      setData({
-        stocks: stock,
-        requests: req,
-        resourcesList: res,
-        warehouses: wh,
-        units: unit,
-        purposes: purp,
-        usersList: user || [],
-        // Створення мапи ресурсів для швидкого пошуку за ID
-        resourcesMap: res.reduce((acc, r) => ({ ...acc, [r.id]: r }), {}),
-        // Мапінг кодів призначень на іконки та кольори
-        purposeMap: purp.reduce((acc, p) => {
-          const config = PURPOSE_MAP[p.code] || PURPOSE_MAP['default'];
-          acc[p.id] = {
-            label: p.name,
-            icon: config.icon,
-            color: config.color
-          };
-          return acc;
-        }, {})
-      });
-    } catch (error) {
-      console.error("Помилка завантаження даних:", error);
-      throw error;
-    }
-  }, [currentUser]);
+            const results = {};
+            keys.forEach((key, index) => {
+                results[key] = responses[index].data;
+            });
 
-  return { data, fetchData };
+            // Твоя робоча логіка фільтрації
+            const rawRequests = results.requests || [];
+            const filteredRequests = rawRequests.filter(r => {
+                if (currentUser?.is_admin) return true;
+
+                return (
+                    r.user == currentUser?.id ||
+                    r.username === currentUser?.email ||
+                    r.user_email === currentUser?.email
+                );
+            });
+
+            const resources = results.resources || [];
+            const purposes = results.purposes || [];
+
+            setData({
+                stocks: results.stocks || [],
+                requests: filteredRequests,
+                resourcesList: resources,
+                warehouses: results.warehouses || [],
+                units: results.units || [],
+                purposes: purposes,
+                usersList: results.users || [],
+                resourcesMap: resources.reduce((acc, r) => ({...acc, [r.id]: r}), {}),
+                purposeMap: purposes.reduce((acc, p) => {
+                    const config = PURPOSE_MAP[p.code] || PURPOSE_MAP['default'];
+                    acc[p.id] = { label: p.name, icon: config.icon, color: config.color };
+                    return acc;
+                }, {})
+            });
+        } catch (error) {
+            console.error("Помилка завантаження даних:", error);
+        }
+    }, [currentUser]);
+
+    return { data, fetchData };
 };

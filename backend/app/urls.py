@@ -3,7 +3,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     ResourceViewSet, WarehouseViewSet, StockViewSet,
-    UserRequestViewSet, DistributeResourcesView, CategoryViewSet, UserViewSet, RegisterView, UnitViewSet,RequestPurposeViewSet
+    UserRequestViewSet, DistributeResourcesView, CategoryViewSet, UserViewSet, RegisterView, UnitViewSet,
+    RequestPurposeViewSet
 )
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
