@@ -107,10 +107,6 @@ const DistributionPlan = ({ plan, purposeMap }) => (
                     <span className="font-bold text-slate-800 text-sm leading-none flex items-center gap-1">
                       {item.recipient_name}
                     </span>
-                    <span className={`flex items-center gap-1.5 text-[10px] font-black px-2 py-0.5 rounded-lg w-fit uppercase mt-1 ${purposeData.color}`}>
-                      {purposeData.icon}
-                      <span>{purposeData.label}</span>
-                    </span>
                   </div>
                 </div>
               </div>
