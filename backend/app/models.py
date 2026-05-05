@@ -76,15 +76,18 @@ class UserRequest(models.Model):
     quantity_requested = models.DecimalField(max_digits=10, decimal_places=2)
     quantity_allocated = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
-    # 3NF: Тепер це зовнішній ключ на таблицю довідник
-    purpose = models.ForeignKey(RequestPurpose, on_delete=models.PROTECT, verbose_name="Призначення")
+    # --- ПОЛЯ ДЛЯ НП ---
+    city = models.CharField(max_length=100, blank=True, null=True, verbose_name="Місто")
+    warehouse_ref = models.CharField(max_length=100, blank=True, null=True, verbose_name="ID відділення НП")
+    warehouse_address = models.CharField(max_length=255, blank=True, null=True, verbose_name="Адреса відділення")
+    # ---------------------------
 
+    purpose = models.ForeignKey(RequestPurpose, on_delete=models.PROTECT, verbose_name="Призначення")
     priority = models.FloatField(default=1.0, verbose_name="Пріоритет")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        # Розрахунок тепер бере вагу з бази даних (RequestPurpose)
         w_dest = self.purpose.weight
         w_res = self.resource.category.criticality if self.resource.category else 0.5
         self.priority = float(w_dest) * float(w_res)

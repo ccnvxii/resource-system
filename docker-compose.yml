@@ -13,6 +13,8 @@ services:
 
   backend:
     build: ./backend
+    env_file:
+      - .env
     volumes:
       - ./backend:/app
     ports:
@@ -25,6 +27,7 @@ services:
       - POSTGRES_PORT=5432
       - DEBUG=${DEBUG}
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - NOVA_POSHTA_API_KEY=${NOVA_POSHTA_API_KEY}
     command: python manage.py runserver 0.0.0.0:8000
     depends_on:
       - db

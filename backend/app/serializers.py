@@ -109,6 +109,7 @@ class StockSerializer(serializers.ModelSerializer):
 
 class UserRequestSerializer(serializers.ModelSerializer):
     resource_name = serializers.CharField(source='resource.name', read_only=True)
+    # Поле оголошено тут:
     unit_name = serializers.CharField(source='resource.unit.name', read_only=True)
     purpose_name = serializers.CharField(source='purpose.name', read_only=True)
     user_full_name = serializers.SerializerMethodField()
@@ -116,7 +117,12 @@ class UserRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserRequest
-        fields = '__all__'
+        fields = [
+            'id', 'user', 'user_full_name', 'user_email', 'resource', 'resource_name',
+            'unit_name', 'quantity_requested', 'quantity_allocated', 'purpose',
+            'purpose_name', 'priority', 'status', 'created_at',
+            'city', 'warehouse_address', 'warehouse_ref'
+        ]
         read_only_fields = ['priority', 'quantity_allocated', 'status']
         extra_kwargs = {'user': {'required': False}}
 

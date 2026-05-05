@@ -6,6 +6,8 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.db import transaction
 from decimal import Decimal
 from django.contrib.auth.models import User
+from .services import NovaPoshtaService
+from django.conf import settings
 
 from .models import (
     Resource, Warehouse, Stock, UserRequest,
@@ -215,12 +217,40 @@ class DistributeResourcesView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
-# app/views.py
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DistributionItem.objects.select_related(
         'request__user', 'request__resource', 'warehouse', 'plan'
     ).all().order_by('-plan__created_at')
 
-    # ЗАМІНІТЬ DistributionLogSerializer НА AuditLogSerializer
     serializer_class = AuditLogSerializer
     permission_classes = [permissions.IsAdminUser]
+
+class NovaPoshtaProxyView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        np_service = NovaPoshtaService(api_key=settings.NOVA_POSHTA_API_KEY)
+        action = request.data.get("action")
+
+        if action == "get_cities":
+            search = request.data.get("search", "")
+            res = np_service.get_cities(search)
+            if res.get('success') and res.get('data'):
+                # Повертаємо список адрес
+                return Response(res['data'][0].get('Addresses', []))
+            return Response([])
+
+        if action == "get_warehouses":
+            city_ref = request.data.get("city_ref") # Тут очікуємо SettlementRef
+            res = np_service.get_warehouses(city_ref)
+            return Response(res.get('data', []) if res.get('success') else [])
+
+        if action == "get_streets":
+            city_ref = request.data.get("city_ref")
+            search = request.data.get("search", "")
+            res = np_service.get_streets(city_ref, search)
+            if res.get('success') and res.get('data'):
+                return Response(res['data'][0].get('Addresses', []))
+            return Response([])
+
+        return Response({"error": "Invalid action"}, status=400)
