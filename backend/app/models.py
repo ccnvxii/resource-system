@@ -102,3 +102,4 @@ class DistributionItem(models.Model):
     request = models.ForeignKey(UserRequest, on_delete=models.CASCADE)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+

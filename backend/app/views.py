@@ -213,3 +213,14 @@ class DistributeResourcesView(APIView):
             DistributionItem.objects.bulk_create(items_to_create)
             serializer = DistributionPlanSerializer(new_plan)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+# app/views.py
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = DistributionItem.objects.select_related(
+        'request__user', 'request__resource', 'warehouse', 'plan'
+    ).all().order_by('-plan__created_at')
+
+    # ЗАМІНІТЬ DistributionLogSerializer НА AuditLogSerializer
+    serializer_class = AuditLogSerializer
+    permission_classes = [permissions.IsAdminUser]

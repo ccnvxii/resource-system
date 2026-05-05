@@ -6,6 +6,7 @@ export const useFetchData = (currentUser) => {
     const [data, setData] = useState({
         stocks: [],
         requests: [],
+        logs: [], // Додано поле для логів
         warehouses: [],
         resourcesList: [],
         resourcesMap: {},
@@ -19,7 +20,7 @@ export const useFetchData = (currentUser) => {
         if (!currentUser) return;
 
         try {
-            // Визначаємо набір запитів залежно від ролі
+            // Базові запити для всіх
             const requestsToMake = {
                 requests: api.get('/requests/'),
                 resources: api.get('/resources/'),
@@ -27,10 +28,12 @@ export const useFetchData = (currentUser) => {
                 purposes: api.get('/purposes/')
             };
 
+            // Додаткові запити ТІЛЬКИ для адміна
             if (currentUser?.is_admin) {
                 requestsToMake.stocks = api.get('/stocks/');
                 requestsToMake.warehouses = api.get('/warehouses/');
                 requestsToMake.users = api.get('/users/');
+                requestsToMake.logs = api.get('/logs/'); // ДОДАНО ЗАПИТ ДО ЛОГІВ
             }
 
             const keys = Object.keys(requestsToMake);
@@ -41,13 +44,14 @@ export const useFetchData = (currentUser) => {
                 results[key] = responses[index].data;
             });
 
-            // Твоя робоча логіка фільтрації
+            // Фільтрація заявок
             const rawRequests = results.requests || [];
             const filteredRequests = rawRequests.filter(r => {
                 if (currentUser?.is_admin) return true;
 
+                // Виправлено == на === для відповідності стандартам
                 return (
-                    r.user == currentUser?.id ||
+                    Number(r.user) === Number(currentUser?.id) ||
                     r.username === currentUser?.email ||
                     r.user_email === currentUser?.email
                 );
@@ -59,6 +63,7 @@ export const useFetchData = (currentUser) => {
             setData({
                 stocks: results.stocks || [],
                 requests: filteredRequests,
+                logs: results.logs || [], // ТЕПЕР ЛОГИ ПЕРЕДАЮТЬСЯ В APP.JS
                 resourcesList: resources,
                 warehouses: results.warehouses || [],
                 units: results.units || [],

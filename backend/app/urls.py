@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     ResourceViewSet, WarehouseViewSet, StockViewSet,
     UserRequestViewSet, DistributeResourcesView, CategoryViewSet, UserViewSet, RegisterView, UnitViewSet,
-    RequestPurposeViewSet
+    RequestPurposeViewSet, AuditLogViewSet
 )
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -20,6 +20,7 @@ router.register(r'requests', UserRequestViewSet)
 router.register(r'users', UserViewSet)
 router.register(r'units', UnitViewSet)
 router.register(r'purposes', RequestPurposeViewSet)
+router.register(r'logs', AuditLogViewSet, basename='audit-logs')
 
 urlpatterns = [
     path('', include(router.urls)),

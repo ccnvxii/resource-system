@@ -152,3 +152,24 @@ class DistributionPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = DistributionPlan
         fields = ['id', 'created_at', 'executed', 'items']
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    plan_id = serializers.IntegerField(source='plan.id', read_only=True)
+    username = serializers.CharField(source='request.user.username', read_only=True)
+    # Додайте цей метод, щоб ПІБ відображалося коректно
+    user_full_name = serializers.SerializerMethodField()
+    resource_name = serializers.CharField(source='request.resource.name', read_only=True)
+    unit = serializers.CharField(source='request.resource.unit.name', read_only=True)
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+    timestamp = serializers.DateTimeField(source='plan.created_at', read_only=True)
+
+    class Meta:
+        model = DistributionItem
+        fields = [
+            'id', 'plan_id', 'timestamp', 'username', 'user_full_name',
+            'resource_name', 'unit', 'warehouse_name', 'amount'
+        ]
+
+    def get_user_full_name(self, obj):
+        user = obj.request.user
+        return f"{user.first_name} {user.last_name}".strip() or user.username
