@@ -77,16 +77,15 @@ const Header = ({onOpenForm, onOpenStockIn, onRefresh, onAddResource, currentUse
                     Заявка
                 </button>
 
-                {/* Ресурси — тільки для адміна */}
-                {isAdmin && (
-                    <button
-                        onClick={onAddResource}
-                        className={`${btnBase} bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100 hover:border-indigo-200`}
-                    >
-                        <PackagePlus size={18}/>
-                        Ресурси
-                    </button>
-                )}
+                {/*{isAdmin && (*/}
+                {/*    <button*/}
+                {/*        onClick={onAddResource}*/}
+                {/*        className={`${btnBase} bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100 hover:border-indigo-200`}*/}
+                {/*    >*/}
+                {/*        <PackagePlus size={18}/>*/}
+                {/*        Ресурси*/}
+                {/*    </button>*/}
+                {/*)}*/}
 
                 <div className="flex gap-2 ml-2 pl-4 border-l-2 border-slate-100">
                     <button

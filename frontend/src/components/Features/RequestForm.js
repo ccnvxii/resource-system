@@ -1,110 +1,96 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, {useState, useEffect, useMemo} from 'react';
 import {
     User, Package, Hash, Target, Plus, Trash2, Save,
     AlertCircle, CheckCircle2, MapPin, Truck, Map as MapIcon, X, Home
 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import {toast} from 'react-hot-toast';
 import api from '../../services/api';
 
-import 'leaflet/dist/leaflet.css';
-
-// Фікс іконок Leaflet для React
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
-// Допоміжні компоненти для мапи
-function MapEffect() {
-    const map = useMap();
-    useEffect(() => {
-        setTimeout(() => map.invalidateSize(), 250);
-    }, [map]);
-    return null;
-}
-
-function ChangeView({ center, zoom }) {
-    const map = useMap();
-    useEffect(() => {
-        if (center && center[0] !== 48.3794) map.setView(center, zoom);
-    }, [center, zoom, map]);
-    return null;
-}
-
 const RequestForm = ({
-    usersList = [], resourcesList = [], stocks = [], purposes = [],
-    onClose, fetchData, currentUser
-}) => {
-    // --- СТАН ДАНИХ НОВОЇ ПОШТИ ---
+                         usersList = [], resourcesList = [], stocks = [], purposes = [],
+                         onClose, fetchData, currentUser
+                     }) => {
+    // --- СТАН ЛОКАЦІЇ ---
     const [cities, setCities] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
-    const [streets, setStreets] = useState([]);
     const [selectedCity, setSelectedCity] = useState(null);
     const [selectedWarehouse, setSelectedWarehouse] = useState(null);
-    const [selectedStreet, setSelectedStreet] = useState(null);
 
     const [citySearch, setCitySearch] = useState('');
     const [streetSearch, setStreetSearch] = useState('');
     const [houseNumber, setHouseNumber] = useState('');
 
     const [showCityDropdown, setShowCityDropdown] = useState(false);
-    const [showStreetDropdown, setShowStreetDropdown] = useState(false);
-    const [showMap, setShowMap] = useState(false);
     const [langError, setLangError] = useState(false);
+    const [isWarehousesLoading, setIsWarehousesLoading] = useState(false);
+
     const [deliveryType, setDeliveryType] = useState('warehouse');
 
-    // --- СТАН ФОРМИ ЗАПИТУ ---
+    // --- СТАН ФОРМИ ---
     const [selectedUserId, setSelectedUserId] = useState('');
-    const [formRows, setFormRows] = useState([{ id: Date.now(), resource: '', quantity: '', purpose: '' }]);
+    const [formRows, setFormRows] = useState([{id: Date.now(), resource: '', quantity: '', purpose: ''}]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const dropdownRef = useRef(null);
-    const streetDropdownRef = useRef(null);
+    // Перевірка чи доступна доставка в місто (чи є там відділення)
+    const isDeliveryAvailable = useMemo(() => {
+        if (!selectedCity) return true; // Поки не вибрано місто — не лякаємо користувача
+        return warehouses.length > 0 || isWarehousesLoading;
+    }, [selectedCity, warehouses, isWarehousesLoading]);
 
-    // --- ЛОГІКА ПОШУКУ МІСТ ---
+    // --- ПОШУК МІСТ ---
     const handleCityInput = (val) => {
         setCitySearch(val);
         const isEnglish = /[a-zA-Z]/.test(val);
         setLangError(isEnglish);
         if (isEnglish) setShowCityDropdown(false);
         setSelectedCity(null);
+        setWarehouses([]);
     };
 
     const fetchCities = async (search) => {
         if (search.length < 2 || langError) return;
         try {
-            const response = await api.post('/novaposhta/', { action: 'get_cities', search });
+            const response = await api.post('/novaposhta/', {action: 'get_cities', search});
             setCities(Array.isArray(response.data) ? response.data : []);
             setShowCityDropdown(true);
-        } catch (err) { console.error("City fetch error:", err); }
+        } catch (err) { console.error(err); }
     };
 
-    // --- ЛОГІКА ПОШУКУ ВІДДІЛЕНЬ ---
+    const fetchCityDetails = async (city) => {
+        try {
+            const response = await api.post('/novaposhta/', {
+                action: 'get_warehouses',
+                city_ref: city.SettlementRef || city.Ref
+            });
+            if (response.data && response.data.length > 0) {
+                const centerData = response.data[0];
+                setSelectedCity({
+                    ...city,
+                    Latitude: centerData.Latitude,
+                    Longitude: centerData.Longitude
+                });
+            } else {
+                setSelectedCity(city);
+            }
+        } catch (err) { setSelectedCity(city); }
+    };
+
     const fetchWarehouses = async (cityRef) => {
         if (!cityRef) return;
+        setIsWarehousesLoading(true);
         try {
-            const response = await api.post('/novaposhta/', { action: 'get_warehouses', city_ref: cityRef });
-            setWarehouses(Array.isArray(response.data) ? response.data : []);
-        } catch (err) { console.error("Warehouse fetch error:", err); }
-    };
-
-    // --- ЛОГІКА ПОШУКУ ВУЛИЦЬ ---
-    const fetchStreets = async (search) => {
-        const cityRef = selectedCity?.SettlementRef || selectedCity?.Ref;
-        if (!cityRef || search.length < 2) return;
-        try {
-            const response = await api.post('/novaposhta/', { action: 'get_streets', city_ref: cityRef, search });
+            const response = await api.post('/novaposhta/', {action: 'get_warehouses', city_ref: cityRef});
             const data = Array.isArray(response.data) ? response.data : [];
-            setStreets(data);
-            setShowStreetDropdown(data.length > 0);
-        } catch (err) { console.error("Street fetch error:", err); }
+            setWarehouses(data);
+            // Якщо відділень немає — примусово ставимо тип warehouse (щоб не вибирали адресу)
+            if (data.length === 0) setDeliveryType('warehouse');
+        } catch (err) {
+            setWarehouses([]);
+        } finally {
+            setIsWarehousesLoading(false);
+        }
     };
 
-    // --- ЕФЕКТИ ---
     useEffect(() => {
         const timer = setTimeout(() => {
             if (citySearch && !selectedCity && !langError) fetchCities(citySearch);
@@ -113,20 +99,11 @@ const RequestForm = ({
     }, [citySearch, selectedCity, langError]);
 
     useEffect(() => {
-        if (selectedCity && deliveryType === 'warehouse') {
-            // Використовуємо SettlementRef для отримання відділень
+        if (selectedCity) {
             fetchWarehouses(selectedCity.SettlementRef || selectedCity.Ref);
         }
-    }, [selectedCity, deliveryType]);
+    }, [selectedCity]);
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (streetSearch && !selectedStreet && deliveryType === 'address') fetchStreets(streetSearch);
-        }, 500);
-        return () => clearTimeout(timer);
-    }, [streetSearch, selectedStreet, deliveryType]);
-
-    // Розрахунок доступності ресурсів
     const availabilityMap = useMemo(() => {
         return stocks.reduce((acc, s) => {
             acc[s.resource] = (acc[s.resource] || 0) + parseFloat(s.amount);
@@ -134,250 +111,199 @@ const RequestForm = ({
         }, {});
     }, [stocks]);
 
-    const mapCenter = useMemo(() => {
-        if (selectedWarehouse?.Latitude && parseFloat(selectedWarehouse.Latitude) !== 0)
-            return [parseFloat(selectedWarehouse.Latitude), parseFloat(selectedWarehouse.Longitude)];
-        return [48.3794, 31.1656];
-    }, [selectedWarehouse]);
-
     const handleFormChange = (index, field, value) => {
         const newRows = [...formRows];
-        newRows[index][field] = value;
+        if (field === 'quantity') {
+            const cleanValue = value.replace(/[^0-9]/g, '');
+            newRows[index][field] = cleanValue;
+        } else {
+            newRows[index][field] = value;
+        }
         setFormRows(newRows);
     };
 
     const handleSubmit = async () => {
-        if (!selectedCity) return toast.error("Оберіть місто");
-        const finalAddress = deliveryType === 'warehouse'
-            ? selectedWarehouse?.Description
-            : `вул. ${selectedStreet?.Description}, буд. ${houseNumber}`;
+        if (!selectedCity) return toast.error("Оберіть місто зі списку");
+        if (!isDeliveryAvailable) return toast.error("Доставка в цей населений пункт неможлива");
 
-        if (!finalAddress) return toast.error("Вкажіть адресу доставки");
+        const isAddressMode = deliveryType === 'address';
+        const finalAddress = isAddressMode
+            ? (streetSearch && houseNumber ? `вул. ${streetSearch}, буд. ${houseNumber}` : null)
+            : selectedWarehouse?.Description;
+
+        if (!finalAddress) return toast.error("Вкажіть конкретну точку отримання");
 
         setIsSubmitting(true);
         try {
             await Promise.all(formRows.map(row => api.post('/requests/', {
                 resource: parseInt(row.resource),
-                quantity_requested: Math.round(parseFloat(row.quantity)),
+                quantity_requested: parseInt(row.quantity),
                 purpose: parseInt(row.purpose),
                 user: selectedUserId || currentUser?.id,
                 city: selectedCity.Present || selectedCity.Description,
                 warehouse_address: finalAddress,
-                warehouse_ref: deliveryType === 'warehouse' ? selectedWarehouse?.Ref : 'ADDRESS_DELIVERY'
+                warehouse_ref: isAddressMode ? 'ADDRESS_DELIVERY' : selectedWarehouse?.Ref,
+                latitude: isAddressMode ? selectedCity?.Latitude : selectedWarehouse?.Latitude,
+                longitude: isAddressMode ? selectedCity?.Longitude : selectedWarehouse?.Longitude
             })));
-            toast.success("Заявку успішно створено");
+            toast.success("Заявку успішно створено!");
             fetchData();
             onClose();
-        } catch (err) {
-            toast.error("Помилка при збереженні");
-        } finally {
-            setIsSubmitting(false);
-        }
+        } catch (err) { toast.error("Помилка при збереженні"); }
+        finally { setIsSubmitting(false); }
     };
 
     return (
         <div className="space-y-6 text-left relative">
-            {/* МОДАЛЬНЕ ВІКНО КАРТИ */}
-            {showMap && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                    <div className="bg-white w-full max-w-4xl h-[80vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-                        <div className="p-4 border-b flex justify-between items-center bg-white">
-                            <h3 className="font-black text-slate-700 uppercase text-xs italic flex items-center gap-2">
-                                <MapIcon size={16} className="text-blue-600"/> Мапа: {selectedCity?.MainDescription}
-                            </h3>
-                            <button onClick={() => setShowMap(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20}/></button>
-                        </div>
-                        <div className="flex-1">
-                            <MapContainer center={mapCenter} zoom={13} style={{height: '100%', width: '100%'}}>
-                                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                                <MapEffect />
-                                <ChangeView center={mapCenter} zoom={15} />
-                                {warehouses.map((w, idx) => w.Latitude && (
-                                    <Marker
-                                        key={`marker-${w.Ref || idx}`}
-                                        position={[parseFloat(w.Latitude), parseFloat(w.Longitude)]}
-                                        eventHandlers={{ click: () => { setSelectedWarehouse(w); toast.success(`Обрано: ${w.Description}`); } }}
-                                    >
-                                        <Popup>
-                                            <div className="text-center font-bold text-xs">
-                                                {w.Description}<br/>
-                                                <button onClick={() => setShowMap(false)} className="mt-2 bg-blue-600 text-white px-3 py-1 rounded uppercase">Вибрати</button>
-                                            </div>
-                                        </Popup>
-                                    </Marker>
-                                ))}
-                            </MapContainer>
-                        </div>
+
+            {/* 1. ЗАЯВНИК — Тільки для адміна */}
+            {currentUser?.is_admin && (
+                <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100 shadow-sm">
+                    <label className="text-[10px] font-black uppercase text-blue-500 italic mb-2 block tracking-widest">1. Оберіть заявника (Admin)</label>
+                    <div className="flex items-center gap-3">
+                        <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100"><User size={20}/></div>
+                        <select
+                            value={selectedUserId || ''}
+                            onChange={(e) => setSelectedUserId(e.target.value)}
+                            className="w-full px-4 py-2.5 bg-white border border-blue-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
+                        >
+                            <option value="">Виберіть користувача зі списку...</option>
+                            {usersList.map(u => <option key={u.id} value={u.id}>{u.full_name || u.username}</option>)}
+                        </select>
                     </div>
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* ЗАЯВНИК */}
-                <div className="bg-blue-50/30 p-5 rounded-2xl border border-blue-100">
-                    <label className="text-[10px] font-black uppercase text-slate-400 italic mb-1.5 block">Заявник</label>
-                    {currentUser?.is_admin ? (
-                        <select
-                            value={selectedUserId || ''}
-                            onChange={(e) => setSelectedUserId(e.target.value)}
-                            className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none"
-                        >
-                            <option value="">Оберіть користувача...</option>
-                            {usersList.map(u => <option key={`user-${u.id}`} value={u.id}>{u.full_name || u.username}</option>)}
-                        </select>
-                    ) : <p className="font-black text-slate-900 text-sm px-1">{currentUser?.first_name} {currentUser?.last_name}</p>}
-                </div>
-
-                {/* НАСЕЛЕНИЙ ПУНКТ */}
-                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3 relative">
-                    <div className="relative text-left">
-                        <label className="text-[10px] font-black uppercase text-slate-400 italic mb-1.5 block">Місто</label>
-                        <input
-                            type="text"
-                            value={citySearch || ''}
-                            onChange={(e) => handleCityInput(e.target.value)}
-                            placeholder="Введіть назву..."
-                            className={`w-full px-4 py-2 bg-white border ${langError ? 'border-red-300' : 'border-slate-200'} rounded-xl font-bold text-sm outline-none transition-all`}
-                        />
-                        {showCityDropdown && cities.length > 0 && (
-                            <div className="absolute left-0 right-0 z-[9999] mt-1 max-h-52 overflow-y-auto bg-white border-2 border-blue-100 rounded-xl shadow-2xl">
+            {/* 2. ЛОКАЦІЯ ТА ДОСТАВКА */}
+            <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200 space-y-4 shadow-inner">
+                <label className="text-[10px] font-black uppercase text-slate-400 italic block tracking-widest">
+                    {currentUser?.is_admin ? '2.' : '1.'} Локація та доставка
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="relative">
+                        <label className="text-[9px] font-bold uppercase text-slate-500 mb-1 ml-1 block">Місто</label>
+                        <input type="text" value={citySearch || ''}
+                            onChange={(e) => { handleCityInput(e.target.value); setSelectedCity(null); }}
+                            placeholder="Пошук міста..." className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-blue-400 transition-all"/>
+                        {showCityDropdown && !selectedCity && cities.length > 0 && (
+                            <div className="absolute left-0 right-0 z-[9999] mt-1 max-h-52 overflow-y-auto bg-white border-2 border-blue-100 rounded-xl shadow-xl">
                                 {cities.map((city, idx) => (
-                                    <div
-                                        key={`city-${city.Ref || idx}`}
-                                        className="px-4 py-3 hover:bg-blue-50 cursor-pointer text-sm font-bold border-b last:border-none"
+                                    <div key={idx} className="px-4 py-3 hover:bg-blue-50 cursor-pointer text-sm font-bold border-b last:border-none"
                                         onClick={() => {
-                                            setSelectedCity(city);
-                                            setCitySearch(city.MainDescription || city.Description);
+                                            setCitySearch(city.Present || city.Description);
                                             setShowCityDropdown(false);
-                                            setStreetSearch('');
-                                        }}
-                                    >
+                                            fetchCityDetails(city);
+                                        }}>
                                         {city.Present || city.Description}
                                     </div>
                                 ))}
                             </div>
                         )}
                     </div>
-
-                    {/* ПЕРЕМИКАЧ ТИПУ ДОСТАВКИ */}
-                    <div className="flex bg-white p-1 rounded-xl border">
-                        <button type="button" onClick={() => setDeliveryType('warehouse')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${deliveryType === 'warehouse' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>
-                            <Truck size={14} className="inline mr-2"/>Відділення
-                        </button>
-                        <button type="button" onClick={() => setDeliveryType('address')} className={`flex-1 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${deliveryType === 'address' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>
-                            <Home size={14} className="inline mr-2"/>Адреса
-                        </button>
-                    </div>
-
-                    {/* ДИНАМІЧНІ ПОЛЯ ДОСТАВКИ */}
-                    {deliveryType === 'warehouse' ? (
-                        <div className="text-left animate-in fade-in">
-                            <div className="flex justify-between items-center mb-1.5">
-                                <label className="text-[10px] font-black text-slate-400 uppercase italic">Відділення</label>
-                                {selectedCity && <button type="button" onClick={() => setShowMap(true)} className="text-[9px] font-black text-blue-600 uppercase flex items-center gap-1"><MapIcon size={10}/>Карта</button>}
-                            </div>
-                            <select
-                                disabled={!selectedCity}
-                                value={selectedWarehouse?.Ref || ''}
-                                onChange={(e) => setSelectedWarehouse(warehouses.find(w => w.Ref === e.target.value))}
-                                className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none disabled:bg-slate-100 transition-all"
+                    <div>
+                        <label className="text-[9px] font-bold uppercase text-slate-500 mb-1 ml-1 block">Спосіб отримання</label>
+                        <div className="flex bg-white p-1 rounded-xl border border-slate-200 h-[42px]">
+                            <button type="button" onClick={() => setDeliveryType('warehouse')}
+                                    className={`flex-1 flex items-center justify-center gap-2 rounded-lg text-[10px] font-black uppercase transition-all ${deliveryType === 'warehouse' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>
+                                <Truck size={14}/>Відділення
+                            </button>
+                            <button
+                                type="button"
+                                disabled={!isDeliveryAvailable}
+                                onClick={() => setDeliveryType('address')}
+                                className={`flex-1 flex items-center justify-center gap-2 rounded-lg text-[10px] font-black uppercase transition-all ${deliveryType === 'address' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'} disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed`}
+                                title={!isDeliveryAvailable ? "Адресна доставка неможлива" : ""}
                             >
-                                <option value="">{selectedCity ? "Оберіть зі списку..." : "Спочатку вкажіть місто"}</option>
-                                {warehouses.map((w, idx) => <option key={`wh-${w.Ref || idx}`} value={w.Ref}>{w.Description}</option>)}
-                            </select>
+                                <Home size={14}/>Адреса
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-white/50 p-4 rounded-2xl border border-slate-100">
+                    {!isDeliveryAvailable && selectedCity ? (
+                        <div className="p-4 bg-red-50 border-2 border-dashed border-red-200 rounded-2xl flex flex-col items-center text-center gap-2 text-red-600 animate-in fade-in slide-in-from-top-2 duration-500">
+                            <AlertCircle size={24} />
+                            <div>
+                                <p className="text-xs font-black uppercase tracking-wider">Логістичне обмеження</p>
+                                <p className="text-[11px] font-bold opacity-80 uppercase mt-1">Доставка в цей населений пункт тимчасово недоступна. Будь ласка, оберіть інше місто.</p>
+                            </div>
                         </div>
                     ) : (
-                        <div className="space-y-3 animate-in fade-in">
-                            <div className="relative">
-                                <label className="text-[10px] font-black text-slate-400 uppercase italic mb-1.5 block">Вулиця</label>
-                                <input
-                                    type="text"
-                                    disabled={!selectedCity}
-                                    value={streetSearch || ''}
-                                    onChange={(e) => { setStreetSearch(e.target.value); setSelectedStreet(null); }}
-                                    placeholder="Назва вулиці..."
-                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none disabled:bg-slate-100"
-                                />
-                                {showStreetDropdown && streets.length > 0 && (
-                                    <div className="absolute left-0 right-0 z-[9999] mt-1 max-h-48 overflow-y-auto bg-white border-2 border-blue-100 rounded-xl shadow-2xl">
-                                        {streets.map((s, idx) => (
-                                            <div
-                                                key={`street-${s.StreetRef || idx}`}
-                                                className="px-4 py-2 hover:bg-blue-50 cursor-pointer border-b last:border-none font-bold text-sm"
-                                                onClick={() => { setSelectedStreet(s); setStreetSearch(s.Description); setShowStreetDropdown(false); }}
-                                            >
-                                                {s.Description}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                        deliveryType === 'warehouse' ? (
+                            <div className="space-y-2">
+                                <label className="text-[9px] font-bold text-slate-500 uppercase">Оберіть відділення</label>
+                                <select
+                                    disabled={!selectedCity || isWarehousesLoading}
+                                    value={selectedWarehouse?.Ref || ''}
+                                    onChange={(e) => setSelectedWarehouse(warehouses.find(w => w.Ref === e.target.value))}
+                                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none disabled:bg-slate-50"
+                                >
+                                    <option value="">
+                                        {isWarehousesLoading ? "Завантаження списку..." : (selectedCity ? "Оберіть зі списку..." : "Спочатку вкажіть місто")}
+                                    </option>
+                                    {warehouses.map((w, idx) => <option key={idx} value={w.Ref}>{w.Description}</option>)}
+                                </select>
                             </div>
-                            <input
-                                type="text"
-                                disabled={!selectedStreet}
-                                value={houseNumber || ''}
-                                onChange={(e) => setHouseNumber(e.target.value)}
-                                placeholder="Будинок / Кв"
-                                className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none disabled:bg-slate-100"
-                            />
-                        </div>
+                        ) : (
+                            <div className="grid grid-cols-3 gap-3 animate-in slide-in-from-top-2 duration-300">
+                                <div className="col-span-2">
+                                    <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block ml-1">Вулиця</label>
+                                    <input type="text" value={streetSearch} onChange={(e) => setStreetSearch(e.target.value)}
+                                        placeholder="Назва..." className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-blue-400"/>
+                                </div>
+                                <div>
+                                    <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block ml-1">Буд/Кв</label>
+                                    <input type="text" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)}
+                                        placeholder="№" className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-blue-400"/>
+                                </div>
+                            </div>
+                        )
                     )}
                 </div>
             </div>
 
-            {/* СПИСОК РЕСУРСІВ */}
+            {/* 3. ПЕРЕЛІК РЕСУРСІВ */}
             <div className="space-y-4 max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
+                <label className="text-[10px] font-black uppercase text-slate-400 italic block tracking-widest">
+                    {currentUser?.is_admin ? '3.' : '2.'} Перелік ресурсів
+                </label>
                 {formRows.map((row, index) => {
                     const availableCount = availabilityMap[row.resource] || 0;
                     return (
-                        <div key={row.id} className="bg-white p-5 rounded-2xl border hover:border-blue-100 transition-all">
+                        <div key={row.id} className="bg-white p-5 rounded-2xl border hover:border-blue-100 transition-all shadow-sm">
                             <div className="flex flex-col md:flex-row gap-4 items-end">
                                 <div className="flex-1 w-full text-left">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Package size={12} className="inline mr-1"/>Ресурс</label>
-                                    <select
-                                        value={row.resource || ''}
-                                        onChange={(e) => handleFormChange(index, 'resource', e.target.value)}
-                                        className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold outline-none"
-                                    >
+                                    <select value={row.resource || ''} onChange={(e) => handleFormChange(index, 'resource', e.target.value)}
+                                        className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold outline-none">
                                         <option value="">Оберіть ресурс...</option>
-                                        {resourcesList.map(r => <option key={`res-${r.id}`} value={r.id}>{r.name}</option>)}
+                                        {resourcesList.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="w-24 text-left">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Hash size={12} className="inline mr-1"/>К-сть</label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        value={row.quantity || ''}
+                                    <input type="text" inputMode="numeric" value={row.quantity || ''}
+                                        onKeyDown={(e) => { if (['.', ',', 'e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
                                         onChange={(e) => handleFormChange(index, 'quantity', e.target.value)}
-                                        className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-black outline-none"
-                                    />
+                                        placeholder="0" className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-black outline-none"/>
                                 </div>
                                 <div className="flex-1 w-full text-left">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Target size={12} className="inline mr-1"/>Ціль</label>
-                                    <select
-                                        value={row.purpose || ''}
-                                        onChange={(e) => handleFormChange(index, 'purpose', e.target.value)}
-                                        className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none"
-                                    >
-                                        <option value="">Оберіть ціль...</option>
-                                        {purposes.map(p => <option key={`purp-${p.id}`} value={p.id}>{p.name}</option>)}
+                                    <select value={row.purpose || ''} onChange={(e) => handleFormChange(index, 'purpose', e.target.value)}
+                                        className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none">
+                                        <option value="">Ціль...</option>
+                                        {purposes.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                     </select>
                                 </div>
                                 {formRows.length > 1 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setFormRows(formRows.filter(r => r.id !== row.id))}
-                                        className="p-2.5 text-slate-300 hover:text-red-500 transition-colors mb-0.5"
-                                    >
-                                        <Trash2 size={18}/>
-                                    </button>
+                                    <button onClick={() => setFormRows(formRows.filter(r => r.id !== row.id))} className="text-slate-300 p-2 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
                                 )}
                             </div>
                             {row.resource && (
                                 <div className={`mt-3 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase flex items-center gap-2 ${availableCount > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
                                     {availableCount > 0 ? <CheckCircle2 size={12}/> : <AlertCircle size={12}/>}
-                                    {availableCount > 0 ? `На складі: ${availableCount.toFixed(0)} од.` : 'Ресурс відсутній'}
+                                    {availableCount > 0 ? `На складі: ${availableCount.toFixed(0)} од.` : 'На даний момент немає на складах'}
                                 </div>
                             )}
                         </div>
@@ -385,28 +311,15 @@ const RequestForm = ({
                 })}
             </div>
 
-            <button
-                type="button"
-                onClick={() => setFormRows([...formRows, { id: Date.now(), resource: '', quantity: '', purpose: '' }])}
-                className="flex items-center gap-2 text-blue-600 font-black text-[10px] uppercase tracking-widest hover:bg-blue-50 px-6 py-3 rounded-xl border-2 border-dashed border-blue-100 w-full justify-center transition-all"
-            >
-                <Plus size={16}/> Додати позицію
+            <button type="button" onClick={() => setFormRows([...formRows, {id: Date.now(), resource: '', quantity: '', purpose: ''}])}
+                className="flex items-center gap-2 text-blue-600 font-black text-[10px] uppercase tracking-widest hover:bg-blue-50 px-6 py-4 rounded-2xl border-2 border-dashed border-blue-100 w-full justify-center transition-all active:scale-95">
+                <Plus size={16}/> Додати ще одну позицію
             </button>
 
-            <div className="flex gap-4 justify-end pt-6 border-t border-slate-100">
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-8 py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors"
-                >
-                    Скасувати
-                </button>
-                <button
-                    type="button"
-                    onClick={handleSubmit}
-                    disabled={isSubmitting}
-                    className="px-10 py-3 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-200 hover:bg-slate-900 transition-all transform active:scale-95 disabled:bg-slate-300"
-                >
+            <div className="flex gap-4 justify-end pt-4 border-t border-slate-100">
+                <button type="button" onClick={onClose} className="px-8 py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors">Скасувати</button>
+                <button type="button" onClick={handleSubmit} disabled={isSubmitting || !isDeliveryAvailable}
+                    className="px-10 py-3 bg-blue-600 text-white font-black rounded-2xl hover:bg-slate-900 shadow-xl shadow-blue-200 active:scale-95 transition-all disabled:bg-slate-300 disabled:shadow-none">
                     {isSubmitting ? "ЗБЕРЕЖЕННЯ..." : <div className="flex items-center gap-2"><Save size={20}/>ЗБЕРЕГТИ ЗАЯВКУ</div>}
                 </button>
             </div>

@@ -5,7 +5,6 @@ from .models import (
     DistributionPlan, DistributionItem, Unit, RequestPurpose, UserProfile
 )
 
-
 # --- НОВІ СЕРІАЛІЗАТОРИ ДЛЯ 3NF ДОДІДНИКІВ ---
 
 class UnitSerializer(serializers.ModelSerializer):

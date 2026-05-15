@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 
 
-# --- 1. ОДИНИЦІ ВИМІРУ (Додано для 3NF) ---
+# --- 1. ОДИНИЦІ ВИМІРУ ---
 class Unit(models.Model):
     name = models.CharField(max_length=20, unique=True, verbose_name="Одиниця виміру")
 
@@ -10,7 +10,7 @@ class Unit(models.Model):
         return self.name
 
 
-# --- 2. КАТЕГОРІЇ (Довідник) ---
+# --- 2. КАТЕГОРІЇ ---
 class Category(models.Model):
     name = models.CharField(max_length=100, verbose_name="Назва категорії")
     slug = models.SlugField(unique=True, verbose_name="Технічний код")
@@ -23,7 +23,6 @@ class Category(models.Model):
 # --- 3. РЕСУРСИ ---
 class Resource(models.Model):
     name = models.CharField(max_length=100, verbose_name="Назва ресурсу")
-    # 3NF: Зв'язок з одиницею виміру
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, verbose_name="Одиниця")
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='resources')
 
@@ -35,15 +34,17 @@ class Resource(models.Model):
 class Warehouse(models.Model):
     name = models.CharField(max_length=100, verbose_name="Назва складу")
     location = models.CharField(max_length=200, verbose_name="Локація")
+    latitude = models.FloatField(default=0.0, verbose_name="Широта")
+    longitude = models.FloatField(default=0.0, verbose_name="Довгота")
 
     def __str__(self):
         return self.name
 
 
-# --- 5. ТИПИ ПРИЗНАЧЕННЯ (Винесено з коду в БД для 3NF) ---
+# --- 5. ТИПИ ПРИЗНАЧЕННЯ ---
 class RequestPurpose(models.Model):
-    name = models.CharField(max_length=100, verbose_name="Тип призначення")  # Напр: "Військові потреби"
-    code = models.CharField(max_length=20, unique=True)  # Напр: "military"
+    name = models.CharField(max_length=100, verbose_name="Тип призначення")
+    code = models.CharField(max_length=20, unique=True)
     weight = models.FloatField(default=1.0, verbose_name="Вага пріоритету")
 
     def __str__(self):
@@ -54,13 +55,14 @@ class RequestPurpose(models.Model):
 class Stock(models.Model):
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='stocks')
     resource = models.ForeignKey(Resource, on_delete=models.CASCADE, related_name='stocks')
-    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Змінено на ціле число
+    amount = models.PositiveIntegerField(default=0, verbose_name="Кількість на складі")
 
     class Meta:
         unique_together = ('warehouse', 'resource')
 
 
-# --- 7. ПРОФІЛЬ (Дані про організацію та телефон) ---
+# --- 7. ПРОФІЛЬ ---
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     organization = models.CharField(max_length=255, blank=True, null=True)
@@ -73,14 +75,16 @@ class UserRequest(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     resource = models.ForeignKey(Resource, on_delete=models.CASCADE)
-    quantity_requested = models.DecimalField(max_digits=10, decimal_places=2)
-    quantity_allocated = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
-    # --- ПОЛЯ ДЛЯ НП ---
+    quantity_requested = models.PositiveIntegerField(verbose_name="Запитувана кількість")
+    quantity_allocated = models.PositiveIntegerField(default=0, verbose_name="Виділена кількість")
+
     city = models.CharField(max_length=100, blank=True, null=True, verbose_name="Місто")
     warehouse_ref = models.CharField(max_length=100, blank=True, null=True, verbose_name="ID відділення НП")
     warehouse_address = models.CharField(max_length=255, blank=True, null=True, verbose_name="Адреса відділення")
-    # ---------------------------
+
+    latitude = models.FloatField(null=True, blank=True, verbose_name="Широта отримувача")
+    longitude = models.FloatField(null=True, blank=True, verbose_name="Довгота отримувача")
 
     purpose = models.ForeignKey(RequestPurpose, on_delete=models.PROTECT, verbose_name="Призначення")
     priority = models.FloatField(default=1.0, verbose_name="Пріоритет")
@@ -88,9 +92,19 @@ class UserRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        w_dest = self.purpose.weight
-        w_res = self.resource.category.criticality if self.resource.category else 0.5
-        self.priority = float(w_dest) * float(w_res)
+        w_dest = float(self.purpose.weight)
+        w_res = float(self.resource.category.criticality) if self.resource.category else 0.5
+        base_priority = w_dest * w_res
+
+        multiplier = 1.0
+        if self.latitude and self.longitude:
+            try:
+                from .views import calculate_front_multiplier
+                multiplier = calculate_front_multiplier(self.latitude, self.longitude)
+            except Exception as e:
+                print(f"Save Priority Error: {e}")
+
+        self.priority = base_priority * multiplier
         super().save(*args, **kwargs)
 
 
@@ -104,5 +118,5 @@ class DistributionItem(models.Model):
     plan = models.ForeignKey(DistributionPlan, related_name='items', on_delete=models.CASCADE)
     request = models.ForeignKey(UserRequest, on_delete=models.CASCADE)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-
+    # Змінено на ціле число
+    amount = models.PositiveIntegerField(verbose_name="Кількість для видачі")

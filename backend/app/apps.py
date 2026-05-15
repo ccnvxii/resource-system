@@ -13,106 +13,69 @@ class MyAppConfig(AppConfig):
 
 def create_initial_data(sender, **kwargs):
     from django.contrib.auth.models import User
-    from .models import Resource, Warehouse, Stock, UserRequest, Category, Unit, RequestPurpose, UserProfile
+    from .models import (
+        Resource, Warehouse, Stock, UserRequest,
+        Category, Unit, RequestPurpose, UserProfile
+    )
 
     if sender.name != 'app':
         return
 
-    # Перевірка наявності таблиць, щоб не впасти під час самих міграцій
+    # Перевірка наявності таблиць (захист від помилок при першій міграції)
     tables = connection.introspection.table_names()
-    if 'app_unit' not in tables or 'app_requestpurpose' not in tables:
+    if 'app_unit' not in tables:
         return
 
-    print("--- [System Init] Наповнення бази даних (3NF) ---")
-
-    # --- 1. ОДИНИЦІ ВИМІРУ (3NF) ---
-    units_data = ['шт', 'кг', 'л', 'упак', 'банка', 'бут']
-    unit_objs = {}
-    for name in units_data:
-        u_obj, _ = Unit.objects.get_or_create(name=name)
-        unit_objs[name] = u_obj
+    # --- 1. ОДИНИЦІ ВИМІРУ ---
+    for name in ['шт', 'кг', 'л', 'упак']:
+        Unit.objects.get_or_create(name=name)
+    unit_pcs = Unit.objects.get(name='шт')
 
     # --- 2. КАТЕГОРІЇ ---
-    categories_data = [
-        ('meds', 'Медицина / Ліки', 1.0),
-        ('water', 'Вода питна', 0.9),
-        ('food', 'Продукти харчування', 0.7),
-        ('clothes', 'Одяг та Тепло', 0.5),
-    ]
-    cats_objs = {}
-    for slug, name, crit in categories_data:
-        cat, _ = Category.objects.update_or_create(
-            slug=slug,
-            defaults={'name': name, 'criticality': crit}
-        )
-        cats_objs[slug] = cat
+    cat_med, _ = Category.objects.update_or_create(
+        slug='meds', defaults={'name': 'Медицина', 'criticality': 1.0}
+    )
 
-    # --- 3. ТИПИ ПРИЗНАЧЕННЯ (3NF) ---
-    purposes_data = [
-        ('military', 'Військові потреби', 10.0),
-        ('hospital', 'Медичні заклади', 9.0),
-        ('disaster', 'Зона лиха', 8.0),
-        ('refugees', 'ВПО та біженці', 6.0),
-        ('personal', 'Особисті потреби', 1.0),
-    ]
-    purp_objs = {}
-    for code, name, weight in purposes_data:
-        p_obj, _ = RequestPurpose.objects.update_or_create(
-            code=code,
-            defaults={'name': name, 'weight': weight}
-        )
-        purp_objs[code] = p_obj
+    # --- 3. ТИПИ ПРИЗНАЧЕННЯ ---
+    purp_mil, _ = RequestPurpose.objects.update_or_create(
+        code='military', defaults={'name': 'Військові потреби', 'weight': 10.0}
+    )
 
-    # --- 4. КОРИСТУВАЧІ ТА ПРОФІЛІ (3NF) ---
-    users_info = [
-        {'first': 'Адмін', 'last': 'Системи', 'email': 'admin@resq.ua', 'is_staff': True, 'org': 'RESQ HQ'},
-        {'first': 'Дар’я', 'last': 'Россоха', 'email': 'vol@test.com', 'is_staff': False, 'org': 'Volunteer Center'},
-    ]
-    users_map = {}
-    for u in users_info:
-        user, created = User.objects.get_or_create(
-            username=u['email'],
-            defaults={'email': u['email'], 'first_name': u['first'], 'last_name': u['last']}
-        )
-        if created:
-            user.set_password('adminpassword' if u['is_staff'] else '1234')
-            user.is_staff = u['is_staff']
-            user.is_superuser = u['is_staff']
-            user.save()
+    # --- 4. КОРИСТУВАЧІ ---
+    admin_user, created = User.objects.get_or_create(
+        username='admin@resq.ua',
+        defaults={'email': 'admin@resq.ua', 'is_staff': True, 'is_superuser': True}
+    )
+    if created:
+        admin_user.set_password('adminpassword')
+        admin_user.save()
+        UserProfile.objects.get_or_create(user=admin_user, organization='RESQ HQ')
 
-        # Створюємо профіль (3NF)
-        UserProfile.objects.get_or_create(user=user, defaults={'organization': u['org'], 'phone': '+38000000000'})
-        users_map[u['email']] = user
+    # --- 5. РЕСУРСИ ТА СКЛАДИ ---
+    res_tourniquet, _ = Resource.objects.get_or_create(
+        name='Турнікет', defaults={'unit': unit_pcs, 'category': cat_med}
+    )
+    wh_main, _ = Warehouse.objects.get_or_create(
+        name='Центральний Хаб', location='Київ'
+    )
+    Stock.objects.update_or_create(
+        warehouse=wh_main, resource=res_tourniquet, defaults={'amount': 100}
+    )
 
-    # --- 5. РЕСУРСИ ---
-    resources_data = [
-        {'name': 'Турнікет', 'unit': 'шт', 'cat': 'meds'},
-        {'name': 'Аспірин', 'unit': 'упак', 'cat': 'meds'},
-        {'name': 'Тушонка', 'unit': 'банка', 'cat': 'food'},
-    ]
-    res_objs = {}
-    for res in resources_data:
-        obj, _ = Resource.objects.update_or_create(
-            name=res['name'],
-            defaults={
-                'unit': unit_objs[res['unit']],  # Зв'язок з Unit
-                'category': cats_objs[res['cat']]
-            }
-        )
-        res_objs[res['name']] = obj
-
-    # --- 6. СКЛАДИ ТА ЗАПАСИ ---
-    w_main, _ = Warehouse.objects.get_or_create(name='Центральний Хаб (Київ)', location='Київ, вул. Центральна 1')
-    Stock.objects.update_or_create(warehouse=w_main, resource=res_objs['Турнікет'], defaults={'amount': 100})
-
-    # --- 7. ЗАЯВКИ (3NF) ---
+    # --- 6. ТЕСТОВІ ЗАЯВКИ (З ГЕО-ДАННИМИ) ---
     UserRequest.objects.all().delete()
+
+    # Заявка для Слов'янська (Прифронтова зона)
     UserRequest.objects.create(
-        user=users_map['vol@test.com'],
-        resource=res_objs['Турнікет'],
-        quantity_requested=50,
-        purpose=purp_objs['military'],  # Зв'язок з RequestPurpose
+        user=admin_user,
+        resource=res_tourniquet,
+        quantity_requested=30,
+        purpose=purp_mil,
+        city="Слов'янськ",
+        latitude=48.85,
+        longitude=37.60,
         status='new'
     )
 
-    print("--- [Success] База даних готова. Логін: admin@resq.ua / adminpassword ---")
+    # Заявка для Львова (Тил) - створюється через адмінку для порівняння
+    print("--- [Success] База даних готова. ---")
