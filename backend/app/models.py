@@ -55,7 +55,6 @@ class RequestPurpose(models.Model):
 class Stock(models.Model):
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='stocks')
     resource = models.ForeignKey(Resource, on_delete=models.CASCADE, related_name='stocks')
-    # Змінено на ціле число
     amount = models.PositiveIntegerField(default=0, verbose_name="Кількість на складі")
 
     class Meta:
@@ -92,6 +91,7 @@ class UserRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
+        # Розрахунок базового пріоритету
         w_dest = float(self.purpose.weight)
         w_res = float(self.resource.category.criticality) if self.resource.category else 0.5
         base_priority = w_dest * w_res
@@ -99,10 +99,10 @@ class UserRequest(models.Model):
         multiplier = 1.0
         if self.latitude and self.longitude:
             try:
-                from .views import calculate_front_multiplier
+                from app.utils import calculate_front_multiplier
                 multiplier = calculate_front_multiplier(self.latitude, self.longitude)
             except Exception as e:
-                print(f"Save Priority Error: {e}")
+                print(f"Save Priority Error inside models.py: {e}")
 
         self.priority = base_priority * multiplier
         super().save(*args, **kwargs)
@@ -118,5 +118,4 @@ class DistributionItem(models.Model):
     plan = models.ForeignKey(DistributionPlan, related_name='items', on_delete=models.CASCADE)
     request = models.ForeignKey(UserRequest, on_delete=models.CASCADE)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE)
-    # Змінено на ціле число
     amount = models.PositiveIntegerField(verbose_name="Кількість для видачі")

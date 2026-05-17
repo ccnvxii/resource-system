@@ -1,5 +1,4 @@
-import requests
-
+import time
 import requests
 
 
@@ -48,65 +47,63 @@ class GeoFrontService:
 
 
 class NovaPoshtaService:
-    def __init__(self, api_key):
+    def __init__(self, api_key: str):
         self.api_key = api_key
         self.url = "https://api.novaposhta.ua/v2.0/json/"
 
-    def _send_request(self, model, method, properties):
+    def _request(self, model, method, props):
         payload = {
             "apiKey": self.api_key,
             "modelName": model,
             "calledMethod": method,
-            "methodProperties": properties
+            "methodProperties": props,
         }
-        try:
-            response = requests.post(self.url, json=payload, timeout=10)
-            return response.json()
-        except Exception as e:
-            return {"success": False, "errors": [str(e)], "data": []}
+        response = requests.post(self.url, json=payload, timeout=15)
+        return response.json()
 
-    def get_cities(self, search_text=""):
-        return self._send_request(
-            model="Address",
-            method="searchSettlements",
-            properties={"CityName": search_text, "Limit": "20"}
+    def _safe_request(self, model, method, props, retries=3):
+        last = None
+        for i in range(retries):
+            try:
+                data = self._request(model, method, props)
+                last = data
+
+                if data.get("success") is False:
+                    time.sleep(0.5 * (i + 1))
+                    continue
+                return data
+            except Exception:
+                time.sleep(0.5 * (i + 1))
+        return last or {"success": False, "data": []}
+
+    def get_cities(self, search):
+        return self._safe_request(
+            "Address", "searchSettlements",
+            {"CityName": search, "Limit": 20}
         )
 
-    def get_warehouses(self, settlement_ref):
-        return self._send_request(
-            model="Address",
-            method="getWarehouses",
-            properties={"SettlementRef": settlement_ref}
+    def get_warehouses(self, city_ref):
+        return self._safe_request(
+            "Address", "getWarehouses",
+            {"SettlementRef": city_ref}
         )
 
-    def get_streets(self, settlement_ref, search_text):
-        return self._send_request(
-            model="Address",
-            method="searchSettlementStreets",
-            properties={
-                "StreetName": search_text,
-                "SettlementRef": settlement_ref,
-                "Limit": "50"
-            }
+    def get_streets(self, city_ref, search):
+        return self._safe_request(
+            "Address", "searchSettlementStreets",
+            {"SettlementRef": city_ref, "StreetName": search, "Limit": 50}
         )
 
     def get_warehouse_coordinates(self, warehouse_ref):
-        """Отримує координати конкретного відділення за його Ref."""
-        payload = {
-            "apiKey": self.api_key,
-            "modelName": "Address",
-            "calledMethod": "getWarehouses",
-            "methodProperties": {
-                "Ref": warehouse_ref
-            }
-        }
+        """ПРАВИЛЬНИЙ PRODUCTION FIX: Отримуємо координати конкретного відділення за його унікальним Ref"""
         try:
-            response = requests.post(self.url, json=payload, timeout=10)
-            data = response.json()
+            data = self._safe_request(
+                "Address", "getWarehouses",
+                {"Ref": warehouse_ref}
+            )
             if data.get('success') and data.get('data'):
                 wh = data['data'][0]
                 return float(wh.get('Latitude', 0)), float(wh.get('Longitude', 0))
         except Exception as e:
-            print(f"NP Coords Error: {e}")
+            print(f"🚨 Помилка парсингу координат НП: {e}")
         return None, None
-

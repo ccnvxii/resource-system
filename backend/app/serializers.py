@@ -135,15 +135,22 @@ class DistributionItemSerializer(serializers.ModelSerializer):
     resource_name = serializers.CharField(source='request.resource.name', read_only=True)
     unit_name = serializers.CharField(source='request.resource.unit.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
-    recipient_name = serializers.SerializerMethodField()
-    purpose_name = serializers.CharField(source='request.purpose.name', read_only=True)
+    recipient_name = serializers.CharField(source='request.user.username', read_only=True)
     priority = serializers.FloatField(source='request.priority', read_only=True)
+
+    # Пряме витягування логістичних даних із пов'язаної заявки (UserRequest)
+    city = serializers.CharField(source='request.city', default='Місто не вказано', read_only=True)
+    warehouse_address = serializers.CharField(source='request.warehouse_address', default='', read_only=True)
+    warehouse_ref = serializers.CharField(source='request.warehouse_ref', default='', read_only=True)
+    quantity_requested = serializers.IntegerField(source='request.quantity_requested', read_only=True)
+    purpose_code = serializers.CharField(source='request.purpose.code', read_only=True)
 
     class Meta:
         model = DistributionItem
         fields = [
-            'id', 'resource_name', 'unit_name', 'warehouse_name', 'amount',
-            'recipient_name', 'purpose_name', 'request', 'priority'
+            'id', 'amount', 'resource_name', 'unit_name', 'warehouse_name',
+            'recipient_name', 'priority', 'city', 'warehouse_address',
+            'warehouse_ref', 'quantity_requested', 'purpose_code'
         ]
 
     def get_recipient_name(self, obj):

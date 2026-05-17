@@ -45,7 +45,9 @@ function App() {
         if (!isLandingMode && currentUser) {
             fetchData().catch(() => toast.error("Не вдалося оновити дані"));
         }
-    }, [fetchData, isLandingMode, currentUser]);
+        // КРИТИЧНО: Прибираємо fetchData з залежностей, щоб розірвати нескінченний цикл рендерингу!
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLandingMode, currentUser]);
 
     // --- ОБРОБНИКИ ПОДІЙ ---
     const handleAuthSuccess = (userData, tokens) => {
@@ -68,6 +70,27 @@ function App() {
         toast.success("Вихід виконано");
     };
 
+    // ЦЕНТРАЛІЗОВАНЕ БЕЗПЕЧНЕ ВИДАЛЕННЯ ЗАЯВКИ
+    const handleDeleteRequest = async (requestId) => {
+        const lid = toast.loading("Оновлення черги потреб...");
+        setLoading(true);
+        try {
+            await api.delete(`/requests/${requestId}/`);
+            toast.success("Заявку успішно видалено", { id: lid });
+
+            // Обов'язково скидаємо старий план розподілу, оскільки матриця потреб змінилася
+            setPlan(null);
+
+            // Оновлюємо таблиці та графіки дашборду
+            await fetchData();
+        } catch (e) {
+            console.error("Помилка при видаленні заявки:", e);
+            toast.error("Не вдалося видалити заявку", { id: lid });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleDistribute = async () => {
         const lid = toast.loading("Аналіз запасів та потреб...");
         setLoading(true);
@@ -78,10 +101,9 @@ function App() {
                 setPlan(null);
             } else {
                 toast.success("План розподілу сформовано", {id: lid});
-                // Переконуємося, що дані мають структуру { items: [...] }
                 setPlan(Array.isArray(res.data) ? {items: res.data} : res.data);
             }
-            fetchData();
+            await fetchData();
         } catch (e) {
             toast.error("Помилка алгоритму розподілу", {id: lid});
         } finally {
@@ -115,24 +137,19 @@ function App() {
             <Toaster position="top-center" toastOptions={{className: 'rounded-xl font-bold shadow-xl'}}/>
 
             {/* МОДАЛЬНІ ВІКНА */}
-            <Modal isOpen={modals.request} onClose={() => closeModal('request')} title="Нова заявка"
-                   icon={ClipboardList}>
-                <Modal isOpen={modals.request} onClose={() => closeModal('request')} title="Нова заявка"
-                       icon={ClipboardList}>
-                    <RequestForm
-                        usersList={data.usersList}
-                        resourcesList={data.resourcesList}
-                        stocks={data.stocks}
-                        purposes={data.purposes}
-                        onClose={() => closeModal('request')}
-                        fetchData={fetchData}
-                        currentUser={currentUser}
-                    />
-                </Modal>
+            <Modal isOpen={modals.request} onClose={() => closeModal('request')} title="Нова заявка" icon={ClipboardList}>
+                <RequestForm
+                    usersList={data.usersList}
+                    resourcesList={data.resourcesList}
+                    stocks={data.stocks}
+                    purposes={data.purposes}
+                    onClose={() => closeModal('request')}
+                    fetchData={fetchData}
+                    currentUser={currentUser}
+                />
             </Modal>
 
-            <Modal isOpen={modals.stockIn} onClose={() => closeModal('stockIn')} title="Поповнення складів"
-                   icon={ArrowDownCircle} maxWidth="max-w-3xl">
+            <Modal isOpen={modals.stockIn} onClose={() => closeModal('stockIn')} title="Поповнення складів" icon={ArrowDownCircle} maxWidth="max-w-3xl">
                 <StockInForm
                     warehouses={data.warehouses}
                     resources={data.resourcesList}
@@ -141,8 +158,7 @@ function App() {
                 />
             </Modal>
 
-            <Modal isOpen={modals.resource} onClose={() => closeModal('resource')} title="Новий тип ресурсу"
-                   icon={PackagePlus} maxWidth="max-w-lg">
+            <Modal isOpen={modals.resource} onClose={() => closeModal('resource')} title="Новий тип ресурсу" icon={PackagePlus} maxWidth="max-w-lg">
                 <AddResourceForm
                     units={data.units}
                     onResourceAdded={() => {
@@ -178,6 +194,7 @@ function App() {
                             purposeMap={data.purposeMap}
                             onRefresh={fetchData}
                             currentUser={currentUser}
+                            onDeleteRequest={handleDeleteRequest} // Передаємо виправлену функцію
                         />
                     </div>
                 </div>
@@ -189,8 +206,6 @@ function App() {
                             requests={data.requests}
                             resourcesMap={data.resourcesMap}
                         />
-
-                        {/* Додаємо логи тут */}
                         <AdminLogs logs={data.logs || []}/>
                     </>
                 )}

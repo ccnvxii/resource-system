@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import api from '../services/api';
 import { PURPOSE_MAP } from '../constants/purposes';
 
@@ -6,7 +6,7 @@ export const useFetchData = (currentUser) => {
     const [data, setData] = useState({
         stocks: [],
         requests: [],
-        logs: [], // Додано поле для логів
+        logs: [],
         warehouses: [],
         resourcesList: [],
         resourcesMap: {},
@@ -16,24 +16,31 @@ export const useFetchData = (currentUser) => {
         purposeMap: {}
     });
 
+    // Використовуємо реф, щоб знати, чи це перше завантаження довідників
+    const isStaticDataLoaded = useRef(false);
+
     const fetchData = useCallback(async () => {
         if (!currentUser) return;
 
         try {
-            // Базові запити для всіх
-            const requestsToMake = {
-                requests: api.get('/requests/'),
-                resources: api.get('/resources/'),
-                units: api.get('/units/'),
-                purposes: api.get('/purposes/')
-            };
+            const requestsToMake = {};
 
-            // Додаткові запити ТІЛЬКИ для адміна
+            // 1. Динамічні дані — оновлюємо ЗАВЖДИ при кожному виклику
+            requestsToMake.requests = api.get('/requests/');
             if (currentUser?.is_admin) {
                 requestsToMake.stocks = api.get('/stocks/');
-                requestsToMake.warehouses = api.get('/warehouses/');
-                requestsToMake.users = api.get('/users/');
-                requestsToMake.logs = api.get('/logs/'); // ДОДАНО ЗАПИТ ДО ЛОГІВ
+                requestsToMake.logs = api.get('/logs/');
+            }
+
+            // 2. Статичні дані — вантажимо ТІЛЬКИ ОДИН РАЗ при старті системи
+            if (!isStaticDataLoaded.current) {
+                requestsToMake.resources = api.get('/resources/');
+                requestsToMake.units = api.get('/units/');
+                requestsToMake.purposes = api.get('/purposes/');
+                if (currentUser?.is_admin) {
+                    requestsToMake.warehouses = api.get('/warehouses/');
+                    requestsToMake.users = api.get('/users/');
+                }
             }
 
             const keys = Object.keys(requestsToMake);
@@ -44,12 +51,10 @@ export const useFetchData = (currentUser) => {
                 results[key] = responses[index].data;
             });
 
-            // Фільтрація заявок
+            // Фільтрація заявок (динамічне поле)
             const rawRequests = results.requests || [];
             const filteredRequests = rawRequests.filter(r => {
                 if (currentUser?.is_admin) return true;
-
-                // Виправлено == на === для відповідності стандартам
                 return (
                     Number(r.user) === Number(currentUser?.id) ||
                     r.username === currentUser?.email ||
@@ -57,25 +62,45 @@ export const useFetchData = (currentUser) => {
                 );
             });
 
-            const resources = results.resources || [];
-            const purposes = results.purposes || [];
+            // Оновлюємо стан React
+            setData(prev => {
+                // Якщо статичні дані прийшли вперше — трансформуємо мапи, інакше — беремо старі з prev
+                const resources = results.resources || prev.resourcesList;
+                const purposes = results.purposes || prev.purposes;
 
-            setData({
-                stocks: results.stocks || [],
-                requests: filteredRequests,
-                logs: results.logs || [], // ТЕПЕР ЛОГИ ПЕРЕДАЮТЬСЯ В APP.JS
-                resourcesList: resources,
-                warehouses: results.warehouses || [],
-                units: results.units || [],
-                purposes: purposes,
-                usersList: results.users || [],
-                resourcesMap: resources.reduce((acc, r) => ({...acc, [r.id]: r}), {}),
-                purposeMap: purposes.reduce((acc, p) => {
-                    const config = PURPOSE_MAP[p.code] || PURPOSE_MAP['default'];
-                    acc[p.id] = { label: p.name, icon: config.icon, color: config.color };
-                    return acc;
-                }, {})
+                const nextResourcesMap = results.resources
+                    ? resources.reduce((acc, r) => ({...acc, [r.id]: r}), {})
+                    : prev.resourcesMap;
+
+                const nextPurposeMap = results.purposes
+                    ? purposes.reduce((acc, p) => {
+                        const config = PURPOSE_MAP[p.code] || PURPOSE_MAP['default'] || { color: 'bg-slate-100' };
+                        acc[p.id] = { label: p.name, icon: config.icon, color: config.color };
+                        return acc;
+                    }, {})
+                    : prev.purposeMap;
+
+                return {
+                    // Оновлювані (динамічні) поля
+                    requests: filteredRequests,
+                    stocks: results.stocks !== undefined ? (results.stocks || []) : prev.stocks,
+                    logs: results.logs !== undefined ? (results.logs || []) : prev.logs,
+
+                    // Статичні поля (або нові, або з попереднього стану)
+                    resourcesList: resources,
+                    purposes: purposes,
+                    resourcesMap: nextResourcesMap,
+                    purposeMap: nextPurposeMap,
+                    warehouses: results.warehouses || prev.warehouses,
+                    units: results.units || prev.units,
+                    usersList: results.users || prev.usersList
+                };
             });
+
+             if (!isStaticDataLoaded.current) {
+                isStaticDataLoaded.current = true;
+            }
+
         } catch (error) {
             console.error("Помилка завантаження даних:", error);
         }
