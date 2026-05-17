@@ -298,12 +298,32 @@ class NovaPoshtaProxyView(APIView):
             res = np.get_warehouses(request.data.get("city_ref"))
             return Response(res.get("data", []))
 
-        # 3. ОБРОБКА ВУЛИЦЬ (без Addresses, прямий масив)
+        # 3. ОБРОБКА ВУЛИЦЬ
         if action == "get_streets":
+            city_ref = request.data.get("city_ref")
             res = np.get_streets(
-                request.data.get("city_ref"),
+                city_ref,
                 request.data.get("search", "")
             )
-            return Response(res.get("data", []))
+            raw_data = res.get("data", [])
+            streets_list = []
+
+            if raw_data and isinstance(raw_data, list) and len(raw_data) > 0:
+                if "AddressesList" in raw_data[0]:
+                    streets_list = raw_data[0].get("AddressesList", [])
+                elif "Addresses" in raw_data[0]:
+                    streets_list = raw_data[0].get("Addresses", [])
+                else:
+                    streets_list = raw_data
+
+            final_streets = []
+            for s in streets_list:
+                if isinstance(s, dict):
+                    desc = s.get("Description") or s.get("Presentation") or s.get("SettlementStreetDescription")
+                    if desc:
+                        s["Description"] = desc
+                        final_streets.append(s)
+
+            return Response(final_streets)
 
         return Response({"error": "Invalid action"}, status=400)

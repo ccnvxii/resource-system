@@ -72,7 +72,8 @@ class NovaPoshtaService:
                     time.sleep(0.5 * (i + 1))
                     continue
                 return data
-            except Exception:
+            except Exception as e:
+                print(f"NP ERROR: {e}")
                 time.sleep(0.5 * (i + 1))
         return last or {"success": False, "data": []}
 
@@ -88,14 +89,19 @@ class NovaPoshtaService:
             {"SettlementRef": city_ref}
         )
 
-    def get_streets(self, city_ref, search):
+    def get_streets(self, settlement_ref, search):
         return self._safe_request(
-            "Address", "searchSettlementStreets",
-            {"SettlementRef": city_ref, "StreetName": search, "Limit": 50}
+            "Address",
+            "searchSettlementStreets",
+            {
+                "SettlementRef": settlement_ref,
+                "StreetName": search,
+                "Limit": 50
+            }
         )
 
     def get_warehouse_coordinates(self, warehouse_ref):
-        """ПРАВИЛЬНИЙ PRODUCTION FIX: Отримуємо координати конкретного відділення за його унікальним Ref"""
+        """ Отримуємо координати конкретного відділення за його унікальним Ref"""
         try:
             data = self._safe_request(
                 "Address", "getWarehouses",
@@ -105,5 +111,5 @@ class NovaPoshtaService:
                 wh = data['data'][0]
                 return float(wh.get('Latitude', 0)), float(wh.get('Longitude', 0))
         except Exception as e:
-            print(f"🚨 Помилка парсингу координат НП: {e}")
+            print(f"Помилка парсингу координат НП: {e}")
         return None, None

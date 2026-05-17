@@ -11,8 +11,13 @@ const RequestForm = ({
                          onClose, fetchData, currentUser
                      }) => {
     // --- СТАН ЛОКАЦІЇ ---
+    // --- СТАН ЛОКАЦІЇ ---
     const [cities, setCities] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
+
+    const [streets, setStreets] = useState([]);
+    const [selectedStreet, setSelectedStreet] = useState(null);
+
     const [selectedCity, setSelectedCity] = useState(null);
     const [selectedWarehouse, setSelectedWarehouse] = useState(null);
 
@@ -21,19 +26,31 @@ const RequestForm = ({
     const [houseNumber, setHouseNumber] = useState('');
 
     const [showCityDropdown, setShowCityDropdown] = useState(false);
+    const [showStreetDropdown, setShowStreetDropdown] = useState(false);
+
     const [langError, setLangError] = useState(false);
+
     const [isWarehousesLoading, setIsWarehousesLoading] = useState(false);
+    const [isStreetsLoading, setIsStreetsLoading] = useState(false);
 
     const [deliveryType, setDeliveryType] = useState('warehouse');
 
-    // --- СТАН ФОРМИ ---
+    // --- FORM ---
     const [selectedUserId, setSelectedUserId] = useState('');
-    const [formRows, setFormRows] = useState([{id: Date.now(), resource: '', quantity: '', purpose: ''}]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const [formRows, setFormRows] = useState([
+        {
+            id: Date.now(),
+            resource: '',
+            quantity: '',
+            purpose: ''
+        }
+    ]);
 
     // Перевірка чи доступна доставка в місто (чи є там відділення)
     const isDeliveryAvailable = useMemo(() => {
-        if (!selectedCity) return true; // Поки не вибрано місто — не лякаємо користувача
+        if (!selectedCity) return true;
         return warehouses.length > 0 || isWarehousesLoading;
     }, [selectedCity, warehouses, isWarehousesLoading]);
 
@@ -47,13 +64,19 @@ const RequestForm = ({
         setWarehouses([]);
     };
 
+    const handleStreetInput = (val) => {
+        setStreetSearch(val);
+        setSelectedStreet(null); // Скидаємо об'єкт вибору, якщо користувач знову почав редагувати текст
+    };
     const fetchCities = async (search) => {
         if (search.length < 2 || langError) return;
         try {
             const response = await api.post('/novaposhta/', {action: 'get_cities', search});
             setCities(Array.isArray(response.data) ? response.data : []);
             setShowCityDropdown(true);
-        } catch (err) { console.error(err); }
+        } catch (err) {
+            console.error(err);
+        }
     };
 
     const fetchCityDetails = async (city) => {
@@ -72,7 +95,9 @@ const RequestForm = ({
             } else {
                 setSelectedCity(city);
             }
-        } catch (err) { setSelectedCity(city); }
+        } catch (err) {
+            setSelectedCity(city);
+        }
     };
 
     const fetchWarehouses = async (cityRef) => {
@@ -91,6 +116,37 @@ const RequestForm = ({
         }
     };
 
+    // ---------------- FETCH STREETS ----------------
+
+    const fetchStreets = async (cityRef, search) => {
+        if (!cityRef || search.length < 2) return;
+        setIsStreetsLoading(true);
+
+        try {
+            const response = await api.post('/novaposhta/', {
+                action: 'get_streets',
+                city_ref: cityRef,
+                search
+            });
+
+            console.log('STREETS RAW FROM BACKEND:', response.data);
+
+            // Тепер бекенд віддає чистий масив об'єктів, де назва лежить у Description або Presentation
+            const data = Array.isArray(response.data)
+                ? response.data.filter(s => s && (s.Description || s.Presentation))
+                : [];
+
+            setStreets(data);
+            setShowStreetDropdown(true);
+        } catch (err) {
+            console.error(err);
+            setStreets([]);
+            setShowStreetDropdown(false);
+        } finally {
+            setIsStreetsLoading(false);
+        }
+    };
+
     useEffect(() => {
         const timer = setTimeout(() => {
             if (citySearch && !selectedCity && !langError) fetchCities(citySearch);
@@ -103,6 +159,26 @@ const RequestForm = ({
             fetchWarehouses(selectedCity.SettlementRef || selectedCity.Ref);
         }
     }, [selectedCity]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (
+                deliveryType === 'address' &&
+                selectedCity &&
+                streetSearch.length >= 2 &&
+                !selectedStreet
+            ) {
+                // Для вулиць критично передавати саме SettlementRef (UUID міста)
+                const cityUuid = selectedCity.SettlementRef || selectedCity.DeliveryCity;
+                if (cityUuid) {
+                    fetchStreets(cityUuid, streetSearch);
+                } else {
+                    console.warn("У вибраного міста відсутній SettlementRef!");
+                }
+            }
+        }, 400);
+        return () => clearTimeout(timer);
+    }, [streetSearch, selectedCity, deliveryType, selectedStreet]);
 
     const availabilityMap = useMemo(() => {
         return stocks.reduce((acc, s) => {
@@ -149,8 +225,11 @@ const RequestForm = ({
             toast.success("Заявку успішно створено!");
             fetchData();
             onClose();
-        } catch (err) { toast.error("Помилка при збереженні"); }
-        finally { setIsSubmitting(false); }
+        } catch (err) {
+            toast.error("Помилка при збереженні");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -159,9 +238,11 @@ const RequestForm = ({
             {/* 1. ЗАЯВНИК — Тільки для адміна */}
             {currentUser?.is_admin && (
                 <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100 shadow-sm">
-                    <label className="text-[10px] font-black uppercase text-blue-500 italic mb-2 block tracking-widest">1. Оберіть заявника (Admin)</label>
+                    <label className="text-[10px] font-black uppercase text-blue-500 italic mb-2 block tracking-widest">1.
+                        Оберіть заявника (Admin)</label>
                     <div className="flex items-center gap-3">
-                        <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100"><User size={20}/></div>
+                        <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100"><User
+                            size={20}/></div>
                         <select
                             value={selectedUserId || ''}
                             onChange={(e) => setSelectedUserId(e.target.value)}
@@ -183,17 +264,23 @@ const RequestForm = ({
                     <div className="relative">
                         <label className="text-[9px] font-bold uppercase text-slate-500 mb-1 ml-1 block">Місто</label>
                         <input type="text" value={citySearch || ''}
-                            onChange={(e) => { handleCityInput(e.target.value); setSelectedCity(null); }}
-                            placeholder="Пошук міста..." className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-blue-400 transition-all"/>
+                               onChange={(e) => {
+                                   handleCityInput(e.target.value);
+                                   setSelectedCity(null);
+                               }}
+                               placeholder="Пошук міста..."
+                               className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-blue-400 transition-all"/>
                         {showCityDropdown && !selectedCity && cities.length > 0 && (
-                            <div className="absolute left-0 right-0 z-[9999] mt-1 max-h-52 overflow-y-auto bg-white border-2 border-blue-100 rounded-xl shadow-xl">
+                            <div
+                                className="absolute left-0 right-0 z-[9999] mt-1 max-h-52 overflow-y-auto bg-white border-2 border-blue-100 rounded-xl shadow-xl">
                                 {cities.map((city, idx) => (
-                                    <div key={idx} className="px-4 py-3 hover:bg-blue-50 cursor-pointer text-sm font-bold border-b last:border-none"
-                                        onClick={() => {
-                                            setCitySearch(city.Present || city.Description);
-                                            setShowCityDropdown(false);
-                                            fetchCityDetails(city);
-                                        }}>
+                                    <div key={idx}
+                                         className="px-4 py-3 hover:bg-blue-50 cursor-pointer text-sm font-bold border-b last:border-none"
+                                         onClick={() => {
+                                             setCitySearch(city.Present || city.Description);
+                                             setShowCityDropdown(false);
+                                             fetchCityDetails(city);
+                                         }}>
                                         {city.Present || city.Description}
                                     </div>
                                 ))}
@@ -201,7 +288,8 @@ const RequestForm = ({
                         )}
                     </div>
                     <div>
-                        <label className="text-[9px] font-bold uppercase text-slate-500 mb-1 ml-1 block">Спосіб отримання</label>
+                        <label className="text-[9px] font-bold uppercase text-slate-500 mb-1 ml-1 block">Спосіб
+                            отримання</label>
                         <div className="flex bg-white p-1 rounded-xl border border-slate-200 h-[42px]">
                             <button type="button" onClick={() => setDeliveryType('warehouse')}
                                     className={`flex-1 flex items-center justify-center gap-2 rounded-lg text-[10px] font-black uppercase transition-all ${deliveryType === 'warehouse' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400'}`}>
@@ -222,17 +310,20 @@ const RequestForm = ({
 
                 <div className="bg-white/50 p-4 rounded-2xl border border-slate-100">
                     {!isDeliveryAvailable && selectedCity ? (
-                        <div className="p-4 bg-red-50 border-2 border-dashed border-red-200 rounded-2xl flex flex-col items-center text-center gap-2 text-red-600 animate-in fade-in slide-in-from-top-2 duration-500">
-                            <AlertCircle size={24} />
+                        <div
+                            className="p-4 bg-red-50 border-2 border-dashed border-red-200 rounded-2xl flex flex-col items-center text-center gap-2 text-red-600 animate-in fade-in slide-in-from-top-2 duration-500">
+                            <AlertCircle size={24}/>
                             <div>
                                 <p className="text-xs font-black uppercase tracking-wider">Логістичне обмеження</p>
-                                <p className="text-[11px] font-bold opacity-80 uppercase mt-1">Доставка в цей населений пункт тимчасово недоступна. Будь ласка, оберіть інше місто.</p>
+                                <p className="text-[11px] font-bold opacity-80 uppercase mt-1">Доставка в цей населений
+                                    пункт тимчасово недоступна. Будь ласка, оберіть інше місто.</p>
                             </div>
                         </div>
                     ) : (
                         deliveryType === 'warehouse' ? (
                             <div className="space-y-2">
-                                <label className="text-[9px] font-bold text-slate-500 uppercase">Оберіть відділення</label>
+                                <label className="text-[9px] font-bold text-slate-500 uppercase">Оберіть
+                                    відділення</label>
                                 <select
                                     disabled={!selectedCity || isWarehousesLoading}
                                     value={selectedWarehouse?.Ref || ''}
@@ -242,20 +333,66 @@ const RequestForm = ({
                                     <option value="">
                                         {isWarehousesLoading ? "Завантаження списку..." : (selectedCity ? "Оберіть зі списку..." : "Спочатку вкажіть місто")}
                                     </option>
-                                    {warehouses.map((w, idx) => <option key={idx} value={w.Ref}>{w.Description}</option>)}
+                                    {warehouses.map((w, idx) => <option key={idx}
+                                                                        value={w.Ref}>{w.Description}</option>)}
                                 </select>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-3 gap-3 animate-in slide-in-from-top-2 duration-300">
-                                <div className="col-span-2">
+                            /* АДРЕСНА ДОСТАВКА З ВИПАДАЮЧИМ МЕНЮ ВУЛИЦЬ */
+                            <div className="grid grid-cols-3 gap-3 animate-in slide-in-from-top-2 duration-300 relative">
+                                <div className="col-span-2 relative">
                                     <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block ml-1">Вулиця</label>
-                                    <input type="text" value={streetSearch} onChange={(e) => setStreetSearch(e.target.value)}
-                                        placeholder="Назва..." className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-blue-400"/>
+                                    <input
+                                        type="text"
+                                        value={streetSearch}
+                                        disabled={!selectedCity}
+                                        onChange={(e) => handleStreetInput(e.target.value)}
+                                        placeholder={selectedCity ? "Почніть вводити..." : "Спочатку оберіть місто"}
+                                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-blue-400 disabled:bg-slate-50"
+                                    />
+
+                                    {/* ШВИДКИЙ ЛОАДЕР ВУЛИЦЬ */}
+                                    {isStreetsLoading && (
+                                        <div className="absolute right-3 top-9 text-[10px] text-blue-500 font-bold animate-pulse">Пошук...</div>
+                                    )}
+
+                                    {/* ДРОПДАУН ВУЛИЦЬ */}
+                                    {showStreetDropdown && selectedCity && !selectedStreet && (
+                                        <div className="absolute left-0 right-0 z-[99999] mt-1 max-h-56 overflow-y-auto bg-white border-2 border-blue-100 rounded-xl shadow-2xl">
+                                            {streets.length === 0 ? (
+                                                <div className="px-4 py-3 text-sm text-gray-400">Нічого не знайдено</div>
+                                            ) : (
+                                                streets.map((street, idx) => {
+                                                    const streetName = street.Presentation || street.Description;
+                                                    return (
+                                                        <div
+                                                            key={idx}
+                                                            className="px-4 py-3 hover:bg-blue-50 cursor-pointer text-sm font-bold border-b last:border-none text-left"
+                                                            onClick={() => {
+                                                                setStreetSearch(streetName);
+                                                                setSelectedStreet(street);
+                                                                setShowStreetDropdown(false);
+                                                            }}
+                                                        >
+                                                            {streetName}
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
+
+                                {/* БУДИНОК */}
                                 <div>
-                                    <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block ml-1">Буд/Кв</label>
-                                    <input type="text" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)}
-                                        placeholder="№" className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-blue-400"/>
+                                    <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block ml-1">Будинок</label>
+                                    <input
+                                        type="text"
+                                        value={houseNumber}
+                                        onChange={(e) => setHouseNumber(e.target.value)}
+                                        placeholder="№"
+                                        className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:border-blue-400"
+                                    />
                                 </div>
                             </div>
                         )
@@ -271,37 +408,52 @@ const RequestForm = ({
                 {formRows.map((row, index) => {
                     const availableCount = availabilityMap[row.resource] || 0;
                     return (
-                        <div key={row.id} className="bg-white p-5 rounded-2xl border hover:border-blue-100 transition-all shadow-sm">
+                        <div key={row.id}
+                             className="bg-white p-5 rounded-2xl border hover:border-blue-100 transition-all shadow-sm">
                             <div className="flex flex-col md:flex-row gap-4 items-end">
                                 <div className="flex-1 w-full text-left">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Package size={12} className="inline mr-1"/>Ресурс</label>
-                                    <select value={row.resource || ''} onChange={(e) => handleFormChange(index, 'resource', e.target.value)}
-                                        className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold outline-none">
+                                    <label
+                                        className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Package
+                                        size={12} className="inline mr-1"/>Ресурс</label>
+                                    <select value={row.resource || ''}
+                                            onChange={(e) => handleFormChange(index, 'resource', e.target.value)}
+                                            className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold outline-none">
                                         <option value="">Оберіть ресурс...</option>
                                         {resourcesList.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="w-24 text-left">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Hash size={12} className="inline mr-1"/>К-сть</label>
+                                    <label
+                                        className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Hash
+                                        size={12} className="inline mr-1"/>К-сть</label>
                                     <input type="text" inputMode="numeric" value={row.quantity || ''}
-                                        onKeyDown={(e) => { if (['.', ',', 'e', 'E', '+', '-'].includes(e.key)) e.preventDefault(); }}
-                                        onChange={(e) => handleFormChange(index, 'quantity', e.target.value)}
-                                        placeholder="0" className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-black outline-none"/>
+                                           onKeyDown={(e) => {
+                                               if (['.', ',', 'e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+                                           }}
+                                           onChange={(e) => handleFormChange(index, 'quantity', e.target.value)}
+                                           placeholder="0"
+                                           className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-black outline-none"/>
                                 </div>
                                 <div className="flex-1 w-full text-left">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Target size={12} className="inline mr-1"/>Ціль</label>
-                                    <select value={row.purpose || ''} onChange={(e) => handleFormChange(index, 'purpose', e.target.value)}
-                                        className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none">
+                                    <label
+                                        className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Target
+                                        size={12} className="inline mr-1"/>Ціль</label>
+                                    <select value={row.purpose || ''}
+                                            onChange={(e) => handleFormChange(index, 'purpose', e.target.value)}
+                                            className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none">
                                         <option value="">Ціль...</option>
                                         {purposes.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                     </select>
                                 </div>
                                 {formRows.length > 1 && (
-                                    <button onClick={() => setFormRows(formRows.filter(r => r.id !== row.id))} className="text-slate-300 p-2 hover:text-red-500 transition-colors"><Trash2 size={18}/></button>
+                                    <button onClick={() => setFormRows(formRows.filter(r => r.id !== row.id))}
+                                            className="text-slate-300 p-2 hover:text-red-500 transition-colors"><Trash2
+                                        size={18}/></button>
                                 )}
                             </div>
                             {row.resource && (
-                                <div className={`mt-3 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase flex items-center gap-2 ${availableCount > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                                <div
+                                    className={`mt-3 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase flex items-center gap-2 ${availableCount > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
                                     {availableCount > 0 ? <CheckCircle2 size={12}/> : <AlertCircle size={12}/>}
                                     {availableCount > 0 ? `На складі: ${availableCount.toFixed(0)} од.` : 'На даний момент немає на складах'}
                                 </div>
@@ -311,16 +463,24 @@ const RequestForm = ({
                 })}
             </div>
 
-            <button type="button" onClick={() => setFormRows([...formRows, {id: Date.now(), resource: '', quantity: '', purpose: ''}])}
-                className="flex items-center gap-2 text-blue-600 font-black text-[10px] uppercase tracking-widest hover:bg-blue-50 px-6 py-4 rounded-2xl border-2 border-dashed border-blue-100 w-full justify-center transition-all active:scale-95">
+            <button type="button" onClick={() => setFormRows([...formRows, {
+                id: Date.now(),
+                resource: '',
+                quantity: '',
+                purpose: ''
+            }])}
+                    className="flex items-center gap-2 text-blue-600 font-black text-[10px] uppercase tracking-widest hover:bg-blue-50 px-6 py-4 rounded-2xl border-2 border-dashed border-blue-100 w-full justify-center transition-all active:scale-95">
                 <Plus size={16}/> Додати ще одну позицію
             </button>
 
             <div className="flex gap-4 justify-end pt-4 border-t border-slate-100">
-                <button type="button" onClick={onClose} className="px-8 py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors">Скасувати</button>
+                <button type="button" onClick={onClose}
+                        className="px-8 py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors">Скасувати
+                </button>
                 <button type="button" onClick={handleSubmit} disabled={isSubmitting || !isDeliveryAvailable}
-                    className="px-10 py-3 bg-blue-600 text-white font-black rounded-2xl hover:bg-slate-900 shadow-xl shadow-blue-200 active:scale-95 transition-all disabled:bg-slate-300 disabled:shadow-none">
-                    {isSubmitting ? "ЗБЕРЕЖЕННЯ..." : <div className="flex items-center gap-2"><Save size={20}/>ЗБЕРЕГТИ ЗАЯВКУ</div>}
+                        className="px-10 py-3 bg-blue-600 text-white font-black rounded-2xl hover:bg-slate-900 shadow-xl shadow-blue-200 active:scale-95 transition-all disabled:bg-slate-300 disabled:shadow-none">
+                    {isSubmitting ? "ЗБЕРЕЖЕННЯ..." :
+                        <div className="flex items-center gap-2"><Save size={20}/>ЗБЕРЕГТИ ЗАЯВКУ</div>}
                 </button>
             </div>
         </div>
