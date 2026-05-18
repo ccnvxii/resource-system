@@ -1,8 +1,13 @@
+# backend/app/views.py
 import math
+import time
+import requests
 from decimal import Decimal
+from datetime import date, timedelta
 from django.db import transaction
 from django.contrib.auth.models import User
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -17,21 +22,16 @@ from .models import (
 from .serializers import *
 from .optimizer.distribute import calculate_distribution
 
-# Імпортуємо функцію розрахунку з утиліт, уникаючи циклічного імпорту
-from .utils import calculate_front_multiplier
-
 
 # --- VIEWSETS ДЛЯ ДОВІДНИКІВ ---
 
 class UnitViewSet(viewsets.ReadOnlyModelViewSet):
-    """Перегляд доступних одиниць виміру (кг, шт, л)."""
     queryset = Unit.objects.all()
     serializer_class = UnitSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
 
 class RequestPurposeViewSet(viewsets.ReadOnlyModelViewSet):
-    """Перегляд типів призначення та їх ваг."""
     queryset = RequestPurpose.objects.all()
     serializer_class = RequestPurposeSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -40,22 +40,17 @@ class RequestPurposeViewSet(viewsets.ReadOnlyModelViewSet):
 # --- КЛАСИ АВТОРИЗАЦІЇ ТА КОРИСТУВАЧІВ ---
 
 class RegisterView(APIView):
-    """Реєстрація нового користувача."""
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            return Response({
-                'message': 'Реєстрація успішна',
-                'user_id': user.id
-            }, status=status.HTTP_201_CREATED)
+            return Response({'message': 'Реєстрація успішна', 'user_id': user.id}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    """Керування користувачами (тільки Admin)."""
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAdminUser]
@@ -64,14 +59,12 @@ class UserViewSet(viewsets.ModelViewSet):
 # --- КЕРУВАННЯ РЕСУРСАМИ ТА СКЛАДАМИ ---
 
 class CategoryViewSet(viewsets.ModelViewSet):
-    """Категорії ресурсів та їх критичність."""
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
 
 class ResourceViewSet(viewsets.ModelViewSet):
-    """Номенклатура ресурсів."""
     queryset = Resource.objects.all()
     serializer_class = ResourceSerializer
 
@@ -82,13 +75,12 @@ class ResourceViewSet(viewsets.ModelViewSet):
 
 
 class WarehouseViewSet(viewsets.ModelViewSet):
-    """Логістичні хаби та склади."""
     queryset = Warehouse.objects.all()
     serializer_class = WarehouseSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
 
-# --- ОПЕРАЦІЙНА ЛОГІКА: ЗАЯВКИ ТА ЗАПАСИ ---
+# --- ОПЕРАЦІЙНА ЛОГІКА ---
 
 class UserRequestViewSet(viewsets.ModelViewSet):
     queryset = UserRequest.objects.all()
@@ -97,37 +89,38 @@ class UserRequestViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         warehouse_ref = self.request.data.get('warehouse_ref')
+        auto_extend_val = self.request.data.get('auto_extend', True)
 
         lat, lon = None, None
-        # Якщо обрано відділення НП — тягнемо його координати через сервіс
         if warehouse_ref and warehouse_ref != 'ADDRESS_DELIVERY':
             np_service = NovaPoshtaService(api_key=settings.NOVA_POSHTA_API_KEY)
             lat, lon = np_service.get_warehouse_coordinates(warehouse_ref)
         else:
-            # Для адресної доставки забираємо прямі гео-координати міста, які прийшли з фронтенду
             try:
                 lat = float(self.request.data.get('latitude')) if self.request.data.get('latitude') else None
                 lon = float(self.request.data.get('longitude')) if self.request.data.get('longitude') else None
             except (ValueError, TypeError):
                 lat, lon = None, None
 
+        save_kwargs = {
+            'latitude': lat,
+            'longitude': lon,
+            'auto_extend': auto_extend_val
+        }
+
+        if self.request.data.get('due_date'):
+            save_kwargs['due_date'] = self.request.data.get('due_date')
+
         if not self.request.user.is_staff:
-            serializer.save(
-                user=self.request.user,
-                latitude=lat,
-                longitude=lon
-            )
+            save_kwargs['user'] = self.request.user
+            serializer.save(**save_kwargs)
         else:
             user_id = self.request.data.get('user')
-            serializer.save(
-                user_id=user_id if user_id else self.request.user.id,
-                latitude=lat,
-                longitude=lon
-            )
+            save_kwargs['user_id'] = user_id if user_id else self.request.user.id
+            serializer.save(**save_kwargs)
 
 
 class StockViewSet(viewsets.ModelViewSet):
-    """Облік запасів на складах."""
     queryset = Stock.objects.all()
     serializer_class = StockSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -146,7 +139,6 @@ class StockViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def add_resource(self, request):
-        """Реєстрація поставки на склад (викликається з StockInForm.js)"""
         if not request.user.is_staff:
             return Response({"error": "Тільки адміністратор може поповнювати склад"}, status=403)
 
@@ -182,11 +174,30 @@ class DistributeResourcesView(APIView):
     def post(self, request):
         try:
             with transaction.atomic():
-                # Блокуємо рядки від дедлоків, пропускаючи заблоковані паралельними сесіями адмінки
-                active_requests_qs = UserRequest.objects.exclude(status='done').select_for_update(skip_locked=True)
+                today = timezone.now().date()
+
+                # 1. КОНТУР АВТОПРОДОВЖЕННЯ ТА ІЗОЛЯЦІЇ (НАУКОВА НОВИЗНА)
+                expired_requests = UserRequest.objects.filter(
+                    status__in=['new', 'partial'],
+                    due_date__lt=today
+                )
+
+                for req in expired_requests:
+                    if req.auto_extend:
+                        req.due_date = today + timedelta(days=5)
+                        req.extension_count += 1
+                        req.save()
+                    else:
+                        req.status = 'expired'
+                        req.save()
+
+                # 2. ЗБІР АКТИВНИХ ЗАЯВОК (без done та expired)
+                active_requests_qs = UserRequest.objects.exclude(
+                    status__in=['done', 'expired']
+                ).select_for_update(skip_locked=True)
+
                 stocks_qs = Stock.objects.filter(amount__gt=0).select_for_update(skip_locked=True)
 
-                # Збір потреб із прокиданням широти та довготи отримувача (lat/lng)
                 requests_data = []
                 for r in active_requests_qs:
                     needed = int(r.quantity_requested - r.quantity_allocated)
@@ -200,7 +211,6 @@ class DistributeResourcesView(APIView):
                             'lng': float(r.longitude) if r.longitude else None
                         })
 
-                # Збір залишків складів із прокиданням широти та довготи хабу (lat/lng)
                 stocks_data = []
                 for s in stocks_qs:
                     stocks_data.append({
@@ -211,7 +221,6 @@ class DistributeResourcesView(APIView):
                         'lng': float(s.warehouse.longitude) if s.warehouse.longitude else None
                     })
 
-                # Виклик покращеного алгоритму оптимізації розподілу (Географія + Справедливість)
                 plan_items_data = calculate_distribution(requests_data, stocks_data)
 
                 if not plan_items_data:
@@ -221,7 +230,6 @@ class DistributeResourcesView(APIView):
                 items_to_create = []
                 req_map = {req.id: req for req in active_requests_qs}
 
-                # Захисний лімітатор ітерацій для запобігання Infinite Loop через округлення
                 max_iterations = 5000
                 iteration = 0
 
@@ -239,8 +247,6 @@ class DistributeResourcesView(APIView):
                     if not req:
                         continue
 
-                    # Створюємо операцію розподілу. Поля координат у плані за бажанням пишуться
-                    # у логи або використовуються безпосередньо у відповіді серіалізатора
                     items_to_create.append(
                         DistributionItem(
                             plan=new_plan,
@@ -262,13 +268,11 @@ class DistributeResourcesView(APIView):
                 return Response(DistributionPlanSerializer(new_plan).data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            print(f"Критична помилка блокування або розрахунку: {e}")
-            return Response({"error": "База даних тимчасово зайнята обробкою операцій. Спробуйте ще раз."},
-                            status=status.HTTP_423_LOCKED)
+            print(f"Критична помилка розрахунку: {e}")
+            return Response({"error": "База даних тимчасово зайнята. Спробуйте ще раз."}, status=status.HTTP_423_LOCKED)
 
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
-    """Історія розподілів для панелі адміністратора."""
     queryset = DistributionItem.objects.select_related(
         'request__user', 'request__resource', 'warehouse', 'plan'
     ).all().order_by('-plan__created_at')
@@ -285,26 +289,18 @@ class NovaPoshtaProxyView(APIView):
         np = NovaPoshtaService(settings.NOVA_POSHTA_API_KEY)
         action = request.data.get("action")
 
-        # 1. ОБРОБКА МІСТ
         if action == "get_cities":
             res = np.get_cities(request.data.get("search", ""))
-            settlements = (
-                res.get("data", []) and res["data"][0].get("Addresses", [])
-            ) or []
+            settlements = (res.get("data", []) and res["data"][0].get("Addresses", [])) or []
             return Response(settlements)
 
-        # 2. ОБРОБКА ВІДДІЛЕНЬ
         if action == "get_warehouses":
             res = np.get_warehouses(request.data.get("city_ref"))
             return Response(res.get("data", []))
 
-        # 3. ОБРОБКА ВУЛИЦЬ
         if action == "get_streets":
             city_ref = request.data.get("city_ref")
-            res = np.get_streets(
-                city_ref,
-                request.data.get("search", "")
-            )
+            res = np.get_streets(city_ref, request.data.get("search", ""))
             raw_data = res.get("data", [])
             streets_list = []
 

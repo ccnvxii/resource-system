@@ -1,5 +1,13 @@
+# backend/app/models.py
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
+from datetime import timedelta
+
+
+# Автоматичний розрахунок базового дедлайну (Сьогодні + 5 днів)
+def get_default_due_date():
+    return timezone.now().date() + timedelta(days=5)
 
 
 # --- 1. ОДИНИЦІ ВИМІРУ ---
@@ -61,7 +69,7 @@ class Stock(models.Model):
         unique_together = ('warehouse', 'resource')
 
 
-# --- 7. ПРОФІЛЬ ---
+# --- 7. ПРОФІЛЬ КОРИСТУВАЧА ---
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     organization = models.CharField(max_length=255, blank=True, null=True)
@@ -70,7 +78,12 @@ class UserProfile(models.Model):
 
 # --- 8. ЗАЯВКИ ---
 class UserRequest(models.Model):
-    STATUS_CHOICES = [('new', 'Нова'), ('partial', 'Частково'), ('done', 'Виконана')]
+    STATUS_CHOICES = [
+        ('new', 'Нова'),
+        ('partial', 'Частково'),
+        ('done', 'Виконана'),
+        ('expired', 'Протермінована')
+    ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     resource = models.ForeignKey(Resource, on_delete=models.CASCADE)
@@ -88,23 +101,48 @@ class UserRequest(models.Model):
     purpose = models.ForeignKey(RequestPurpose, on_delete=models.PROTECT, verbose_name="Призначення")
     priority = models.FloatField(default=1.0, verbose_name="Пріоритет")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
+
+    # Поля часових обмежень (Дедлайни)
+    due_date = models.DateField(default=get_default_due_date, verbose_name="Граничний термін виконання")
+    auto_extend = models.BooleanField(default=True, verbose_name="Автопродовження терміну")
+    extension_count = models.PositiveIntegerField(default=0, verbose_name="Кількість автопродовжень")
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        # Розрахунок базового пріоритету
-        w_dest = float(self.purpose.weight)
-        w_res = float(self.resource.category.criticality) if self.resource.category else 0.5
-        base_priority = w_dest * w_res
+        # 1. Нормалізація базових критеріїв до шкали [0...1]
+        # Максимальна вага призначення в БД = 10.0, тому ділимо на 10
+        k_purp = float(self.purpose.weight) / 10.0
+        k_crit = float(self.resource.category.criticality) if self.resource.category else 0.5
 
-        multiplier = 1.0
-        if self.latitude and self.longitude:
-            try:
-                from app.utils import calculate_front_multiplier
-                multiplier = calculate_front_multiplier(self.latitude, self.longitude)
-            except Exception as e:
-                print(f"Save Priority Error inside models.py: {e}")
+        from app.utils import calculate_front_multiplier, calculate_time_multiplier
 
-        self.priority = base_priority * multiplier
+        # 2. Отримання динамічних множників (кожен повертає максимум 3.0)
+        geo_mult = calculate_front_multiplier(self.latitude, self.longitude)
+        time_mult = calculate_time_multiplier(self.due_date)
+
+        # Нормалізуємо ГІС та Час до шкали [0...1] (ділимо на їхній макс, тобто на 3.0)
+        k_geo = geo_mult / 3.0
+        k_time = time_mult / 3.0
+
+        # Штраф за тривалий дефіцит (вік заявки при автопродовженні)
+        age_penalty = max(0.5, 1.0 - (self.extension_count * 0.1))
+
+        # 3. Визначення вагових коефіцієнтів (Сума = 1.0)
+        alpha = 0.35  # Вага призначення (Призначення)
+        beta = 0.25  # Вага часу (Дедлайн)
+        gamma = 0.25  # Вага простору (ГІС)
+        delta = 0.15  # Вага номенклатури (Критичність ресурсу)
+
+        # Обчислення зваженої суми
+        weighted_sum = (alpha * k_purp) + (beta * k_time) + (gamma * k_geo) + (delta * k_crit)
+
+        # 4. Масштабування до 10-бальної шкали та застосування штрафу за старість
+        final_index = weighted_sum * 10.0 * age_penalty
+
+        # Округлюємо до одного знака після коми для красивого відображення в інтерфейсі (напр. 8.4)
+        self.priority = round(max(0.0, min(10.0, final_index)), 1)
+
         super().save(*args, **kwargs)
 
 

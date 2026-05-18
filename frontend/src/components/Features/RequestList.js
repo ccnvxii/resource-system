@@ -1,3 +1,4 @@
+// src/components/Features/RequestList.js
 import React, {useState} from 'react';
 import {
     ListChecks, History, User, AlertCircle, Clock,
@@ -20,7 +21,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
         requestTab === 'active' ? r.status !== 'done' : r.status === 'done'
     );
 
-    // 2. Додаткова фільтрація (якщо вона буде розширена)
+    // 2. Додаткова фільтрація
     const displayedRequests = baseFiltered.filter(r => {
         const matchStatus = statusFilter === 'all' || r.status === statusFilter;
         const matchResource = resourceFilter === 'all' || r.resource_name === resourceFilter;
@@ -53,6 +54,17 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                 return {icon: <Clock size={14} className="text-amber-600"/>, label: 'Частково'};
             default:
                 return {icon: <AlertCircle size={14} className="text-blue-600"/>, label: 'Нова'};
+        }
+    };
+
+    // Форматування дати дедлайну
+    const formatDate = (dateString) => {
+        if (!dateString) return null;
+        try {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        } catch (e) {
+            return dateString;
         }
     };
 
@@ -116,16 +128,27 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                                 <div className="absolute left-0 top-0 bottom-0 w-1.5"
                                      style={{backgroundColor: stripeColor}}></div>
                                 <div className="flex justify-between items-start">
-                                    <div className="space-y-1">
+                                    <div className="space-y-1 flex-1">
                                         <span
                                             className={`flex w-fit items-center gap-1.5 text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${purposeData.color}`}>
                                             {purposeData.icon} {purposeData.label}
                                         </span>
                                         <h3 className={`font-bold text-lg text-slate-800 ${isHistory && 'line-through opacity-50'}`}>{req.resource_name}</h3>
-                                        <div className="flex items-center gap-1 text-xs text-slate-500 font-medium">
-                                            <User size={12} className="opacity-50"/>
-                                            <span>{req.user_full_name || req.username}</span>
+
+                                        {/* КОМПАКТНИЙ ГОРИЗОНТАЛЬНИЙ БЛОК: ЗАЯВНИК + ТЕРМІНОВОСТЬ */}
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 font-medium">
+                                            <div className="flex items-center gap-1">
+                                                <User size={12} className="opacity-50"/>
+                                                <span>{req.user_full_name || req.username}</span>
+                                            </div>
+                                            {req.due_date && (
+                                                <div className="flex items-center gap-1 text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100/60 text-[11px] font-bold">
+                                                    <Clock size={11} className="text-amber-500"/>
+                                                    <span>до {formatDate(req.due_date)}</span>
+                                                </div>
+                                            )}
                                         </div>
+
                                         {req.city && (
                                             <div
                                                 className="flex items-center gap-1 text-[11px] text-blue-700 font-bold bg-blue-50 w-fit px-1.5 py-0.5 rounded-md mt-1">
@@ -135,9 +158,8 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                                         )}
                                     </div>
                                     {isAdmin && (
-                                        <div className="text-right">
-                                            <div className="text-[10px] text-slate-400 font-bold uppercase">Пріоритет
-                                            </div>
+                                        <div className="text-right ml-2">
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase">Пріоритет</div>
                                             <div
                                                 className={`text-xl font-black ${!isHistory && Number(req.priority) >= 8 ? 'text-red-500' : 'text-slate-700'}`}>
                                                 {Number(req.priority).toFixed(1)}

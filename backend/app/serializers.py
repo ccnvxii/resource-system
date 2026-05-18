@@ -5,6 +5,7 @@ from .models import (
     DistributionPlan, DistributionItem, Unit, RequestPurpose, UserProfile
 )
 
+
 # --- НОВІ СЕРІАЛІЗАТОРИ ДЛЯ 3NF ДОДІДНИКІВ ---
 
 class UnitSerializer(serializers.ModelSerializer):
@@ -108,11 +109,11 @@ class StockSerializer(serializers.ModelSerializer):
 
 class UserRequestSerializer(serializers.ModelSerializer):
     resource_name = serializers.CharField(source='resource.name', read_only=True)
-    # Поле оголошено тут:
     unit_name = serializers.CharField(source='resource.unit.name', read_only=True)
     purpose_name = serializers.CharField(source='purpose.name', read_only=True)
     user_full_name = serializers.SerializerMethodField()
     user_email = serializers.EmailField(source='user.email', read_only=True)
+    due_date = serializers.DateField(format="%Y-%m-%d", required=False)
 
     class Meta:
         model = UserRequest
@@ -120,7 +121,7 @@ class UserRequestSerializer(serializers.ModelSerializer):
             'id', 'user', 'user_full_name', 'user_email', 'resource', 'resource_name',
             'unit_name', 'quantity_requested', 'quantity_allocated', 'purpose',
             'purpose_name', 'priority', 'status', 'created_at',
-            'city', 'warehouse_address', 'warehouse_ref'
+            'city', 'warehouse_address', 'warehouse_ref', 'due_date'  # ❗ FIX: додано поле дедлайну
         ]
         read_only_fields = ['priority', 'quantity_allocated', 'status']
         extra_kwargs = {'user': {'required': False}}
@@ -138,19 +139,20 @@ class DistributionItemSerializer(serializers.ModelSerializer):
     recipient_name = serializers.CharField(source='request.user.username', read_only=True)
     priority = serializers.FloatField(source='request.priority', read_only=True)
 
-    # Пряме витягування логістичних даних із пов'язаної заявки (UserRequest)
     city = serializers.CharField(source='request.city', default='Місто не вказано', read_only=True)
     warehouse_address = serializers.CharField(source='request.warehouse_address', default='', read_only=True)
     warehouse_ref = serializers.CharField(source='request.warehouse_ref', default='', read_only=True)
     quantity_requested = serializers.IntegerField(source='request.quantity_requested', read_only=True)
     purpose_code = serializers.CharField(source='request.purpose.code', read_only=True)
 
+    due_date = serializers.DateField(source='request.due_date', read_only=True, format="%Y-%m-%d")
+
     class Meta:
         model = DistributionItem
         fields = [
             'id', 'amount', 'resource_name', 'unit_name', 'warehouse_name',
             'recipient_name', 'priority', 'city', 'warehouse_address',
-            'warehouse_ref', 'quantity_requested', 'purpose_code'
+            'warehouse_ref', 'quantity_requested', 'purpose_code', 'due_date'
         ]
 
     def get_recipient_name(self, obj):
@@ -165,21 +167,23 @@ class DistributionPlanSerializer(serializers.ModelSerializer):
         model = DistributionPlan
         fields = ['id', 'created_at', 'executed', 'items']
 
+
 class AuditLogSerializer(serializers.ModelSerializer):
     plan_id = serializers.IntegerField(source='plan.id', read_only=True)
     username = serializers.CharField(source='request.user.username', read_only=True)
-    # Додайте цей метод, щоб ПІБ відображалося коректно
     user_full_name = serializers.SerializerMethodField()
     resource_name = serializers.CharField(source='request.resource.name', read_only=True)
     unit = serializers.CharField(source='request.resource.unit.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
     timestamp = serializers.DateTimeField(source='plan.created_at', read_only=True)
 
+    due_date = serializers.DateField(source='request.due_date', read_only=True, format="%Y-%m-%d")
+
     class Meta:
         model = DistributionItem
         fields = [
             'id', 'plan_id', 'timestamp', 'username', 'user_full_name',
-            'resource_name', 'unit', 'warehouse_name', 'amount'
+            'resource_name', 'unit', 'warehouse_name', 'amount', 'due_date'
         ]
 
     def get_user_full_name(self, obj):

@@ -9,7 +9,8 @@ import {
   PieChart,
   Download,
   MapPin,
-  HelpCircle
+  HelpCircle,
+  Clock
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { PURPOSE_MAP } from '../../constants/purposes';
@@ -17,6 +18,17 @@ import { PURPOSE_MAP } from '../../constants/purposes';
 import DistributionChart from './DistributionChart';
 
 const DistributionPlan = ({ plan, purposeMap }) => {
+
+  // Форматування дати дедлайну для інтерфейсу
+  const formatDate = (dateString) => {
+    if (!dateString) return null;
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch (e) {
+      return dateString;
+    }
+  };
 
   const exportPlanToExcel = () => {
     if (!plan || !plan.items || plan.items.length === 0) return;
@@ -28,6 +40,7 @@ const DistributionPlan = ({ plan, purposeMap }) => {
       return {
         "ID Operational": item.id,
         "Пріоритет": item.priority ? Number(item.priority).toFixed(1) : '0.0',
+        "Граничний термін": item.due_date ? formatDate(item.due_date) : 'Не вказано', // Додано в Excel
         "Ресурс": item.resource_name,
         "Виділено": Math.round(item.amount),
         "Запитувано": item.quantity_requested ? Math.round(item.quantity_requested) : 0,
@@ -101,24 +114,35 @@ const DistributionPlan = ({ plan, purposeMap }) => {
           return (
             <div
               key={item.id}
-              className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition-all flex flex-col justify-between group relative overflow-hidden animate-in fade-in zoom-in duration-300"
+              className="bg-white p-5 rounded-2xl border border-slate-200 hover:shadow-md transition-all flex flex-col justify-between group relative overflow-hidden animate-in fade-in zoom-in duration-300 shadow-sm"
             >
               <div className="absolute left-0 top-0 bottom-0 w-1.5" style={{ backgroundColor: isHighPriority ? '#ef4444' : '#3b82f6' }}></div>
 
               <div>
                 <div className="flex justify-between items-start mb-4">
-                  <div className="flex flex-col text-left">
+                  <div className="flex flex-col text-left flex-1">
                     <div className="flex items-center gap-1.5 text-slate-400">
                       <Fingerprint size={14} />
                       <span className="text-[10px] font-mono font-bold uppercase">Операція #{item.id}</span>
                     </div>
-                    <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase rounded-lg px-2 py-0.5 w-fit mt-1.5 ${purposeData.color}`}>
-                      {purposeData.icon}
-                      <span>{purposeData.label}</span>
-                    </span>
+
+                    {/* РЯДОК З ЦІЛЛЮ ТА ДЕДЛАЙНОМ В ОДИН РЯДОК ДЛЯ ЗБЕРЕЖЕННЯ КОМПАКТНОСТІ */}
+                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                      <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase rounded-lg px-2 py-0.5 w-fit ${purposeData.color}`}>
+                        {purposeData.icon}
+                        <span>{purposeData.label}</span>
+                      </span>
+
+                      {item.due_date && (
+                        <span className="flex items-center gap-1 text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100/60 text-[10px] font-black uppercase tracking-tight">
+                          <Clock size={10} className="text-amber-500" />
+                          <span>до {formatDate(item.due_date)}</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="text-right">
+                  <div className="text-right ml-2">
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Пріоритет</div>
                     <div className={`text-xl font-black leading-none ${isHighPriority ? 'text-red-500' : 'text-slate-700'}`}>
                       {item.priority && !isNaN(item.priority) ? Number(item.priority).toFixed(1) : '0.0'}
@@ -166,7 +190,7 @@ const DistributionPlan = ({ plan, purposeMap }) => {
                 <div className="flex items-start gap-2.5">
                   <div className="mt-0.5 text-blue-500"><MapPin size={13} /></div>
                   <div className="flex flex-col w-full">
-                    <span className="text-[9px] font-bold text-blue-500 uppercase tracking-tight leading-none mb-0.5">Куди поїде ресурс</span>
+                    <span className="text-[9px] font-bold text-blue-500 uppercase tracking-tight leading-none mb-0.5">Куди поїде resource</span>
                     <div className="bg-blue-50/50 px-2.5 py-1.5 rounded-xl border border-blue-100 w-full mt-0.5 space-y-0.5">
                       <span className="font-black text-blue-900 text-xs block">{item.city || 'Місто не вказано'}</span>
                       {item.warehouse_address && <span className="text-[11px] text-slate-600 font-medium block leading-tight">{item.warehouse_address}</span>}

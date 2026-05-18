@@ -1,16 +1,22 @@
 import React, {useState, useEffect, useMemo} from 'react';
 import {
     User, Package, Hash, Target, Plus, Trash2, Save,
-    AlertCircle, CheckCircle2, MapPin, Truck, Map as MapIcon, X, Home
+    AlertCircle, CheckCircle2, MapPin, Truck, Map as MapIcon, X, Home, Calendar, RefreshCw
 } from 'lucide-react';
 import {toast} from 'react-hot-toast';
 import api from '../../services/api';
+
+// Допоміжна функція для генерації дати за замовчуванням (Сьогодні + 5 днів)
+const getFutureDate = (daysAhead = 5) => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysAhead);
+    return date.toISOString().split('T')[0];
+};
 
 const RequestForm = ({
                          usersList = [], resourcesList = [], stocks = [], purposes = [],
                          onClose, fetchData, currentUser
                      }) => {
-    // --- СТАН ЛОКАЦІЇ ---
     // --- СТАН ЛОКАЦІЇ ---
     const [cities, setCities] = useState([]);
     const [warehouses, setWarehouses] = useState([]);
@@ -37,6 +43,8 @@ const RequestForm = ({
 
     // --- FORM ---
     const [selectedUserId, setSelectedUserId] = useState('');
+    const [dueDate, setDueDate] = useState(() => getFutureDate(5)); // Початковий стан: сьогодні + 5 днів
+    const [autoExtend, setAutoExtend] = useState(true); // ❗ Новий стан для автопродовження
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [formRows, setFormRows] = useState([
@@ -47,6 +55,9 @@ const RequestForm = ({
             purpose: ''
         }
     ]);
+
+    // Значення поточної дати для обмеження вибору "минулих" дат у календарі
+    const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
     // Перевірка чи доступна доставка в місто (чи є там відділення)
     const isDeliveryAvailable = useMemo(() => {
@@ -68,6 +79,7 @@ const RequestForm = ({
         setStreetSearch(val);
         setSelectedStreet(null); // Скидаємо об'єкт вибору, якщо користувач знову почав редагувати текст
     };
+
     const fetchCities = async (search) => {
         if (search.length < 2 || langError) return;
         try {
@@ -107,7 +119,6 @@ const RequestForm = ({
             const response = await api.post('/novaposhta/', {action: 'get_warehouses', city_ref: cityRef});
             const data = Array.isArray(response.data) ? response.data : [];
             setWarehouses(data);
-            // Якщо відділень немає — примусово ставимо тип warehouse (щоб не вибирали адресу)
             if (data.length === 0) setDeliveryType('warehouse');
         } catch (err) {
             setWarehouses([]);
@@ -131,7 +142,6 @@ const RequestForm = ({
 
             console.log('STREETS RAW FROM BACKEND:', response.data);
 
-            // Тепер бекенд віддає чистий масив об'єктів, де назва лежить у Description або Presentation
             const data = Array.isArray(response.data)
                 ? response.data.filter(s => s && (s.Description || s.Presentation))
                 : [];
@@ -168,7 +178,6 @@ const RequestForm = ({
                 streetSearch.length >= 2 &&
                 !selectedStreet
             ) {
-                // Для вулиць критично передавати саме SettlementRef (UUID міста)
                 const cityUuid = selectedCity.SettlementRef || selectedCity.DeliveryCity;
                 if (cityUuid) {
                     fetchStreets(cityUuid, streetSearch);
@@ -208,6 +217,7 @@ const RequestForm = ({
             : selectedWarehouse?.Description;
 
         if (!finalAddress) return toast.error("Вкажіть конкретну точку отримання");
+        if (!dueDate) return toast.error("Вкажіть граничний термін виконання заявки");
 
         setIsSubmitting(true);
         try {
@@ -220,7 +230,9 @@ const RequestForm = ({
                 warehouse_address: finalAddress,
                 warehouse_ref: isAddressMode ? 'ADDRESS_DELIVERY' : selectedWarehouse?.Ref,
                 latitude: isAddressMode ? selectedCity?.Latitude : selectedWarehouse?.Latitude,
-                longitude: isAddressMode ? selectedCity?.Longitude : selectedWarehouse?.Longitude
+                longitude: isAddressMode ? selectedCity?.Longitude : selectedWarehouse?.Longitude,
+                due_date: dueDate,
+                auto_extend: autoExtend // ❗ Передаємо параметр автопродовження дефіциту на бекенд
             })));
             toast.success("Заявку успішно створено!");
             fetchData();
@@ -235,30 +247,66 @@ const RequestForm = ({
     return (
         <div className="space-y-6 text-left relative">
 
-            {/* 1. ЗАЯВНИК — Тільки для адміна */}
-            {currentUser?.is_admin && (
-                <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100 shadow-sm">
-                    <label className="text-[10px] font-black uppercase text-blue-500 italic mb-2 block tracking-widest">1.
-                        Оберіть заявника (Admin)</label>
-                    <div className="flex items-center gap-3">
-                        <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100"><User
-                            size={20}/></div>
-                        <select
-                            value={selectedUserId || ''}
-                            onChange={(e) => setSelectedUserId(e.target.value)}
-                            className="w-full px-4 py-2.5 bg-white border border-blue-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
-                        >
-                            <option value="">Виберіть користувача зі списку...</option>
-                            {usersList.map(u => <option key={u.id} value={u.id}>{u.full_name || u.username}</option>)}
-                        </select>
+            {/* 1. СТРУКТУРНИЙ БЛОК: АДМІНІСТРУВАННЯ ТА ТЕРМІНОВІСТЬ */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* ЗАЯВНИК — Тільки для адміна */}
+                {currentUser?.is_admin && (
+                    <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100 shadow-sm md:col-span-2">
+                        <label className="text-[10px] font-black uppercase text-blue-500 italic mb-2 block tracking-widest">1. Оберіть заявника (Admin)</label>
+                        <div className="flex items-center gap-3">
+                            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100"><User size={20}/></div>
+                            <select
+                                value={selectedUserId || ''}
+                                onChange={(e) => setSelectedUserId(e.target.value)}
+                                className="w-full px-4 py-2.5 bg-white border border-blue-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
+                            >
+                                <option value="">Виберіть користувача зі списку...</option>
+                                {usersList.map(u => <option key={u.id} value={u.id}>{u.full_name || u.username}</option>)}
+                            </select>
+                        </div>
                     </div>
+                )}
+
+                {/* ГРАНИЧНИЙ ТЕРМІН ВИКОНАННЯ ТА АВТОПРОДОВЖЕННЯ */}
+                <div className={`bg-amber-50/40 p-5 rounded-2xl border border-amber-100 shadow-sm flex flex-col justify-between gap-3 ${!currentUser?.is_admin ? 'md:col-span-3' : ''}`}>
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-amber-600 italic mb-2 block tracking-widest">
+                            {currentUser?.is_admin ? '1.1' : '1.'} Виконати до
+                        </label>
+                        <div className="flex items-center gap-2">
+                            <div className="bg-amber-500 p-2.5 rounded-xl text-white shadow-lg shadow-amber-100"><Calendar size={20}/></div>
+                            <input
+                                type="date"
+                                value={dueDate}
+                                min={todayStr}
+                                onChange={(e) => setDueDate(e.target.value)}
+                                className="w-full px-3 py-2 bg-white border border-amber-100 rounded-xl font-black text-xs text-slate-700 outline-none focus:ring-2 focus:ring-amber-500/20"
+                            />
+                        </div>
+                    </div>
+
+                    {/* ІНТЕРАКТИВНИЙ ЧЕКБОКС АВТОПРОДОВЖЕННЯ */}
+                    <label className="flex items-center gap-2.5 cursor-pointer bg-white/60 p-2 rounded-xl border border-amber-200/50 hover:bg-white transition-all select-none">
+                        <input
+                            type="checkbox"
+                            checked={autoExtend}
+                            onChange={(e) => setAutoExtend(e.target.checked)}
+                            className="w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500/20 focus:ring-2 accent-amber-500"
+                        />
+                        <div className="flex flex-col text-left">
+                            <span className="text-[10px] font-black text-amber-900 uppercase leading-none mb-0.5 flex items-center gap-1">
+                                <RefreshCw size={10} className={autoExtend ? "animate-spin-slow" : ""} /> Автопродовження
+                            </span>
+                            <span className="text-[9px] font-medium text-slate-400 leading-none">Продовжити на +5 днів у разі дефіциту</span>
+                        </div>
+                    </label>
                 </div>
-            )}
+            </div>
 
             {/* 2. ЛОКАЦІЯ ТА ДОСТАВКА */}
             <div className="bg-slate-50 p-5 rounded-3xl border border-slate-200 space-y-4 shadow-inner">
                 <label className="text-[10px] font-black uppercase text-slate-400 italic block tracking-widest">
-                    {currentUser?.is_admin ? '2.' : '1.'} Локація та доставка
+                    {currentUser?.is_admin ? '2.' : '2.'} Локація та доставка
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="relative">
@@ -403,7 +451,7 @@ const RequestForm = ({
             {/* 3. ПЕРЕЛІК РЕСУРСІВ */}
             <div className="space-y-4 max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
                 <label className="text-[10px] font-black uppercase text-slate-400 italic block tracking-widest">
-                    {currentUser?.is_admin ? '3.' : '2.'} Перелік ресурсів
+                    3. Перелік ресурсів
                 </label>
                 {formRows.map((row, index) => {
                     const availableCount = availabilityMap[row.resource] || 0;
