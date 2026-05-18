@@ -16,13 +16,26 @@ const StockInForm = ({warehouses, resources, onSubmit, loading, onClose}) => {
 
         setLocalLoading(true);
         try {
-            await Promise.all(rows.map(row =>
-                api.post('/stocks/add_resource/', {
-                    warehouse: parseInt(warehouse, 10),
-                    resource: parseInt(row.resource, 10),
-                    amount: parseInt(row.amount, 10)
-                })
-            ));
+            for (const row of rows) {
+                try {
+                    await api.post('/stocks/add_resource/', {
+                        warehouse: parseInt(warehouse, 10),
+                        resource: parseInt(row.resource, 10),
+                        amount: parseInt(row.amount, 10)
+                    });
+                } catch (rowError) {
+                    const missingResource = resources.find(r => r.id === parseInt(row.resource, 10));
+                    const resourceName = missingResource ? `"${missingResource.name}"` : "Обраний ресурс";
+
+                    if (rowError.response && rowError.response.status !== 403) {
+                        throw new Error(`Ресурс ${resourceName} більше не існує в базі даних. Оновіть сторінку.`);
+                    }
+                    if (rowError.response && rowError.response.status === 403) {
+                        throw new Error("Тільки адміністратор може поповнювати склад");
+                    }
+                    throw rowError;
+                }
+            }
 
             toast.success("Запаси успішно поповнено");
             setWarehouse('');
@@ -32,6 +45,7 @@ const StockInForm = ({warehouses, resources, onSubmit, loading, onClose}) => {
             onClose();
         } catch (error) {
             console.error("Stock in error:", error);
+            toast.error(error.message || "Помилка при поповненні складу");
         } finally {
             setLocalLoading(false);
         }
