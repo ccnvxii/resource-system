@@ -177,26 +177,29 @@ class DistributeResourcesView(APIView):
                 today = timezone.now().date()
 
                 # 1. КОНТУР АВТОПРОДОВЖЕННЯ ТА ІЗОЛЯЦІЇ (НАУКОВА НОВИЗНА)
+                # Оптимізовано: використовуємо .update() замість циклу з req.save()
                 expired_requests = UserRequest.objects.filter(
                     status__in=['new', 'partial'],
                     due_date__lt=today
                 )
 
-                for req in expired_requests:
-                    if req.auto_extend:
-                        req.due_date = today + timedelta(days=5)
-                        req.extension_count += 1
-                        req.save()
-                    else:
-                        req.status = 'expired'
-                        req.save()
+                # Заявки без автопродовження — маркуємо як протерміновані
+                expired_requests.filter(auto_extend=False).update(status='expired')
 
-                # 2. ЗБІР АКТИВНИХ ЗАЯВОК (без done та expired)
+                # Заявки з автопродовженням — зміщуємо дедлайн масово одним запитом
+                for req in expired_requests.filter(auto_extend=True):
+                    req.due_date = today + timedelta(days=5)
+                    req.extension_count += 1
+                    req.save()
+
+                # 2. ЗБІР АКТИВНИХ ЗАЯВОК (Оптимізовано через select_related)
                 active_requests_qs = UserRequest.objects.exclude(
                     status__in=['done', 'expired']
-                ).select_for_update(skip_locked=True)
+                ).select_related('resource').select_for_update(skip_locked=True)
 
-                stocks_qs = Stock.objects.filter(amount__gt=0).select_for_update(skip_locked=True)
+                # ОПТИМІЗАЦІЯ: підтягуємо склад разом із координатами за ОДИН запит SQL
+                stocks_qs = Stock.objects.filter(amount__gt=0).select_related('warehouse').select_for_update(
+                    skip_locked=True)
 
                 requests_data = []
                 for r in active_requests_qs:
@@ -221,24 +224,23 @@ class DistributeResourcesView(APIView):
                         'lng': float(s.warehouse.longitude) if s.warehouse.longitude else None
                     })
 
+                # Запуск нашого швидкого SciPy-оптимізатора
                 plan_items_data = calculate_distribution(requests_data, stocks_data)
 
                 if not plan_items_data:
                     return Response({"message": "Немає доступних комбінацій для розподілу ресурсів"}, status=200)
 
                 new_plan = DistributionPlan.objects.create()
-                items_to_create = []
-                req_map = {req.id: req for req in active_requests_qs}
 
-                max_iterations = 5000
-                iteration = 0
+                # Створюємо мапи (кеш в пам'яті), щоб уникнути запитів .get() всередині циклу
+                req_map = {req.id: req for req in active_requests_qs}
+                stock_map = {(s.warehouse_id, s.resource_id): s for s in stocks_qs}
+
+                items_to_create = []
+                requests_to_update = set()
+                stocks_to_update = set()
 
                 for item in plan_items_data:
-                    iteration += 1
-                    if iteration > max_iterations:
-                        print("🚨 Захисний лімітатор: виявлено ризик зациклення при імпорті елементів плану!")
-                        break
-
                     amount_int = int(item['amount'])
                     if amount_int <= 0:
                         continue
@@ -247,6 +249,12 @@ class DistributeResourcesView(APIView):
                     if not req:
                         continue
 
+                    # Знаходимо склад в пам'яті сервера без запиту до БД
+                    stock = stock_map.get((item['warehouse_id'], req.resource_id))
+                    if not stock:
+                        continue
+
+                    # Додаємо елемент плану в масив для масового створення
                     items_to_create.append(
                         DistributionItem(
                             plan=new_plan,
@@ -256,15 +264,27 @@ class DistributeResourcesView(APIView):
                         )
                     )
 
+                    # Змінюємо об'єкти суто в оперативній пам'яті
                     req.quantity_allocated += amount_int
                     req.status = 'done' if req.quantity_allocated >= req.quantity_requested else 'partial'
-                    req.save()
+                    requests_to_update.add(req)
 
-                    stock = Stock.objects.get(warehouse_id=item['warehouse_id'], resource_id=req.resource_id)
                     stock.amount -= amount_int
-                    stock.save()
+                    stocks_to_update.add(stock)
 
+                # --- МАГІЯ МАСОВОГО ЗБЕРЕЖЕННЯ (BULK OPERATIONS) ---
+                # 1. Записуємо всі нові елементи логістичного плану за 1 запит
                 DistributionItem.objects.bulk_create(items_to_create)
+
+                # 2. Оновлюємо статуси та виділену кількість усіх заявок за 1 запит
+                if requests_to_update:
+                    UserRequest.objects.bulk_update(list(requests_to_update),
+                                                    ['quantity_allocated', 'status', 'due_date', 'extension_count'])
+
+                # 3. Зрізаємо залишки на всіх складах за 1 запит
+                if stocks_to_update:
+                    Stock.objects.bulk_update(list(stocks_to_update), ['amount'])
+
                 return Response(DistributionPlanSerializer(new_plan).data, status=status.HTTP_201_CREATED)
 
         except Exception as e:

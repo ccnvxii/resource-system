@@ -106,4 +106,6 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-NOVA_POSHTA_API_KEY = os.getenv('NOVA_POSHTA_API_KEY')
+NOVA_POSHTA_API_KEY = config('NOVA_POSHTA_API_KEY', default='')
+GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
+ARCGIS_FRONT_LINE_URL = config('ARCGIS_FRONT_LINE_URL', default='https://services.arcgis.com/...')

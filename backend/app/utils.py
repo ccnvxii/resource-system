@@ -1,19 +1,20 @@
 import math
 import datetime
+import numpy as np
 from django.utils import timezone
+from scipy.spatial.distance import cdist
 from .services import GeoFrontService
 
 
 def calculate_front_multiplier(user_lat, user_lon):
     """
     СППР-модель динамічної гео-пріоритезації (Front-Line Proximity Model).
-    Версія з посиленим квадратичним штрафуванням глибокого тилу.
+    Версія з оптимізованим векторним пошуком найближчої точки через SciPy cdist.
 
     Забезпечує жорстку диференціацію:
     - Зона бойових дій (0-80 км) -> Максимальний буст (до 3.0)
-    - Стабілізаційні хаби (80-200 км, Дніпро) -> Помітний пріоритет (1.3 - 1.5)
-    - Тил (200-500 км, Вінниця) -> Суворий деградаційний коефіцієнт (0.5 - 0.7)
-    - Глибокий тил (>500 км, Львів) -> Максимальний штраф безпеки (0.4)
+    - Стабілізаційні хаби (80-200 км, Дніпро) -> Помітний пріоритет (1.4)
+    - Тил ( > 220 км) -> Суворий деградаційний коефіцієнт (0.4 - 1.0)
     """
     if user_lat is None or user_lon is None:
         return 1.0
@@ -28,29 +29,31 @@ def calculate_front_multiplier(user_lat, user_lon):
         u_lat = float(user_lat)
         u_lon = float(user_lon)
 
-        # Переведення координат сітки у кілометри
-        distances = [
-            math.sqrt((u_lat - float(fx)) ** 2 + (u_lon - float(fy)) ** 2) * 111
-            for fx, fy in front_points
-        ]
-        min_dist = min(distances) if distances else 300
+        # --- ВЕКТОРНИЙ РОЗРАХУНОК ЧЕРЕЗ SCIPY (ОПТИМІЗАЦІЯ CPU) ---
+        # Формуємо матрицю для поточної координати користувача (1 рядок, 2 стовпці)
+        user_coord = np.array([[u_lat, u_lon]])
+
+        # Перетворюємо масив опорних точок лінії фронту у двовимірну матрицю NumPy
+        front_coords = np.array(front_points, dtype=float)
+
+        # cdist обчислює евклідову відстань у градусах між точкою користувача
+        # та ВСІМА опорними точками лінії зіткнення на рівні компільованого C-коду
+        distances_deg = cdist(user_coord, front_coords, metric='euclidean')
+
+        # Знаходимо мінімальний елемент матриці (найближчу точку кривої) та масштабуємо в кілометри
+        min_dist = np.min(distances_deg) * 111.0
 
         # --- РАДИКАЛЬНА МАТЕМАТИЧНА МОДЕЛЬ ЗОНУВАННЯ ---
-
         if min_dist <= 80.0:
             # 1. Смуга безпосередньої близькості до фронту (Краматорськ)
-            # Експоненційне зростання до 3.0
             return 3.0 * math.exp(-min_dist / 120.0)
 
         elif min_dist <= 220.0:
             # 2. Оперативно-тактична прифронтова зона (Дніпро, Запоріжжя)
-            # Фіксуємо сильний, стабільний множник, який суттєво вищий за тил
             return 1.4
 
         else:
             # 3. Стратегічний тил (Вінниця, Львів)
-            # Застосовуємо агресивне квадратичне затухання: чим далі від 220 км,
-            # тим швидше падає пріоритет, прямуючи до жорсткого мінімуму 0.4
             distance_from_front_zone = min_dist - 220.0
             penalty = math.exp(-distance_from_front_zone / 150.0)
 

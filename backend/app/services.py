@@ -2,6 +2,7 @@ import time
 import math
 import requests
 import googlemaps
+from django.conf import settings  # Імпортуємо глобальні налаштування Django
 
 # Внутрішній локальний кеш для уникнення дублювання запитів під час роботи симплекс-методу
 _ROUTING_CACHE = {}
@@ -9,53 +10,23 @@ _ROUTING_CACHE = {}
 
 class DistanceMatrixService:
     def __init__(self):
-        # Твій робочий API ключ із Google Cloud Maps Platform
-        self.google_key = "AIzaSyDR8L5DEC1oCb9eOhg6ZERNVQZMoeABNU0"
-
-        try:
-            self.gmaps_client = googlemaps.Client(key=self.google_key)
-        except Exception as e:
-            print(f"[DistanceMatrixService] Клієнт Google Maps не ініціалізовано: {e}")
-            self.gmaps_client = None
+        pass
 
     def get_distance(self, lat1, lng1, lat2, lng2):
         """
         Повертає реальну автомобільну відстань між двома точками в кілометрах.
-        Каскадна стратегія: Google Maps API -> Безкоштовний OSRM API -> Евклідовий фолбек.
+        Каскадна стратегія: Безкоштовний OSRM API (OpenStreetMap) -> Математичний геометричний фолбек.
         """
         if None in (lat1, lng1, lat2, lng2):
-            return 500.0  # Стандартний штрафний коефіцієнт системи при відсутності координат
+            return 500.0  # Штрафний коефіцієнт системи при відсутності координат
 
-        # Формуємо ключ для кешування (округлення до 4 знаків для стабільності)
+        # ключ для кешування
         cache_key = (round(float(lat1), 4), round(float(lng1), 4), round(float(lat2), 4), round(float(lng2), 4))
         if cache_key in _ROUTING_CACHE:
             return _ROUTING_CACHE[cache_key]
 
-        # --- СТРАТЕГІЯ 1: GOOGLE MAPS API (Режим Driving) ---
-        if self.gmaps_client:
-            try:
-                origins = f"{lat1},{lng1}"
-                destinations = f"{lat2},{lng2}"
-
-                matrix = self.gmaps_client.distance_matrix(
-                    origins=origins,
-                    destinations=destinations,
-                    mode="driving"
-                )
-
-                element = matrix['rows'][0]['elements'][0]
-                if element.get('status') == 'OK':
-                    distance_km = element['distance']['value'] / 1000.0
-                    _ROUTING_CACHE[cache_key] = distance_km
-                    return distance_km
-                else:
-                    print(f"[Google API] Статус відповіді NOT OK: {element.get('status')}. Спроба через OSRM...")
-            except Exception as e:
-                print(f"[Google API] Помилка запиту ({e}). Перемикання на OSRM...")
-
-        # --- СТРАТЕГІЯ 2: БЕЗКОШТОВНИЙ СЕРВЕР OSRM (OPENSTREETMAP) ---
+        # --- СТРАТЕГІЯ 1: БЕЗКОШТОВНИЙ СЕРВЕР OSRM (OPENSTREETMAP) ---
         try:
-            # Важливо: OSRM приймає параметри у форматі (longitude, latitude)
             url = f"http://router.project-osrm.org/route/v1/driving/{lng1},{lat1};{lng2},{lat2}?overview=false"
             response = requests.get(url, timeout=2.0)
 
@@ -64,25 +35,28 @@ class DistanceMatrixService:
                 if data.get('code') == 'Ok':
                     distance_km = data['routes'][0]['distance'] / 1000.0
                     _ROUTING_CACHE[cache_key] = distance_km
+                    print(f"[SUCCESS] [OSRM OpenStreetMap] Маршрут отримано: {lat1},{lng1} -> {lat2},{lng2} = {distance_km} км")
                     return distance_km
+                else:
+                    print(f"[OSRM API] Сервер повернув код, відмінний від Ok: {data.get('code')}. Перемикання на геометрію...")
+            else:
+                print(f"[OSRM API] Помилка сервера (Статус {response.status_code}). Перемикання на геометрію...")
         except Exception as e:
-            print(f"[OSRM API] Помилка безкоштовного сервера ({e}). Розрахунок геометрії...")
+            print(f"[OSRM API] Помилка мережевого запиту ({e}). Розрахунок геометрії...")
 
-        # --- СТРАТЕГІЯ 3: МАТЕМАТИЧНИЙ ГЕОМЕТРИЧНИЙ ФОЛБЕК (Автономний режим) ---
-        # 1 градус широти ≈ 111 км, 1 градус довготи ≈ 73 км в шикротах України
+        # --- СТРАТЕГІЯ 2: МАТЕМАТИЧНИЙ ГЕОМЕТРИЧНИЙ ФОЛБЕК (Автономний режим) ---
         dx = (float(lng2) - float(lng1)) * 73.0
         dy = (float(lat2) - float(lat1)) * 111.0
-        # 1.25 — середній коефіцієнт звивистості автомобільних доріг порівняно з прямою лінією
         fallback_distance = math.sqrt(dx ** 2 + dy ** 2) * 1.25
 
         _ROUTING_CACHE[cache_key] = fallback_distance
+        print(f"[FALLBACK] [Автономна геометрія] Обчислено за формулою: {lat1},{lng1} -> {lat2},{lng2} = {fallback_distance} км")
         return fallback_distance
 
 
 class GeoFrontService:
     def __init__(self):
-        # Приклад REST API ендпоінту ArcGIS (публічний шар моніторингу фронту)
-        self.url = "https://services.arcgis.com/..."
+        self.url = getattr(settings, "ARCGIS_FRONT_LINE_URL", "https://services.arcgis.com/...")
 
     def get_front_line_points(self):
         """
@@ -123,8 +97,8 @@ class GeoFrontService:
 
 
 class NovaPoshtaService:
-    def __init__(self, api_key: str):
-        self.api_key = api_key
+    def __init__(self, api_key: str = None):
+        self.api_key = api_key or getattr(settings, "NOVA_POSHTA_API_KEY", "")
         self.url = "https://api.novaposhta.ua/v2.0/json/"
 
     def _request(self, model, method, props):
