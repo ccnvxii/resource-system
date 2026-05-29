@@ -1,15 +1,92 @@
 import time
+import math
 import requests
+import googlemaps
+
+# Внутрішній локальний кеш для уникнення дублювання запитів під час роботи симплекс-методу
+_ROUTING_CACHE = {}
+
+
+class DistanceMatrixService:
+    def __init__(self):
+        # Твій робочий API ключ із Google Cloud Maps Platform
+        self.google_key = "AIzaSyDR8L5DEC1oCb9eOhg6ZERNVQZMoeABNU0"
+
+        try:
+            self.gmaps_client = googlemaps.Client(key=self.google_key)
+        except Exception as e:
+            print(f"[DistanceMatrixService] Клієнт Google Maps не ініціалізовано: {e}")
+            self.gmaps_client = None
+
+    def get_distance(self, lat1, lng1, lat2, lng2):
+        """
+        Повертає реальну автомобільну відстань між двома точками в кілометрах.
+        Каскадна стратегія: Google Maps API -> Безкоштовний OSRM API -> Евклідовий фолбек.
+        """
+        if None in (lat1, lng1, lat2, lng2):
+            return 500.0  # Стандартний штрафний коефіцієнт системи при відсутності координат
+
+        # Формуємо ключ для кешування (округлення до 4 знаків для стабільності)
+        cache_key = (round(float(lat1), 4), round(float(lng1), 4), round(float(lat2), 4), round(float(lng2), 4))
+        if cache_key in _ROUTING_CACHE:
+            return _ROUTING_CACHE[cache_key]
+
+        # --- СТРАТЕГІЯ 1: GOOGLE MAPS API (Режим Driving) ---
+        if self.gmaps_client:
+            try:
+                origins = f"{lat1},{lng1}"
+                destinations = f"{lat2},{lng2}"
+
+                matrix = self.gmaps_client.distance_matrix(
+                    origins=origins,
+                    destinations=destinations,
+                    mode="driving"
+                )
+
+                element = matrix['rows'][0]['elements'][0]
+                if element.get('status') == 'OK':
+                    distance_km = element['distance']['value'] / 1000.0
+                    _ROUTING_CACHE[cache_key] = distance_km
+                    return distance_km
+                else:
+                    print(f"[Google API] Статус відповіді NOT OK: {element.get('status')}. Спроба через OSRM...")
+            except Exception as e:
+                print(f"[Google API] Помилка запиту ({e}). Перемикання на OSRM...")
+
+        # --- СТРАТЕГІЯ 2: БЕЗКОШТОВНИЙ СЕРВЕР OSRM (OPENSTREETMAP) ---
+        try:
+            # Важливо: OSRM приймає параметри у форматі (longitude, latitude)
+            url = f"http://router.project-osrm.org/route/v1/driving/{lng1},{lat1};{lng2},{lat2}?overview=false"
+            response = requests.get(url, timeout=2.0)
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('code') == 'Ok':
+                    distance_km = data['routes'][0]['distance'] / 1000.0
+                    _ROUTING_CACHE[cache_key] = distance_km
+                    return distance_km
+        except Exception as e:
+            print(f"[OSRM API] Помилка безкоштовного сервера ({e}). Розрахунок геометрії...")
+
+        # --- СТРАТЕГІЯ 3: МАТЕМАТИЧНИЙ ГЕОМЕТРИЧНИЙ ФОЛБЕК (Автономний режим) ---
+        # 1 градус широти ≈ 111 км, 1 градус довготи ≈ 73 км в шикротах України
+        dx = (float(lng2) - float(lng1)) * 73.0
+        dy = (float(lat2) - float(lat1)) * 111.0
+        # 1.25 — середній коефіцієнт звивистості автомобільних доріг порівняно з прямою лінією
+        fallback_distance = math.sqrt(dx ** 2 + dy ** 2) * 1.25
+
+        _ROUTING_CACHE[cache_key] = fallback_distance
+        return fallback_distance
 
 
 class GeoFrontService:
     def __init__(self):
-        # Пример REST API эндпоинта ArcGIS (публичный слой мониторинга фронта)
-        self.url = "https://services.arcgis.com/..."  # Здесь вставляется конкретный URL слоя
+        # Приклад REST API ендпоінту ArcGIS (публічний шар моніторингу фронту)
+        self.url = "https://services.arcgis.com/..."
 
     def get_front_line_points(self):
         """
-        Получает геометрию линии фронта через REST API ArcGIS.
+        Отримує геометрію лінії фронту через REST API ArcGIS.
         """
         params = {
             'where': '1=1',
@@ -22,12 +99,11 @@ class GeoFrontService:
             if response.status_code == 200:
                 data = response.json()
                 points = []
-                # Извлекаем координаты из MultiLineString или LineString
+                # Витягуємо координати з MultiLineString або LineString
                 for feature in data.get('features', []):
                     geometry = feature.get('geometry', {})
                     if geometry.get('type') in ['LineString', 'MultiLineString']:
                         coords = geometry.get('coordinates')
-                        # Обработка вложенности координат
                         self._extract_coords(coords, points)
                 return points if points else self._get_fallback_points()
             return self._get_fallback_points()
@@ -101,7 +177,7 @@ class NovaPoshtaService:
         )
 
     def get_warehouse_coordinates(self, warehouse_ref):
-        """ Отримуємо координати конкретного відділення за його унікальним Ref"""
+        """ Отримуємо координати конкретного відділення за його унікальним Ref """
         try:
             data = self._safe_request(
                 "Address", "getWarehouses",

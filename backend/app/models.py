@@ -10,9 +10,9 @@ def get_default_due_date():
     return timezone.now().date() + timedelta(days=5)
 
 
-# --- 1. ОДИНИЦІ ВИМІРУ ---
+# --- 1. ОДИНИЦІ ВИМІРУ (Коробки, Мішки, Набори, Штуки) ---
 class Unit(models.Model):
-    name = models.CharField(max_length=20, unique=True, verbose_name="Одиниця виміру")
+    name = models.CharField(max_length=50, unique=True, verbose_name="Одиниця виміру (пакування)")
 
     def __str__(self):
         return self.name
@@ -28,14 +28,14 @@ class Category(models.Model):
         return f"{self.name} (x{self.criticality})"
 
 
-# --- 3. РЕСУРСИ ---
+# --- 3. РЕСУРСИ (Орієнтовані на укрупнений облік) ---
 class Resource(models.Model):
     name = models.CharField(max_length=100, verbose_name="Назва ресурсу")
-    unit = models.ForeignKey(Unit, on_delete=models.PROTECT, verbose_name="Одиниця")
+    unit = models.ForeignKey(Unit, on_delete=models.PROTECT, verbose_name="Логістична упаковка")
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='resources')
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.unit.name})"
 
 
 # --- 4. СКЛАДИ ---
@@ -59,14 +59,21 @@ class RequestPurpose(models.Model):
         return self.name
 
 
-# --- 6. ЗАПАСИ ---
+# --- 6. ЗАПАСИ (З урахуванням партій та термінів придатності) ---
 class Stock(models.Model):
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='stocks')
     resource = models.ForeignKey(Resource, on_delete=models.CASCADE, related_name='stocks')
-    amount = models.PositiveIntegerField(default=0, verbose_name="Кількість на складі")
+    amount = models.PositiveIntegerField(default=0, verbose_name="Кількість упаковок/штук")
+
+    # Нове логістичне поле для аналітики та розширення системи (алгоритм ЛП його ігнорує)
+    expiration_date = models.DateField(null=True, blank=True, verbose_name="Термін придатності партії")
 
     class Meta:
         unique_together = ('warehouse', 'resource')
+
+    def __str__(self):
+        exp_info = f" (Придатний до: {self.expiration_date})" if self.expiration_date else ""
+        return f"{self.warehouse.name} -> {self.resource.name}: {self.amount} {self.resource.unit.name}{exp_info}"
 
 
 # --- 7. ПРОФІЛЬ КОРИСТУВАЧА ---
@@ -76,7 +83,7 @@ class UserProfile(models.Model):
     phone = models.CharField(max_length=20, blank=True, null=True)
 
 
-# --- 8. ЗАЯВКИ ---
+# --- 8. ЗАЯВКИ (Обліковуються в тих же упаковках, що й ресурси) ---
 class UserRequest(models.Model):
     STATUS_CHOICES = [
         ('new', 'Нова'),
@@ -102,7 +109,6 @@ class UserRequest(models.Model):
     priority = models.FloatField(default=1.0, verbose_name="Пріоритет")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new')
 
-    # Поля часових обмежень (Дедлайни)
     due_date = models.DateField(default=get_default_due_date, verbose_name="Граничний термін виконання")
     auto_extend = models.BooleanField(default=True, verbose_name="Автопродовження терміну")
     extension_count = models.PositiveIntegerField(default=0, verbose_name="Кількість автопродовжень")
@@ -110,37 +116,26 @@ class UserRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        # 1. Нормалізація базових критеріїв до шкали [0...1]
-        # Максимальна вага призначення в БД = 10.0, тому ділимо на 10
         k_purp = float(self.purpose.weight) / 10.0
         k_crit = float(self.resource.category.criticality) if self.resource.category else 0.5
 
         from app.utils import calculate_front_multiplier, calculate_time_multiplier
 
-        # 2. Отримання динамічних множників (кожен повертає максимум 3.0)
         geo_mult = calculate_front_multiplier(self.latitude, self.longitude)
         time_mult = calculate_time_multiplier(self.due_date)
 
-        # Нормалізуємо ГІС та Час до шкали [0...1] (ділимо на їхній макс, тобто на 3.0)
         k_geo = geo_mult / 3.0
         k_time = time_mult / 3.0
 
-        # Штраф за тривалий дефіцит (вік заявки при автопродовженні)
         age_penalty = max(0.5, 1.0 - (self.extension_count * 0.1))
 
-        # 3. Визначення вагових коефіцієнтів (Сума = 1.0)
-        alpha = 0.35  # Вага призначення (Призначення)
-        beta = 0.25  # Вага часу (Дедлайн)
-        gamma = 0.25  # Вага простору (ГІС)
-        delta = 0.15  # Вага номенклатури (Критичність ресурсу)
+        alpha = 0.35
+        beta = 0.25
+        gamma = 0.25
+        delta = 0.15
 
-        # Обчислення зваженої суми
         weighted_sum = (alpha * k_purp) + (beta * k_time) + (gamma * k_geo) + (delta * k_crit)
-
-        # 4. Масштабування до 10-бальної шкали та застосування штрафу за старість
         final_index = weighted_sum * 10.0 * age_penalty
-
-        # Округлюємо до одного знака після коми для красивого відображення в інтерфейсі (напр. 8.4)
         self.priority = round(max(0.0, min(10.0, final_index)), 1)
 
         super().save(*args, **kwargs)
@@ -156,4 +151,4 @@ class DistributionItem(models.Model):
     plan = models.ForeignKey(DistributionPlan, related_name='items', on_delete=models.CASCADE)
     request = models.ForeignKey(UserRequest, on_delete=models.CASCADE)
     warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE)
-    amount = models.PositiveIntegerField(verbose_name="Кількість для видачі")
+    amount = models.PositiveIntegerField(verbose_name="Виділена кількість упаковок/штук")

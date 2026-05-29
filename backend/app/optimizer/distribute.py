@@ -1,4 +1,5 @@
 import numpy as np
+from ..services import DistanceMatrixService
 
 
 # --- 1. СИМПЛЕКС-МЕТОД (М-МЕТОД) ---
@@ -117,29 +118,15 @@ def simplex_solve(A, b, c_minimize, ineq_sense):
         return 'error', None
 
 
-# --- 2. ГЕОГРАФИЧЕСКИЙ РАСЧЕТ РАССТОЯНИЯ ---
-
-def calculate_distance(lat1, lng1, lat2, lng2):
-    if None in (lat1, lng1, lat2, lng2):
-        return 500.0
-
-    R = 6371.0
-    rad_lat1, rad_lng1 = np.radians(lat1), np.radians(lng1)
-    rad_lat2, rad_lng2 = np.radians(lat2), np.radians(lng2)
-
-    dlat = rad_lat2 - rad_lat1
-    dlng = rad_lng2 - rad_lng1
-
-    a = np.sin(dlat / 2) ** 2 + np.cos(rad_lat1) * np.cos(rad_lat2) * np.sin(dlng / 2) ** 2
-    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-    return R * c
-
-
-# --- 3. ДВОЕТАПНА ЛЕКСИКОГРАФІЧНА ОПТИМІЗАЦІЯ ---
+# --- 2. ДВОЕТАПНА ЛЕКСИКОГРАФІЧНА ОПТИМІЗАЦІЯ ---
 
 def calculate_distribution(requests, stocks):
     final_plan = []
     common_ids = set(r['resource_id'] for r in requests) & set(s['resource_id'] for s in stocks)
+
+    # Ініціалізуємо сервіс маршрутизації ОДИН раз для всього розрахунку,
+    # щоб забезпечити роботу внутрішнього оперативнішого кешу відстаней.
+    routing_service = DistanceMatrixService()
 
     for res_id in common_ids:
         r_sub = [r for r in requests if r['resource_id'] == res_id]
@@ -215,7 +202,8 @@ def calculate_distribution(requests, stocks):
             for j in range(n_req):
                 idx = i * n_req + j
 
-                dist = calculate_distance(
+                # Використовуємо каскадний сервіс (Google Maps API / OSRM)
+                dist = routing_service.get_distance(
                     s_sub[i].get('lat'), s_sub[i].get('lng'),
                     r_sub[j].get('lat'), r_sub[j].get('lng')
                 )
