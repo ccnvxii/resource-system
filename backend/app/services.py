@@ -64,7 +64,7 @@ class GeoFrontService:
         """
         params = {
             'where': '1=1',
-            'outFields': '*',
+            'outFields': '*',   
             'f': 'geojson',
             'resultType': 'standard'
         }

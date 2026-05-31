@@ -6,15 +6,16 @@ from ..services import DistanceMatrixService
 
 def pivot_step(tableau, pivot_row, pivot_col):
     pivot_val = tableau[pivot_row, pivot_col]
-    if abs(pivot_val) < 1e-9:
+    if abs(pivot_val) < 1e-12:
         raise ZeroDivisionError('Pivot value almost 0.')
+
     tableau[pivot_row, :] /= pivot_val
     for r in range(tableau.shape[0]):
         if r != pivot_row:
             tableau[r, :] -= tableau[r, pivot_col] * tableau[pivot_row, :]
 
 
-def find_entering_var(tableau, tol=1e-7):
+def find_entering_var(tableau, tol=1e-9):
     obj = tableau[-1, :-1]
     max_val = np.max(obj)
     if max_val <= tol:
@@ -22,7 +23,7 @@ def find_entering_var(tableau, tol=1e-7):
     return int(np.argmax(obj))
 
 
-def find_leaving_var(tableau, pivot_col, tol=1e-9):
+def find_leaving_var(tableau, pivot_col, tol=1e-12):
     col = tableau[:-1, pivot_col]
     rhs = tableau[:-1, -1]
     ratios = []
@@ -68,7 +69,7 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
 
     tableau[-1, :n] = -c_minimize
 
-    M_val = 1e4
+    M_val = 1e6
     for j in art_cols:
         tableau[-1, j] = -M_val
 
@@ -79,6 +80,7 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
             col = tableau[:m, j]
             unit = np.zeros(m)
             unit[i] = 1
+            # умова пошуку базису
             if np.allclose(col, unit, atol=1e-7):
                 basic_vars.append(j)
                 found = True
@@ -90,31 +92,50 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
         if var_names[bi].startswith('a'):
             tableau[-1, :] -= (-M_val) * tableau[i, :]
 
-    return tableau, basic_vars
+    return tableau, basic_vars, var_names
 
 
-def simplex_solve(A, b, c_minimize, ineq_sense):
+def simplex_solve(A, b, c_minimize, ineq_sense, max_iters=500):
     try:
-        tableau, basic_vars = build_tableau_M(A, b, c_minimize, ineq_sense)
-        for _ in range(500):
+        tableau, basic_vars, var_names = build_tableau_M(A, b, c_minimize, ineq_sense)
+
+        for _ in range(max_iters):
             ent = find_entering_var(tableau)
             if ent is None:
                 break
             lv = find_leaving_var(tableau, ent)
             if lv is None:
                 return 'unbounded', None
+
             basic_vars[lv] = ent
             pivot_step(tableau, lv, ent)
         else:
-            return 'error', None
+            return 'iteration_limit_reached', None
+
+        # Перевіряємо, чи залишились штучні змінні в базисі з ненульовим значенням
+        infeasible = False
+        for i, bi in enumerate(basic_vars):
+            if var_names[bi].startswith('a'):
+                val = tableau[i, -1]
+                if val > 1e-6:
+                    infeasible = True
+                    break
+
+        if infeasible:
+            return 'infeasible', None
 
         n_orig = len(c_minimize)
         res_x = np.zeros(n_orig)
         for i, bi in enumerate(basic_vars):
             if bi < n_orig:
                 res_x[bi] = tableau[i, -1]
+
         return 'optimal', res_x
-    except Exception:
+
+    except ZeroDivisionError:
+        return 'pivot_error', None
+    except Exception as e:
+        print(f"Simplex Exception: {e}")
         return 'error', None
 
 
