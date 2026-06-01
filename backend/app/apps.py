@@ -50,11 +50,11 @@ def create_initial_data(sender, **kwargs):
     u_bpack = Unit.objects.get(name=units_dict['bottle_pack'])
 
     # --- 2. КАТЕГОРІЇ ---
-    cat_med, _ = Category.objects.update_or_create(slug='meds', defaults={'name': 'Медицина та Госпіталі', 'criticality': 1.0})
+    cat_med, _ = Category.objects.update_or_create(slug='meds', defaults={'name': 'Медицина', 'criticality': 1.0})
     cat_food, _ = Category.objects.update_or_create(slug='food', defaults={'name': 'Продукти харчування', 'criticality': 0.7})
     cat_equip, _ = Category.objects.update_or_create(slug='equip', defaults={'name': 'Тактичне обладнання', 'criticality': 0.7})
     cat_cloth, _ = Category.objects.update_or_create(slug='cloth', defaults={'name': 'Одяг та Тепловий захист', 'criticality': 0.5})
-    cat_water, _ = Category.objects.update_or_create(slug='water', defaults={'name': 'Вода та гідратація', 'criticality': 0.9})
+    cat_water, _ = Category.objects.update_or_create(slug='water', defaults={'name': 'Вода', 'criticality': 0.9})
     cat_hygiene, _ = Category.objects.update_or_create(slug='hygiene', defaults={'name': 'Санітарія та гігієна', 'criticality': 0.5})
 
     # --- 3. ТИПИ ПРИЗНАЧЕННЯ ---

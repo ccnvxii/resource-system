@@ -1,4 +1,3 @@
-# app/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
@@ -10,6 +9,8 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+from django.urls import path, include
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 router = DefaultRouter()
 router.register(r'categories', CategoryViewSet)
@@ -32,4 +33,7 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     path('novaposhta/', NovaPoshtaProxyView.as_view(), name='novaposhta-proxy'),
+
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
 ]

@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'app',
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
@@ -95,6 +96,7 @@ REST_FRAMEWORK = {
         # 'rest_framework.permissions.IsAuthenticated',
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 SIMPLE_JWT = {
@@ -109,3 +111,9 @@ SIMPLE_JWT = {
 NOVA_POSHTA_API_KEY = config('NOVA_POSHTA_API_KEY', default='')
 GOOGLE_MAPS_API_KEY = config('GOOGLE_MAPS_API_KEY', default='')
 ARCGIS_FRONT_LINE_URL = config('ARCGIS_FRONT_LINE_URL', default='https://services.arcgis.com/...')
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Inventory Management System API',
+    'DESCRIPTION': 'API для автоматизованого розподілу дефіцитних ресурсів',
+    'VERSION': '1.0.0',
+}
