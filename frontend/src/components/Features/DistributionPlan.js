@@ -1,4 +1,3 @@
-// src/components/Features/DistributionPlan.js
 import React from 'react';
 import {
   CheckCircle2,
@@ -14,12 +13,11 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { PURPOSE_MAP } from '../../constants/purposes';
-// Імпортуємо новий автономний компонент графіка
 import DistributionChart from './DistributionChart';
 
 const DistributionPlan = ({ plan, purposeMap }) => {
 
-  // Форматування дати дедлайну для інтерфейсу
+  //  дати дедлайну для інтерфейсу
   const formatDate = (dateString) => {
     if (!dateString) return null;
     try {
@@ -40,7 +38,7 @@ const DistributionPlan = ({ plan, purposeMap }) => {
       return {
         "ID Operational": item.id,
         "Пріоритет": item.priority ? Number(item.priority).toFixed(1) : '0.0',
-        "Граничний термін": item.due_date ? formatDate(item.due_date) : 'Не вказано', // Додано в Excel
+        "Граничний термін": item.due_date ? formatDate(item.due_date) : 'Не вказано',
         "Ресурс": item.resource_name,
         "Виділено": Math.round(item.amount),
         "Запитувано": item.quantity_requested ? Math.round(item.quantity_requested) : 0,
@@ -126,7 +124,7 @@ const DistributionPlan = ({ plan, purposeMap }) => {
                       <span className="text-[10px] font-mono font-bold uppercase">Операція #{item.id}</span>
                     </div>
 
-                    {/* РЯДОК З ЦІЛЛЮ ТА ДЕДЛАЙНОМ В ОДИН РЯДОК ДЛЯ ЗБЕРЕЖЕННЯ КОМПАКТНОСТІ */}
+                    {/* РЯДОК З ЦІЛЛЮ ТА ДЕДЛАЙНОМ */}
                     <div className="flex flex-wrap items-center gap-2 mt-1.5">
                       <span className={`flex items-center gap-1.5 text-[9px] font-black uppercase rounded-lg px-2 py-0.5 w-fit ${purposeData.color}`}>
                         {purposeData.icon}
@@ -150,21 +148,29 @@ const DistributionPlan = ({ plan, purposeMap }) => {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 mb-6 bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <Box size={18} className="text-blue-500" />
-                    <h4 className="text-sm font-black text-slate-800 leading-tight">{item.resource_name}</h4>
+                {/* скільки видано */}
+                <div className="flex items-center justify-between gap-4 mb-6 bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+                  <div className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                    <Box size={18} className="text-blue-500 shrink-0" />
+                    <h4 className="text-sm font-black text-slate-800 leading-tight truncate">{item.resource_name}</h4>
                   </div>
 
-                  <div className="flex flex-col items-end">
-                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-tight leading-none mb-1">Видано / Треба</span>
-                    <div className="font-mono flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm">
-                      <span className="text-blue-600 font-black text-base">{Math.round(item.amount)}</span>
-                      <span className="text-slate-300 text-sm font-light">/</span>
-                      <span className="text-slate-400 font-bold text-xs">
-                        {item.quantity_requested ? Math.round(item.quantity_requested) : Math.round(item.amount)}
+                  <div className="flex flex-col items-end shrink-0 min-w-[85px]">
+                    <span className="text-[8px] text-slate-400 font-black uppercase tracking-tight leading-none mb-1">Видано / Треба</span>
+                    <div className="font-mono bg-white px-2 py-1 rounded-lg border border-slate-200 shadow-sm w-full flex flex-col items-center">
+                      {/* Рядок з числами та слешем */}
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="text-blue-600 font-black text-sm">{Math.round(item.amount)}</span>
+                        <span className="text-slate-300 text-xs font-light">/</span>
+                        <span className="text-slate-400 font-bold text-xs">
+                          {item.quantity_requested ? Math.round(item.quantity_requested) : Math.round(item.amount)}
+                        </span>
+                      </div>
+
+                      {/* Одиниця виміру строго під ними, щоб не ламати горизонтальний ряд */}
+                      <span className="text-slate-400 font-medium text-[9px] font-sans mt-0.5 truncate max-w-[80px] text-center">
+                        {item.unit_name || 'од.'}
                       </span>
-                      <span className="text-slate-400 text-[9px] font-medium ml-0.5">{item.unit_name || 'од.'}</span>
                     </div>
                   </div>
                 </div>

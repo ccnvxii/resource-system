@@ -2,99 +2,85 @@ import math
 import datetime
 import numpy as np
 from django.utils import timezone
-from scipy.spatial.distance import cdist
 from .services import GeoFrontService
 
 
 def calculate_front_multiplier(user_lat, user_lon):
     """
-    СППР-модель динамічної гео-пріоритезації (Front-Line Proximity Model).
-    Версія з оптимізованим векторним пошуком найближчої точки через SciPy cdist.
-
-    Забезпечує жорстку диференціацію:
-    - Зона бойових дій (0-80 км) -> Максимальний буст (до 3.0)
-    - Стабілізаційні хаби (80-200 км, Дніпро) -> Помітний пріоритет (1.4)
-    - Тил ( > 220 км) -> Суворий деградаційний коефіцієнт (0.4 - 1.0)
+    СППР-модель динамічної гео-пріоритезації
     """
     if user_lat is None or user_lon is None:
-        return 1.0
+        return 0.15  # Дефолтний мінімальний пріоритет для невідомих локацій
 
     geo_service = GeoFrontService()
     front_points = geo_service.get_front_line_points()
 
     if not front_points:
-        return 1.0
+        return 0.15
 
     try:
         u_lat = float(user_lat)
         u_lon = float(user_lon)
 
-        # --- ВЕКТОРНИЙ РОЗРАХУНОК ЧЕРЕЗ SCIPY (ОПТИМІЗАЦІЯ CPU) ---
-        # Формуємо матрицю для поточної координати користувача (1 рядок, 2 стовпці)
-        user_coord = np.array([[u_lat, u_lon]])
-
-        # Перетворюємо масив опорних точок лінії фронту у двовимірну матрицю NumPy
+        # --- ВЕКТОРНИЙ РОЗРАХУНОК ГАВЕРСИНУСА (NUMPY) ---
         front_coords = np.array(front_points, dtype=float)
 
-        # cdist обчислює евклідову відстань у градусах між точкою користувача
-        # та ВСІМА опорними точками лінії зіткнення на рівні компільованого C-коду
-        distances_deg = cdist(user_coord, front_coords, metric='euclidean')
+        u_lat_rad, u_lon_rad = np.radians(u_lat), np.radians(u_lon)
+        front_lat_rad = np.radians(front_coords[:, 0])
+        front_lon_rad = np.radians(front_coords[:, 1])
 
-        # Знаходимо мінімальний елемент матриці (найближчу точку кривої) та масштабуємо в кілометри
-        min_dist = np.min(distances_deg) * 111.0
+        dlat = front_lat_rad - u_lat_rad
+        dlon = front_lon_rad - u_lon_rad
 
-        # --- РАДИКАЛЬНА МАТЕМАТИЧНА МОДЕЛЬ ЗОНУВАННЯ ---
-        if min_dist <= 80.0:
-            # 1. Смуга безпосередньої близькості до фронту (Краматорськ)
-            return 3.0 * math.exp(-min_dist / 120.0)
+        a = np.sin(dlat / 2.0) ** 2 + np.cos(u_lat_rad) * np.cos(front_lat_rad) * np.sin(dlon / 2.0) ** 2
+        c = 2.0 * np.arcsin(np.sqrt(a))
 
+        R = 6371.0 # Радіус Землі в км
+        distances_km = R * c
+        min_dist = np.min(distances_km)
+
+        # --- НОРМАЛІЗОВАНА ЗОНАЛЬНА МОДЕЛЬ (0 - 1.0) ---
+        if min_dist <= 100.0:
+            # 1. Зона бойових дій
+            return math.exp(-min_dist / 120.0)
         elif min_dist <= 220.0:
-            # 2. Оперативно-тактична прифронтова зона (Дніпро, Запоріжжя)
-            return 1.4
-
+            # 2. Прифронтова зона
+            return 0.45
         else:
-            # 3. Стратегічний тил (Вінниця, Львів)
+            # 3. Стратегічний тил
             distance_from_front_zone = min_dist - 220.0
-            penalty = math.exp(-distance_from_front_zone / 150.0)
-
-            # Обмежуємо знизу коефіцієнтом 0.4, щоб пріоритет не занулився зовсім
-            return max(0.4, penalty)
+            penalty = 0.33 * math.exp(-distance_from_front_zone / 150.0)
+            return max(0.15, penalty)
 
     except (ValueError, TypeError) as e:
-        print(f"Error inside calculate_front_multiplier logic: {e}")
-        return 1.0
+        print(f"Помилка гео-модуля: {e}")
+        return 0.15
 
 
 def calculate_time_multiplier(due_date):
     """
     СППР-модель пріоритезації за часовим лімітом (Time-Limit Degradation Model).
-
-    Реалізує закон лінійного зростання гостроти дефіциту при наближенні дедлайну.
-    Гарантує щоденний приріст коефіцієнта на 0.2 протягом 10-денного вікна.
+    Повертає нормалізований коефіцієнт в інтервалі [0.5; 1.0].
     """
     if not due_date:
-        return 1.0
+        return 0.5
 
     try:
         today = timezone.now().date()
 
-        # Конвертація рядка у об'єкт date
         if isinstance(due_date, str):
             due_date = datetime.datetime.strptime(due_date, "%Y-%m-%d").date()
 
-        # Обчислення кількості днів, що залишилися до виконання
         days_left = (due_date - today).days
 
-        # Якщо дедлайн настав сьогодні або вже протермінований — максимальний буст х3.0
         if days_left <= 0:
-            return 3.0
+            return 1.0
 
-        # Лінійне зростання пріоритету
-        multiplier = 3.0 - (days_left * 0.2)
+        # Лінійне падіння: -0.05 за кожен день відстрочки
+        multiplier = 1.0 - (days_left * 0.05)
 
-        # Фіксація діапазону множника [1.0; 3.0]
-        return max(1.0, min(3.0, multiplier))
+        return max(0.5, min(1.0, multiplier))
 
     except Exception as e:
-        print(f"Критична помилка розрахунку часового множника: {e}")
-        return 1.0
+        print(f"Помилка часового модуля: {e}")
+        return 0.5

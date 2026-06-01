@@ -1,39 +1,44 @@
+// src/components/Features/Dashboard.js
 import React, { useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
-import { TrendingDown, Package, Download, BarChart3, ChevronDown } from 'lucide-react';
+import { TrendingDown, Package, Download, BarChart3, ChevronDown, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
-  // Стан для згортання всього дашборду (за замовчуванням false - згорнуто)
   const [isVisible, setIsVisible] = useState(false);
 
-  // БЕЗПЕЧНИЙ розрахунок залишків на складах
+  // БЕЗПЕЧНИЙ розрахунок залишків на складах (з урахуванням нульових позицій)
   const stockData = useMemo(() => {
-    if (!Array.isArray(stocks) || !stocks.length) return [];
+    const totals = {};
 
-    try {
-      const totals = stocks.reduce((acc, s) => {
-        if (!s || !s.resource) return acc;
-        // Захист від пустих чи некоректних значень кількості
-        const amountVal = s.amount ? parseFloat(s.amount) : 0;
-        acc[s.resource] = (acc[s.resource] || 0) + (isNaN(amountVal) ? 0 : amountVal);
-        return acc;
-      }, {});
-
-      return Object.entries(totals).map(([id, val]) => {
-        // Захист від відсутності ресурсу в мапі довідника
-        const resName = resourcesMap && resourcesMap[id] ? resourcesMap[id].name : `Ресурс ID ${id}`;
-        return {
-          name: resName,
-          amount: Math.round(val)
-        };
-      }).sort((a, b) => b.amount - a.amount).slice(0, 6);
-    } catch (e) {
-      console.error("Помилка обробки stockData в дашборді:", e);
-      return [];
+    if (resourcesMap) {
+      Object.keys(resourcesMap).forEach(id => {
+        totals[id] = 0;
+      });
     }
+
+    if (Array.isArray(stocks)) {
+      stocks.forEach(s => {
+        if (!s || !s.resource) return;
+        const amountVal = s.amount ? parseFloat(s.amount) : 0;
+        totals[s.resource] = (totals[s.resource] || 0) + (isNaN(amountVal) ? 0 : amountVal);
+      });
+    }
+
+    return Object.entries(totals).map(([id, val]) => {
+      const resName = resourcesMap && resourcesMap[id] ? resourcesMap[id].name : `Ресурс ID ${id}`;
+      const roundedVal = Math.round(val);
+      return {
+        name: resName,
+        amount: roundedVal,
+        displayAmount: roundedVal === 0 ? 0.4 : roundedVal,
+        isZero: roundedVal === 0
+      };
+    })
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 6);
   }, [stocks, resourcesMap]);
 
   // БЕЗПЕЧНИЙ розрахунок дефіциту ресурсів
@@ -77,6 +82,69 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Звіт");
     XLSX.writeFile(wb, "ResQ_Report.xlsx");
+  };
+
+  // КАСТОМНИЙ КОМПОНЕНТ ДЛЯ ПІДПИСУ ОСІ X З ІКОНКОЮ З LUCIDE-REACT
+  const CustomXAxisTick = ({ x, y, payload }) => {
+    const itemData = stockData.find(d => d.name === payload.value);
+    const isZero = itemData ? itemData.isZero : false;
+
+    const text = payload.value.length > 11 ? `${payload.value.substring(0, 9)}...` : payload.value;
+
+    return (
+      <g transform={`translate(${x},${y})`}>
+        {/* Якщо нуль, посуваємо текст трохи вбік, щоб звільнити місце для іконки */}
+        <text
+          x={isZero ? -6 : 0}
+          y={0}
+          dy={12}
+          textAnchor="middle"
+          fill={isZero ? "#ef4444" : "#64748b"}
+          fontSize={10}
+          fontWeight={isZero ? "900" : "bold"}
+          className={isZero ? "animate-pulse" : ""}
+        >
+          {text}
+        </text>
+
+        {/* Інтегруємо іконку AlertTriangle з lucide за допомогою SVG-контейнера foreignObject */}
+        {isZero && (
+          <foreignObject
+            x={22}
+            y={1}
+            width={14}
+            height={14}
+            className="animate-pulse"
+          >
+            <AlertTriangle size={12} className="text-red-500" strokeWidth={3} />
+          </foreignObject>
+        )}
+      </g>
+    );
+  };
+
+  // КАСТОМНИЙ ТУЛТИП ДЛЯ ЗАПАСІВ
+  const CustomStockTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-slate-900 text-white p-3 rounded-xl border border-slate-700 shadow-xl text-xs font-sans space-y-1">
+          <p className="font-bold text-slate-200">{data.name}</p>
+          <hr className="border-slate-800 my-1" />
+          {data.isZero ? (
+            <p className="text-red-400 font-black flex items-center gap-1">
+              <span>● Кількість:</span>
+              <span className="bg-red-500/20 px-1.5 py-0.5 rounded text-white font-mono">0 од. (НЕМАЄ)</span>
+            </p>
+          ) : (
+            <p className="text-blue-400 font-bold">
+              Поточний запас: <span className="font-mono text-white font-black">{data.amount} од.</span>
+            </p>
+          )}
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -138,12 +206,28 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
               </div>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stockData}>
+                  <BarChart data={stockData} margin={{ bottom: 15 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
+
+                    <XAxis
+                      dataKey="name"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={<CustomXAxisTick />}
+                    />
+
                     <YAxis fontSize={10} axisLine={false} tickLine={false} />
-                    <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none'}} />
-                    <Bar dataKey="amount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+
+                    <Tooltip content={<CustomStockTooltip />} cursor={{fill: '#f8fafc'}} />
+
+                    <Bar dataKey="displayAmount" radius={[4, 4, 0, 0]} barSize={24}>
+                      {stockData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={entry.isZero ? '#ef4444' : '#3b82f6'}
+                        />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -161,8 +245,15 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" fontSize={10} width={80} fontWeight="bold" axisLine={false} tickLine={false} />
-                    <Tooltip cursor={{fill: '#fef2f2'}} contentStyle={{borderRadius: '12px', border: 'none'}} />
-                    <Bar dataKey="deficit" radius={[0, 4, 4, 0]}>
+
+                    <Tooltip
+                      cursor={{fill: '#fef2f2'}}
+                      contentStyle={{borderRadius: '12px', border: 'none', backgroundColor: '#0f172a', color: '#fff', fontSize: '12px'}}
+                      itemStyle={{color: '#f87171'}}
+                      formatter={(value) => [`${value} од.`, 'Нестача (Дефіцит)']}
+                    />
+
+                    <Bar dataKey="deficit" radius={[0, 4, 4, 0]} barSize={14}>
                       {deficitData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={index === 0 ? '#ef4444' : '#f87171'} />
                       ))}
