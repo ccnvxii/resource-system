@@ -20,7 +20,7 @@ from .models import (
     Unit, RequestPurpose
 )
 from .serializers import *
-from .optimizer.distribute import calculate_distribution
+from .optimizer.distribute import calculate_distribution, calculate_strict_priority
 
 
 # --- VIEWSETS ДЛЯ ДОВІДНИКІВ ---
@@ -224,8 +224,14 @@ class DistributeResourcesView(APIView):
                         'lng': float(s.warehouse.longitude) if s.warehouse.longitude else None
                     })
 
-                # Запуск нашого швидкого SciPy-оптимізатора
-                plan_items_data = calculate_distribution(requests_data, stocks_data)
+                # Зчитуємо обрану стратегію з тіла запиту (якщо не передано, беремо справедливість)
+                strategy = request.data.get('strategy', 'fairness')
+
+                # Запуск обраного рушія маршрутизації
+                if strategy == 'triage':
+                    plan_items_data = calculate_strict_priority(requests_data, stocks_data)
+                else:
+                    plan_items_data = calculate_distribution(requests_data, stocks_data)
 
                 if not plan_items_data:
                     return Response({"message": "Немає доступних комбінацій для розподілу ресурсів"}, status=200)
@@ -272,16 +278,16 @@ class DistributeResourcesView(APIView):
                     stock.amount -= amount_int
                     stocks_to_update.add(stock)
 
-                # --- МАГІЯ МАСОВОГО ЗБЕРЕЖЕННЯ (BULK OPERATIONS) ---
-                # 1. Записуємо всі нові елементи логістичного плану за 1 запит
+                # --- МАС ЗБЕРЕЖЕННЯ (BULK OPERATIONS) ---
+                # 1. Записуємо всі нові елементи логістичного плану
                 DistributionItem.objects.bulk_create(items_to_create)
 
-                # 2. Оновлюємо статуси та виділену кількість усіх заявок за 1 запит
+                # 2. Оновлюємо статуси та виділену кількість усіх заявок
                 if requests_to_update:
                     UserRequest.objects.bulk_update(list(requests_to_update),
                                                     ['quantity_allocated', 'status', 'due_date', 'extension_count'])
 
-                # 3. Зрізаємо залишки на всіх складах за 1 запит
+                # 3. Зрізаємо залишки на всіх складах
                 if stocks_to_update:
                     Stock.objects.bulk_update(list(stocks_to_update), ['amount'])
 

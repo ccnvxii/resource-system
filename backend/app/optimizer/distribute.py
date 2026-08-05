@@ -306,3 +306,73 @@ def calculate_distribution(requests, stocks):
                         })
 
     return final_plan
+
+
+def calculate_strict_priority(requests, stocks):
+    """
+    Альтернативний режим (Тріаж): Розподіл строго за пріоритетом на 100%
+    із мінімізацією логістичної відстані.
+    """
+    final_plan = []
+    routing_service = DistanceMatrixService()
+
+    # Працюємо тільки з тими ресурсами, які є і в запитах, і на складах
+    common_ids = set(r['resource_id'] for r in requests) & set(s['resource_id'] for s in stocks)
+
+    for res_id in common_ids:
+        # Відбираємо заявки та склади для поточного ресурсу
+        r_sub = [r for r in requests if r['resource_id'] == res_id]
+        s_sub = [s for s in stocks if s['resource_id'] == res_id]
+
+        # 1. Сортуємо заявки за пріоритетом (від найвищого до найнижчого)
+        r_sub.sort(key=lambda x: x['priority'], reverse=True)
+
+        # Створюємо словник для відстеження актуальних залишків на складах
+        stock_available = {i: s['amount'] for i, s in enumerate(s_sub)}
+
+        # 2. Йдемо по черзі від найважливішої заявки до найменш важливої
+        for req in r_sub:
+            demand = req['amount_needed']
+            if demand <= 0:
+                continue
+
+            # 3. Збираємо відстані від усіх доступних складів до цієї конкретної заявки
+            stock_distances = []
+            for i, stk in enumerate(s_sub):
+                if stock_available[i] > 0:
+                    dist = routing_service.get_distance(
+                        stk.get('lat'), stk.get('lng'),
+                        req.get('lat'), req.get('lng')
+                    )
+                    stock_distances.append((dist, i, stk))
+
+            # 4. Сортуємо склади за відстанню (найближчі перші)
+            stock_distances.sort(key=lambda x: x[0])
+
+            # 5. Жадібно забираємо товар із найближчих складів, поки не закриємо потребу
+            for dist, i, stk in stock_distances:
+                if demand <= 0:
+                    break  # Заявка закрита на 100%
+
+                if stock_available[i] == 0:
+                    continue  # Склад пустий
+
+                # Беремо мінімум між тим, що треба, і тим, що є на складі
+                take_amount = min(demand, stock_available[i])
+
+                # Оновлюємо залишки та потребу
+                demand -= take_amount
+                stock_available[i] -= take_amount
+
+                # Додаємо в фінальний план маршрут
+                final_plan.append({
+                    'request_id': req['id'],
+                    'warehouse_id': stk['warehouse_id'],
+                    'amount': float(take_amount),
+                    'warehouse_lat': stk.get('lat'),
+                    'warehouse_lng': stk.get('lng'),
+                    'recipient_lat': req.get('lat'),
+                    'recipient_lng': req.get('lng')
+                })
+
+    return final_plan

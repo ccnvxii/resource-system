@@ -115,13 +115,17 @@ class UserRequestSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
     due_date = serializers.DateField(format="%Y-%m-%d", required=False)
 
+    # Ваше нове In-Memory поле
+    current_priority = serializers.ReadOnlyField()
+
     class Meta:
         model = UserRequest
         fields = [
             'id', 'user', 'user_full_name', 'user_email', 'resource', 'resource_name',
             'unit_name', 'quantity_requested', 'quantity_allocated', 'purpose',
-            'purpose_name', 'priority', 'status', 'created_at',
-            'city', 'warehouse_address', 'warehouse_ref', 'due_date'  # ❗ FIX: додано поле дедлайну
+            'purpose_name', 'priority', 'current_priority', 'status', 'created_at',
+            'city', 'warehouse_address', 'warehouse_ref', 'due_date',
+            'auto_extend'
         ]
         read_only_fields = ['priority', 'quantity_allocated', 'status']
         extra_kwargs = {'user': {'required': False}}

@@ -1,6 +1,6 @@
 import React, {useState, useEffect} from 'react';
 import {Toaster, toast} from 'react-hot-toast';
-import {Home, ClipboardList, ArrowDownCircle, PackagePlus, Info} from 'lucide-react';
+import {Home, ClipboardList, ArrowDownCircle, PackagePlus, Info, Scale, Zap} from 'lucide-react';
 
 // Сервіси та кастомні хуки
 import api from './services/api';
@@ -23,13 +23,14 @@ import Modal from './components/UI/Modal';
 import AuthModal from './components/Auth/Auth';
 
 function App() {
-    // --- СТАН КОРИСТУВАЧА ТА ІНТЕРФЕЙСУ ---
     const [currentUser, setCurrentUser] = useState(() => authService.getUser());
     const [isLandingMode, setIsLandingMode] = useState(() => localStorage.getItem('isLandingMode') !== 'false');
     const [loading, setLoading] = useState(false);
     const [plan, setPlan] = useState(null);
 
-    // --- КАСТОМНІ ХУКИ ---
+    //  Стан для зберігання обраної стратегії розподілу
+    const [distributionStrategy, setDistributionStrategy] = useState('fairness');
+
     const {modals, openModal, closeModal} = useModal({
         request: false,
         stockIn: false,
@@ -39,17 +40,13 @@ function App() {
 
     const {data, fetchData} = useFetchData(currentUser);
 
-    // --- ЕФЕКТИ ---
     useEffect(() => {
         localStorage.setItem('isLandingMode', isLandingMode);
         if (!isLandingMode && currentUser) {
             fetchData().catch(() => toast.error("Не вдалося оновити дані"));
         }
-        // КРИТИЧНО: Прибираємо fetchData з залежностей, щоб розірвати нескінченний цикл рендерингу!
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isLandingMode, currentUser]);
 
-    // --- ОБРОБНИКИ ПОДІЙ ---
     const handleAuthSuccess = (userData, tokens) => {
         authService.setTokens(tokens.access, tokens.refresh);
         const isAdmin = userData.is_admin || userData.email === 'admin@resq.ua';
@@ -70,18 +67,13 @@ function App() {
         toast.success("Вихід виконано");
     };
 
-    // ЦЕНТРАЛІЗОВАНЕ БЕЗПЕЧНЕ ВИДАЛЕННЯ ЗАЯВКИ
     const handleDeleteRequest = async (requestId) => {
         const lid = toast.loading("Оновлення черги потреб...");
         setLoading(true);
         try {
             await api.delete(`/requests/${requestId}/`);
             toast.success("Заявку успішно видалено", { id: lid });
-
-            // Обов'язково скидаємо старий план розподілу, оскільки матриця потреб змінилася
             setPlan(null);
-
-            // Оновлюємо таблиці та графіки дашборду
             await fetchData();
         } catch (e) {
             console.error("Помилка при видаленні заявки:", e);
@@ -91,11 +83,13 @@ function App() {
         }
     };
 
+    //  Передача обраної стратегії на бекенд
     const handleDistribute = async () => {
         const lid = toast.loading("Аналіз запасів та потреб...");
         setLoading(true);
         try {
-            const res = await api.post('/distribute/');
+            // Передаємо параметр strategy у тілі запиту
+            const res = await api.post('/distribute/', { strategy: distributionStrategy });
             if (res.data.message) {
                 toast(res.data.message, {id: lid, icon: <Info className="text-blue-500"/>});
                 setPlan(null);
@@ -136,7 +130,6 @@ function App() {
         <div className="min-h-screen bg-slate-50 p-4 md:p-10 relative">
             <Toaster position="top-center" toastOptions={{className: 'rounded-xl font-bold shadow-xl'}}/>
 
-            {/* МОДАЛЬНІ ВІКНА */}
             <Modal isOpen={modals.request} onClose={() => closeModal('request')} title="Нова заявка" icon={ClipboardList}>
                 <RequestForm
                     usersList={data.usersList}
@@ -169,7 +162,6 @@ function App() {
                 />
             </Modal>
 
-            {/* ОСНОВНИЙ КОНТЕНТ */}
             <div className="max-w-7xl mx-auto space-y-8 pb-24">
                 <Header
                     onOpenForm={() => openModal('request')}
@@ -194,7 +186,7 @@ function App() {
                             purposeMap={data.purposeMap}
                             onRefresh={fetchData}
                             currentUser={currentUser}
-                            onDeleteRequest={handleDeleteRequest} // Передаємо виправлену функцію
+                            onDeleteRequest={handleDeleteRequest}
                         />
                     </div>
                 </div>
@@ -210,23 +202,57 @@ function App() {
                     </>
                 )}
 
+                {/* Блок вибору стратегії та кнопка розподілу */}
                 {currentUser?.is_admin && (
-                    <div className="flex justify-center py-8">
+                    <div className="flex flex-col items-center py-8 space-y-6">
+
+                        {/* Перемикач режимів */}
+                        <div className="flex bg-slate-200 p-1.5 rounded-2xl shadow-inner border border-slate-300">
+                            <button
+                                onClick={() => setDistributionStrategy('fairness')}
+                                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all duration-300 ${
+                                    distributionStrategy === 'fairness' 
+                                    ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' 
+                                    : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <Scale size={18} />
+                                Max-Min Fairness (Симплекс)
+                            </button>
+                            <button
+                                onClick={() => setDistributionStrategy('triage')}
+                                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all duration-300 ${
+                                    distributionStrategy === 'triage' 
+                                    ? 'bg-white text-red-600 shadow-md ring-1 ring-black/5' 
+                                    : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                            >
+                                <Zap size={18} />
+                                Тріаж (Жорсткий Пріоритет)
+                            </button>
+                        </div>
+
+                        {/* Кнопка запуску */}
                         <button
                             onClick={handleDistribute}
                             disabled={loading}
-                            className={`px-16 py-5 rounded-2xl text-xl font-black text-white shadow-2xl transition-all ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:scale-105 active:scale-95'}`}
+                            className={`px-16 py-5 rounded-2xl text-xl font-black text-white shadow-2xl transition-all ${
+                                loading ? 'bg-slate-400 cursor-not-allowed' 
+                                : distributionStrategy === 'triage' 
+                                    ? 'bg-red-600 hover:bg-red-700 hover:shadow-red-500/30 hover:scale-105 active:scale-95' 
+                                    : 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-500/30 hover:scale-105 active:scale-95'
+                            }`}
                         >
                             {loading ? "ОБРОБКА..." : "ВИКОНАТИ РОЗПОДІЛ"}
                         </button>
                     </div>
                 )}
 
-                {/* --- ПЛАН РОЗПОДІЛУ (ВІДОБРАЖАЄТЬСЯ ПРИ НАЯВНОСТІ) --- */}
                 {currentUser?.is_admin && plan && (
                     <DistributionPlan
                         plan={plan}
                         purposeMap={data.purposeMap}
+                        strategy={distributionStrategy} // Передаємо стратегію у візуалізацію
                     />
                 )}
 

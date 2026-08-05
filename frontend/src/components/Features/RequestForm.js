@@ -249,32 +249,39 @@ const RequestForm = ({
 
             {/* 1. СТРУКТУРНИЙ БЛОК: АДМІНІСТРУВАННЯ ТА ТЕРМІНОВІСТЬ */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* ЗАЯВНИК — Тільки для адміна */}
+                {/* ЗАЯВНИК — Тільки для admin */}
                 {currentUser?.is_admin && (
                     <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100 shadow-sm md:col-span-2">
-                        <label className="text-[10px] font-black uppercase text-blue-500 italic mb-2 block tracking-widest">1. Оберіть заявника (Admin)</label>
+                        <label
+                            className="text-[10px] font-black uppercase text-blue-500 italic mb-2 block tracking-widest">1.
+                            Оберіть заявника (Admin)</label>
                         <div className="flex items-center gap-3">
-                            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100"><User size={20}/></div>
+                            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100"><User
+                                size={20}/></div>
                             <select
                                 value={selectedUserId || ''}
                                 onChange={(e) => setSelectedUserId(e.target.value)}
                                 className="w-full px-4 py-2.5 bg-white border border-blue-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
                             >
                                 <option value="">Виберіть користувача зі списку...</option>
-                                {usersList.map(u => <option key={u.id} value={u.id}>{u.full_name || u.username}</option>)}
+                                {usersList.map(u => <option key={u.id}
+                                                            value={u.id}>{u.full_name || u.username}</option>)}
                             </select>
                         </div>
                     </div>
                 )}
 
                 {/* ГРАНИЧНИЙ ТЕРМІН ВИКОНАННЯ ТА АВТОПРОДОВЖЕННЯ */}
-                <div className={`bg-amber-50/40 p-5 rounded-2xl border border-amber-100 shadow-sm flex flex-col justify-between gap-3 ${!currentUser?.is_admin ? 'md:col-span-3' : ''}`}>
+                <div
+                    className={`bg-amber-50/40 p-5 rounded-2xl border border-amber-100 shadow-sm flex flex-col justify-between gap-3 ${!currentUser?.is_admin ? 'md:col-span-3' : ''}`}>
                     <div>
-                        <label className="text-[10px] font-black uppercase text-amber-600 italic mb-2 block tracking-widest">
+                        <label
+                            className="text-[10px] font-black uppercase text-amber-600 italic mb-2 block tracking-widest">
                             {currentUser?.is_admin ? '1.1' : '1.'} Виконати до
                         </label>
                         <div className="flex items-center gap-2">
-                            <div className="bg-amber-500 p-2.5 rounded-xl text-white shadow-lg shadow-amber-100"><Calendar size={20}/></div>
+                            <div className="bg-amber-500 p-2.5 rounded-xl text-white shadow-lg shadow-amber-100">
+                                <Calendar size={20}/></div>
                             <input
                                 type="date"
                                 value={dueDate}
@@ -286,7 +293,8 @@ const RequestForm = ({
                     </div>
 
                     {/* ІНТЕРАКТИВНИЙ ЧЕКБОКС АВТОПРОДОВЖЕННЯ */}
-                    <label className="flex items-center gap-2.5 cursor-pointer bg-white/60 p-2 rounded-xl border border-amber-200/50 hover:bg-white transition-all select-none">
+                    <label
+                        className="flex items-center gap-2.5 cursor-pointer bg-white/60 p-2 rounded-xl border border-amber-200/50 hover:bg-white transition-all select-none">
                         <input
                             type="checkbox"
                             checked={autoExtend}
@@ -294,8 +302,9 @@ const RequestForm = ({
                             className="w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500/20 focus:ring-2 accent-amber-500"
                         />
                         <div className="flex flex-col text-left">
-                            <span className="text-[10px] font-black text-amber-900 uppercase leading-none mb-0.5 flex items-center gap-1">
-                                <RefreshCw size={10} className={autoExtend ? "animate-spin-slow" : ""} /> Автопродовження
+                            <span
+                                className="text-[10px] font-black text-amber-900 uppercase leading-none mb-0.5 flex items-center gap-1">
+                                <RefreshCw size={10} className={autoExtend ? "animate-spin-slow" : ""}/> Автопродовження
                             </span>
                             <span className="text-[9px] font-medium text-slate-400 leading-none">Продовжити на +5 днів у разі дефіциту</span>
                         </div>
@@ -387,9 +396,11 @@ const RequestForm = ({
                             </div>
                         ) : (
                             /* АДРЕСНА ДОСТАВКА З ВИПАДАЮЧИМ МЕНЮ ВУЛИЦЬ */
-                            <div className="grid grid-cols-3 gap-3 animate-in slide-in-from-top-2 duration-300 relative">
+                            <div
+                                className="grid grid-cols-3 gap-3 animate-in slide-in-from-top-2 duration-300 relative">
                                 <div className="col-span-2 relative">
-                                    <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block ml-1">Вулиця</label>
+                                    <label
+                                        className="text-[9px] font-bold text-slate-500 uppercase mb-1 block ml-1">Вулиця</label>
                                     <input
                                         type="text"
                                         value={streetSearch}
@@ -401,14 +412,17 @@ const RequestForm = ({
 
                                     {/* ШВИДКИЙ ЛОАДЕР ВУЛИЦЬ */}
                                     {isStreetsLoading && (
-                                        <div className="absolute right-3 top-9 text-[10px] text-blue-500 font-bold animate-pulse">Пошук...</div>
+                                        <div
+                                            className="absolute right-3 top-9 text-[10px] text-blue-500 font-bold animate-pulse">Пошук...</div>
                                     )}
 
                                     {/* ДРОПДАУН ВУЛИЦЬ */}
                                     {showStreetDropdown && selectedCity && !selectedStreet && (
-                                        <div className="absolute left-0 right-0 z-[99999] mt-1 max-h-56 overflow-y-auto bg-white border-2 border-blue-100 rounded-xl shadow-2xl">
+                                        <div
+                                            className="absolute left-0 right-0 z-[99999] mt-1 max-h-56 overflow-y-auto bg-white border-2 border-blue-100 rounded-xl shadow-2xl">
                                             {streets.length === 0 ? (
-                                                <div className="px-4 py-3 text-sm text-gray-400">Нічого не знайдено</div>
+                                                <div className="px-4 py-3 text-sm text-gray-400">Нічого не
+                                                    знайдено</div>
                                             ) : (
                                                 streets.map((street, idx) => {
                                                     const streetName = street.Presentation || street.Description;
@@ -433,7 +447,8 @@ const RequestForm = ({
 
                                 {/* БУДИНОК */}
                                 <div>
-                                    <label className="text-[9px] font-bold text-slate-500 uppercase mb-1 block ml-1">Будинок</label>
+                                    <label
+                                        className="text-[9px] font-bold text-slate-500 uppercase mb-1 block ml-1">Будинок</label>
                                     <input
                                         type="text"
                                         value={houseNumber}
@@ -455,6 +470,11 @@ const RequestForm = ({
                 </label>
                 {formRows.map((row, index) => {
                     const availableCount = availabilityMap[row.resource] || 0;
+
+                    // Шукаємо вибраний ресурс у списку, щоб отримати його одиницю виміру
+                    const selectedResourceObj = resourcesList.find(r => r.id === parseInt(row.resource));
+                    const unitSuffix = selectedResourceObj?.unit_name || selectedResourceObj?.unit || 'од.';
+
                     return (
                         <div key={row.id}
                              className="bg-white p-5 rounded-2xl border hover:border-blue-100 transition-all shadow-sm">
@@ -467,7 +487,14 @@ const RequestForm = ({
                                             onChange={(e) => handleFormChange(index, 'resource', e.target.value)}
                                             className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold outline-none">
                                         <option value="">Оберіть ресурс...</option>
-                                        {resourcesList.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                        {resourcesList.map(r => {
+                                            const rUnit = r.unit_name || r.unit;
+                                            return (
+                                                <option key={r.id} value={r.id}>
+                                                    {r.name} {rUnit ? `(${rUnit})` : ''}
+                                                </option>
+                                            );
+                                        })}
                                     </select>
                                 </div>
                                 <div className="w-24 text-left">
@@ -480,7 +507,7 @@ const RequestForm = ({
                                            }}
                                            onChange={(e) => handleFormChange(index, 'quantity', e.target.value)}
                                            placeholder="0"
-                                           className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-black outline-none"/>
+                                           className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-black outline-none text-center"/>
                                 </div>
                                 <div className="flex-1 w-full text-left">
                                     <label
@@ -499,12 +526,24 @@ const RequestForm = ({
                                         size={18}/></button>
                                 )}
                             </div>
+
+                            {/* ПІДКАЗКИ ЗНИЗУ */}
                             {row.resource && (
-                                <div
-                                    className={`mt-3 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase flex items-center gap-2 ${availableCount > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
-                                    {availableCount > 0 ? <CheckCircle2 size={12}/> : <AlertCircle size={12}/>}
-                                    {availableCount > 0 ? `На складі: ${availableCount.toFixed(0)} од.` : 'На даний момент немає на складах'}
-                                </div>
+                                currentUser?.is_admin ? (
+                                    /* Повна інформація для Адміна */
+                                    <div
+                                        className={`mt-3 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase flex items-center gap-2 ${availableCount > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                                        {availableCount > 0 ? <CheckCircle2 size={12}/> : <AlertCircle size={12}/>}
+                                        {availableCount > 0 ? `На складі: ${availableCount.toFixed(0)} ${unitSuffix}` : 'На даний момент немає на складах'}
+                                    </div>
+                                ) : (
+                                    /* Чиста підказка одиниці виміру для Волонтера */
+                                    <div
+                                        className="mt-3 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase flex items-center gap-2 bg-slate-50 text-slate-500">
+                                        <CheckCircle2 size={12} className="text-blue-500"/>
+                                        Вимірюється в: {unitSuffix}
+                                    </div>
+                                )
                             )}
                         </div>
                     );

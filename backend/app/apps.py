@@ -110,27 +110,27 @@ def create_initial_data(sender, **kwargs):
     # Очищуємо старі залишки перед сидуванням
     Stock.objects.all().delete()
 
-    # 📦 Розподіл ТУРНІКЕТІВ (Всього на складах: 40 коробок. Потреба в заявках: 75 коробок) -> ДЕФІЦИТ ~46%
+    #  Розподіл ТУРНІКЕТІВ (Всього на складах: 40 коробок. Потреба в заявках: 75 коробок) -> ДЕФІЦИТ ~46%
     Stock.objects.create(warehouse=wh_center, resource=res_tourniquet, amount=15, expiration_date=None)
     Stock.objects.create(warehouse=wh_west, resource=res_tourniquet, amount=10, expiration_date=None)
     Stock.objects.create(warehouse=wh_east, resource=res_tourniquet, amount=15, expiration_date=None)
 
-    # 📦 Розподіл ГЕНЕРАТОРІВ (Всього на складах: 5 шт. Потреба в заявках: 11 шт.) -> ДЕФІЦИТ ~54%
+    #  Розподіл ГЕНЕРАТОРІВ (Всього на складах: 5 шт. Потреба в заявках: 11 шт.) -> ДЕФІЦИТ ~54%
     Stock.objects.create(warehouse=wh_center, resource=res_generator, amount=2, expiration_date=None)
     Stock.objects.create(warehouse=wh_west, resource=res_generator, amount=2, expiration_date=None)
     Stock.objects.create(warehouse=wh_east, resource=res_generator, amount=1, expiration_date=None)
 
-    # 📦 Розподіл АСПІРИНУ (Всього на складах: 25 ящиків. Потреба в заявках: 50 ящиків) -> ДЕФІЦИТ 50%
+    #  Розподіл АСПІРИНУ (Всього на складах: 25 ящиків. Потреба в заявках: 50 ящиків) -> ДЕФІЦИТ 50%
     Stock.objects.create(warehouse=wh_center, resource=res_aspirin, amount=10, expiration_date=future_expiry)
     Stock.objects.create(warehouse=wh_west, resource=res_aspirin, amount=5, expiration_date=near_expiry) # Ця партія під загрозою протермінування!
     Stock.objects.create(warehouse=wh_east, resource=res_aspirin, amount=10, expiration_date=future_expiry)
 
-    # 📦 Розподіл ОДЯГУ (Всього на складах: 30 мішків. Потреба в заявках: 60 мішків) -> ДЕФІЦИТ 50%
+    #  Розподіл ОДЯГУ (Всього на складах: 30 мішків. Потреба в заявках: 60 мішків) -> ДЕФІЦИТ 50%
     Stock.objects.create(warehouse=wh_center, resource=res_clothes, amount=15, expiration_date=None)
     Stock.objects.create(warehouse=wh_west, resource=res_clothes, amount=10, expiration_date=None)
     Stock.objects.create(warehouse=wh_east, resource=res_clothes, amount=5, expiration_date=None)
 
-    # 📦 Додаткові ресурси для масовки та бази
+    #  Додаткові ресурси для масовки та бази
     Stock.objects.create(warehouse=wh_center, resource=res_stew, amount=100, expiration_date=future_expiry)
     Stock.objects.create(warehouse=wh_center, resource=res_water, amount=200, expiration_date=None)
     Stock.objects.create(warehouse=wh_east, resource=res_water, amount=100, expiration_date=None)
