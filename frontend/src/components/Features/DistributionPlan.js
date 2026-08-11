@@ -1,15 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   CheckCircle2,
   PieChart,
   Download,
-  Zap
+  Zap,
+  MapPin,
+  Package,
+  LayoutGrid
 } from 'lucide-react';
 import DistributionChart from '../UI/DistributionChart';
 import { exportPlanToExcel } from './excelExport';
 import DistributionCard from '../UI/DistributionCard';
 
 const DistributionPlan = ({ plan, purposeMap, strategy = 'fairness' }) => {
+  // Стан для групування: 'destination' (по поїздці), 'resource' (по ресурсу), 'all' (всі картки)
+  const [groupBy, setGroupBy] = useState('destination');
 
   if (!plan || !plan.items || plan.items.length === 0) return null;
 
@@ -19,6 +24,32 @@ const DistributionPlan = ({ plan, purposeMap, strategy = 'fairness' }) => {
   const headerBgColor = isTriage ? 'bg-red-600 shadow-red-100' : 'bg-blue-600 shadow-blue-100';
   const algorithmName = isTriage ? 'Алгоритм екстреного тріажу (Жорсткий пріоритет)' : 'Алгоритм лексикографічного розподілу (Fairness)';
   const exportBtnColor = isTriage ? 'text-red-600' : 'text-blue-600';
+
+  // --- ЛОГІКА ГРУПУВАННЯ ---
+  const getGroupedItems = () => {
+    if (groupBy === 'destination') {
+      // Групуємо по місту / адресі доставки (куди їде)
+      const groups = {};
+      plan.items.forEach(item => {
+        const key = item.city || item.warehouse_address || 'Не вказано адресу';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(item);
+      });
+      return groups;
+    } else if (groupBy === 'resource') {
+      // Групуємо по назві ресурсу
+      const groups = {};
+      plan.items.forEach(item => {
+        const key = item.resource_name || 'Невідомий ресурс';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(item);
+      });
+      return groups;
+    }
+    return null;
+  };
+
+  const groupedData = getGroupedItems();
 
   return (
     <div className={`animate-fade-in-up bg-slate-50 rounded-3xl border-2 p-6 md:p-8 mb-10 text-left space-y-6 ${isTriage ? 'border-red-100' : 'border-slate-200'}`}>
@@ -50,12 +81,79 @@ const DistributionPlan = ({ plan, purposeMap, strategy = 'fairness' }) => {
 
       <DistributionChart items={plan.items} />
 
-      {/* Картки */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {plan.items.map((item) => (
-          <DistributionCard key={item.id} item={item} />
-        ))}
+      {/* ПАНЕЛЬ ПЕРЕМИКАННЯ КНОПОК ГРУПУВАННЯ */}
+      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200">
+        <span className="text-xs font-black uppercase tracking-wider text-slate-400 mr-2">Групувати:</span>
+
+        <button
+          onClick={() => setGroupBy('destination')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs uppercase transition-all ${
+            groupBy === 'destination'
+              ? 'bg-slate-900 text-white shadow-md'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+          }`}
+        >
+          <MapPin size={14} /> За напрямком (куди їде)
+        </button>
+
+        <button
+          onClick={() => setGroupBy('resource')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs uppercase transition-all ${
+            groupBy === 'resource'
+              ? 'bg-slate-900 text-white shadow-md'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+          }`}
+        >
+          <Package size={14} /> За ресурсом
+        </button>
+
+        <button
+          onClick={() => setGroupBy('all')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs uppercase transition-all ${
+            groupBy === 'all'
+              ? 'bg-slate-900 text-white shadow-md'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+          }`}
+        >
+          <LayoutGrid size={14} /> Всі операції (списком)
+        </button>
       </div>
+
+      {/* ВІДОБРАЖЕННЯ ДАНИХ ЗАЛЕЖНО ВІД ВИБРАНОГО ГРУПУВАННЯ */}
+      {groupBy === 'all' ? (
+        // Режим: Всі картки підряд
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {plan.items.map((item) => (
+            <DistributionCard key={item.id} item={item} />
+          ))}
+        </div>
+      ) : (
+        // Режим: Згруповані блоки (по напрямку або по ресурсу)
+        <div className="space-y-8">
+          {Object.entries(groupedData).map(([groupName, items]) => (
+            <div key={groupName} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+              {/* Шапка групи */}
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h4 className="font-black text-slate-800 text-base flex items-center gap-2">
+                  {groupBy === 'destination' ? <MapPin size={18} className="text-blue-500" /> : <Package size={18} className="text-indigo-500" />}
+                  {groupName}
+                </h4>
+                <span className="text-xs font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-full">
+                  {items.length} {items.length === 1 ? 'операція' : items.length < 5 ? 'операції' : 'операцій'}
+                </span>
+              </div>
+
+              {/* Сітка карток всередині групи */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {items.map((item) => (
+                  <DistributionCard key={item.id} item={item} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
     </div>
   );
 };

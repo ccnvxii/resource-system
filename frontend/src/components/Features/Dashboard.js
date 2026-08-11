@@ -1,4 +1,3 @@
-// src/components/Features/Dashboard.js
 import React, { useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
@@ -7,7 +6,7 @@ import { TrendingDown, Package, Download, BarChart3, ChevronDown, AlertTriangle 
 import * as XLSX from 'xlsx';
 
 const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
 
   // БЕЗПЕЧНИЙ розрахунок залишків на складах (з урахуванням нульових позицій)
   const stockData = useMemo(() => {
@@ -84,34 +83,54 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
     XLSX.writeFile(wb, "ResQ_Report.xlsx");
   };
 
-  // КАСТОМНИЙ КОМПОНЕНТ ДЛЯ ПІДПИСУ ОСІ X З ІКОНКОЮ З LUCIDE-REACT
+  // РОЗУМНИЙ БАГАТОРЯДКОВИЙ ПІДПИС ОСІ X (без нахилу, з перенесенням слів)
   const CustomXAxisTick = ({ x, y, payload }) => {
     const itemData = stockData.find(d => d.name === payload.value);
     const isZero = itemData ? itemData.isZero : false;
+    const fullName = payload.value;
 
-    const text = payload.value.length > 11 ? `${payload.value.substring(0, 9)}...` : payload.value;
+    // Розбиваємо довгі назви на слова, щоб формувати рядки по ~10 символів
+    const words = fullName.split(' ');
+    let lines = [];
+    let currentLine = '';
+
+    words.forEach(word => {
+      if ((currentLine + ' ' + word).trim().length <= 11) {
+        currentLine = currentLine ? `${currentLine} ${word}` : word;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    });
+    if (currentLine) lines.push(currentLine);
+
+    // Якщо рядків вийшло більше 2, обрізаємо до 2, щоб не захаращувати графік
+    if (lines.length > 2) {
+      lines = [`${lines[0]}`, `${lines[1].substring(0, 8)}...`];
+    }
 
     return (
       <g transform={`translate(${x},${y})`}>
-        {/* Якщо нуль, посуваємо текст трохи вбік, щоб звільнити місце для іконки */}
         <text
-          x={isZero ? -6 : 0}
+          x={0}
           y={0}
-          dy={12}
           textAnchor="middle"
           fill={isZero ? "#ef4444" : "#64748b"}
           fontSize={10}
           fontWeight={isZero ? "900" : "bold"}
           className={isZero ? "animate-pulse" : ""}
         >
-          {text}
+          {lines.map((line, index) => (
+            <tspan key={index} x={0} dy={index === 0 ? 12 : 11}>
+              {line}
+            </tspan>
+          ))}
         </text>
 
-        {/* Інтегруємо іконку AlertTriangle з lucide за допомогою SVG-контейнера foreignObject */}
         {isZero && (
           <foreignObject
-            x={22}
-            y={1}
+            x={-7}
+            y={lines.length === 2 ? 34 : 23}
             width={14}
             height={14}
             className="animate-pulse"
@@ -151,14 +170,14 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
     <div className="space-y-4 animate-in fade-in duration-500 text-left">
 
       {/* Кнопка експорту повного звіту */}
-        <div className="flex justify-end">
-          <button
-            onClick={exportToExcel}
-            className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl font-black text-[10px] uppercase text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
-          >
-            <Download size={14} /> Експорт повного звіту у Excel
-          </button>
-        </div>
+      <div className="flex justify-end">
+        <button
+          onClick={exportToExcel}
+          className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl font-black text-[10px] uppercase text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+        >
+          <Download size={14} /> Експорт повного звіту у Excel
+        </button>
+      </div>
 
       {/* ГОЛОВНА ШАПКА ДАШБОРДУ */}
       <div
@@ -204,15 +223,18 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
                 <Package className="text-blue-600" size={20} />
                 <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Запаси на складах</h3>
               </div>
-              <div className="h-64">
+              {/* Збільшили висоту та відступ знизу, щоб дворядкові підписи ідеально поміщалися */}
+              <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stockData} margin={{ bottom: 15 }}>
+                  <BarChart data={stockData} margin={{ bottom: 40, top: 10, right: 10, left: -15 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
 
                     <XAxis
                       dataKey="name"
                       axisLine={false}
                       tickLine={false}
+                      height={45}
+                      interval={0}
                       tick={<CustomXAxisTick />}
                     />
 
@@ -239,12 +261,12 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
                 <TrendingDown className="text-red-500" size={20} />
                 <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Критичний дефіцит</h3>
               </div>
-              <div className="h-64">
+              <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={deficitData} layout="vertical">
+                  <BarChart data={deficitData} layout="vertical" margin={{ top: 10, right: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                     <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" fontSize={10} width={80} fontWeight="bold" axisLine={false} tickLine={false} />
+                    <YAxis dataKey="name" type="category" fontSize={10} width={95} fontWeight="bold" axisLine={false} tickLine={false} />
 
                     <Tooltip
                       cursor={{fill: '#fef2f2'}}
