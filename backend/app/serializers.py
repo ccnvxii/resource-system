@@ -31,11 +31,12 @@ class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     organization = serializers.CharField(source='profile.organization', read_only=True)
     phone = serializers.CharField(source='profile.phone', read_only=True)
+    is_approved = serializers.BooleanField(source='profile.is_approved', read_only=True)  # Статус підтвердження
 
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'full_name', 'is_admin', 'organization',
-                  'phone']
+                  'phone', 'is_approved']
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip() or obj.username
@@ -54,11 +55,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         }
 
     def create(self, validated_data):
-        # Витягуємо дані профілю
         org = validated_data.pop('organization', '')
         ph = validated_data.pop('phone', '')
 
-        # Створюємо користувача
         user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data.get('email', ''),
@@ -67,8 +66,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             last_name=validated_data.get('last_name', '')
         )
 
-        # Створюємо профіль (зв'язок 1-до-1 для 3NF)
-        UserProfile.objects.create(user=user, organization=org, phone=ph)
+        # За замовчуванням акаунт НЕ підтверджений (is_approved=False)
+        UserProfile.objects.create(user=user, organization=org, phone=ph, is_approved=False)
         return user
 
 
@@ -115,7 +114,6 @@ class UserRequestSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
     due_date = serializers.DateField(format="%Y-%m-%d", required=False)
 
-    # Ваше нове In-Memory поле
     current_priority = serializers.ReadOnlyField()
 
     class Meta:
@@ -150,18 +148,31 @@ class DistributionItemSerializer(serializers.ModelSerializer):
     purpose_code = serializers.CharField(source='request.purpose.code', read_only=True)
 
     due_date = serializers.DateField(source='request.due_date', read_only=True, format="%Y-%m-%d")
+    total_available_at_source = serializers.SerializerMethodField()
 
     class Meta:
         model = DistributionItem
         fields = [
             'id', 'amount', 'resource_name', 'unit_name', 'warehouse_name',
             'recipient_name', 'priority', 'city', 'warehouse_address',
-            'warehouse_ref', 'quantity_requested', 'purpose_code', 'due_date'
+            'warehouse_ref', 'quantity_requested', 'purpose_code', 'due_date',
+            'total_available_at_source'
         ]
 
     def get_recipient_name(self, obj):
         user = obj.request.user
         return f"{user.first_name} {user.last_name}".strip() or user.username
+
+    def get_total_available_at_source(self, obj):
+        from .models import Stock
+        try:
+            stock_entry = Stock.objects.get(
+                warehouse=obj.warehouse,
+                resource=obj.request.resource
+            )
+            return stock_entry.amount
+        except Stock.DoesNotExist:
+            return 0
 
 
 class DistributionPlanSerializer(serializers.ModelSerializer):

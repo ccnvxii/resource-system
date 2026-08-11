@@ -18,16 +18,18 @@ class UnitAdmin(admin.ModelAdmin):
 @admin.register(RequestPurpose)
 class RequestPurposeAdmin(admin.ModelAdmin):
     list_display = ('name', 'code', 'weight')
-    list_editable = ('weight',)  # Дозволяє швидко змінювати пріоритети прямо у списку
+    list_editable = ('weight',)
     search_fields = ('name', 'code')
 
 
-# --- 2. Профілі користувачів ---
+# --- 2. Профілі користувачів (Тут адміністратор керує підтвердженням) ---
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'organization', 'phone')
-    search_fields = ('user__username', 'organization', 'phone')
+    list_display = ('user', 'organization', 'phone', 'is_approved')
+    list_editable = ('is_approved',)  # Дозволяє клікати галочку прямо в таблиці
+    search_fields = ('user__username', 'organization', 'phone', 'user__first_name', 'user__last_name')
+    list_filter = ('is_approved',)
 
 
 # --- 3. Категорії та Ресурси ---
@@ -46,7 +48,6 @@ class ResourceAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
     def get_total_stock(self, obj):
-        # Показує загальну кількість на всіх складах
         from django.db.models import Sum
         total = obj.stocks.aggregate(Sum('amount'))['amount__sum'] or 0
         return f"{total} {obj.unit.name}"
@@ -63,19 +64,18 @@ class WarehouseAdmin(admin.ModelAdmin):
 
 @admin.register(Stock)
 class StockAdmin(admin.ModelAdmin):
-    list_display = ('resource', 'warehouse', 'colored_amount')
+    list_display = ('resource', 'warehouse', 'colored_amount', 'expiration_date')
     list_filter = ('warehouse', 'resource__category')
     search_fields = ('resource__name',)
 
     def colored_amount(self, obj):
-        # Візуальний контроль: дефіцитні позиції підсвічуються червоним
         color = "red" if obj.amount < 10 else "black"
         return format_html('<span style="color: {}; font-weight: bold;">{}</span>', color, obj.amount)
 
     colored_amount.short_description = "Кількість"
 
 
-# --- 5. Заявки (Центр управління пріоритетами) ---
+# --- 5. Заявки ---
 
 @admin.register(UserRequest)
 class UserRequestAdmin(admin.ModelAdmin):
@@ -92,12 +92,11 @@ class UserRequestAdmin(admin.ModelAdmin):
     user_display.short_description = "Заявник"
 
     def status_label(self, obj):
-        # Кольорові бейджі для статусів
-        colors = {'new': '#3b82f6', 'partial': '#f59e0b', 'done': '#10b981'}
+        colors = {'new': '#3b82f6', 'partial': '#f59e0b', 'done': '#10b981', 'expired': '#ef4444'}
         return format_html(
             '<span style="background: {}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">{}</span>',
             colors.get(obj.status, 'gray'),
-            obj.get_status_display()
+            obj.get_status_label() if hasattr(obj, 'get_status_label') else obj.get_status_display()
         )
 
     status_label.short_description = "Статус"

@@ -1,4 +1,3 @@
-# backend/app/views.py
 import math
 import time
 import requests
@@ -8,10 +7,14 @@ from django.db import transaction
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.utils import timezone
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .services import NovaPoshtaService
 from .models import (
@@ -21,6 +24,33 @@ from .models import (
 )
 from .serializers import *
 from .optimizer.distribute import calculate_distribution, calculate_strict_priority
+
+
+# --- КАСТОМНА АВТОРИЗАЦІЯ З ПЕРЕВІРКОЮ ПІДТВЕРДЖЕННЯ АДМІНІСТРАТОРОМ ---
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        user = self.user
+
+        if not user.is_staff:
+            profile, created = UserProfile.objects.get_or_create(
+                user=user,
+                defaults={'is_approved': False}
+            )
+
+            if not profile.is_approved:
+                # Передаємо і текст, і унікальний код помилки
+                raise AuthenticationFailed({
+                    "detail": "Ваш обліковий запис ще не підтверджено адміністратором.",
+                    "code": "not_approved"
+                })
+
+        return data
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
 
 
 # --- VIEWSETS ДЛЯ ДОВІДНИКІВ ---
@@ -46,7 +76,9 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            return Response({'message': 'Реєстрація успішна', 'user_id': user.id}, status=status.HTTP_201_CREATED)
+            return Response(
+                {'message': 'Реєстрація успішна. Очікуйте підтвердження адміністратора.', 'user_id': user.id},
+                status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -176,28 +208,22 @@ class DistributeResourcesView(APIView):
             with transaction.atomic():
                 today = timezone.now().date()
 
-                # 1. КОНТУР АВТОПРОДОВЖЕННЯ ТА ІЗОЛЯЦІЇ (НАУКОВА НОВИЗНА)
-                # Оптимізовано: використовуємо .update() замість циклу з req.save()
                 expired_requests = UserRequest.objects.filter(
                     status__in=['new', 'partial'],
                     due_date__lt=today
                 )
 
-                # Заявки без автопродовження — маркуємо як протерміновані
                 expired_requests.filter(auto_extend=False).update(status='expired')
 
-                # Заявки з автопродовженням — зміщуємо дедлайн масово одним запитом
                 for req in expired_requests.filter(auto_extend=True):
                     req.due_date = today + timedelta(days=5)
                     req.extension_count += 1
                     req.save()
 
-                # 2. ЗБІР АКТИВНИХ ЗАЯВОК (Оптимізовано через select_related)
                 active_requests_qs = UserRequest.objects.exclude(
                     status__in=['done', 'expired']
                 ).select_related('resource').select_for_update(skip_locked=True)
 
-                # ОПТИМІЗАЦІЯ: підтягуємо склад разом із координатами за ОДИН запит SQL
                 stocks_qs = Stock.objects.filter(amount__gt=0).select_related('warehouse').select_for_update(
                     skip_locked=True)
 
@@ -224,10 +250,8 @@ class DistributeResourcesView(APIView):
                         'lng': float(s.warehouse.longitude) if s.warehouse.longitude else None
                     })
 
-                # Зчитуємо обрану стратегію з тіла запиту (якщо не передано, беремо справедливість)
                 strategy = request.data.get('strategy', 'fairness')
 
-                # Запуск обраного рушія маршрутизації
                 if strategy == 'triage':
                     plan_items_data = calculate_strict_priority(requests_data, stocks_data)
                 else:
@@ -238,7 +262,6 @@ class DistributeResourcesView(APIView):
 
                 new_plan = DistributionPlan.objects.create()
 
-                # Створюємо мапи (кеш в пам'яті), щоб уникнути запитів .get() всередині циклу
                 req_map = {req.id: req for req in active_requests_qs}
                 stock_map = {(s.warehouse_id, s.resource_id): s for s in stocks_qs}
 
@@ -255,12 +278,10 @@ class DistributeResourcesView(APIView):
                     if not req:
                         continue
 
-                    # Знаходимо склад в пам'яті сервера без запиту до БД
                     stock = stock_map.get((item['warehouse_id'], req.resource_id))
                     if not stock:
                         continue
 
-                    # Додаємо елемент плану в масив для масового створення
                     items_to_create.append(
                         DistributionItem(
                             plan=new_plan,
@@ -270,7 +291,6 @@ class DistributeResourcesView(APIView):
                         )
                     )
 
-                    # Змінюємо об'єкти суто в оперативній пам'яті
                     req.quantity_allocated += amount_int
                     req.status = 'done' if req.quantity_allocated >= req.quantity_requested else 'partial'
                     requests_to_update.add(req)
@@ -278,16 +298,12 @@ class DistributeResourcesView(APIView):
                     stock.amount -= amount_int
                     stocks_to_update.add(stock)
 
-                # --- МАС ЗБЕРЕЖЕННЯ (BULK OPERATIONS) ---
-                # 1. Записуємо всі нові елементи логістичного плану
                 DistributionItem.objects.bulk_create(items_to_create)
 
-                # 2. Оновлюємо статуси та виділену кількість усіх заявок
                 if requests_to_update:
                     UserRequest.objects.bulk_update(list(requests_to_update),
                                                     ['quantity_allocated', 'status', 'due_date', 'extension_count'])
 
-                # 3. Зрізаємо залишки на всіх складах
                 if stocks_to_update:
                     Stock.objects.bulk_update(list(stocks_to_update), ['amount'])
 

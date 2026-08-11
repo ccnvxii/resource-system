@@ -77,10 +77,12 @@ class Stock(models.Model):
 
 
 # --- 7. ПРОФІЛЬ КОРИСТУВАЧА ---
+# --- 7. ПРОФІЛЬ КОРИСТУВАЧА ---
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     organization = models.CharField(max_length=255, blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
+    is_approved = models.BooleanField(default=False, verbose_name="Підтверджено адміністратором")
 
 
 # --- 8. ЗАЯВКИ (Обліковуються в тих же упаковках, що й ресурси) ---
