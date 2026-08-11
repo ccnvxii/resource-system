@@ -8,7 +8,7 @@ import {
   HelpCircle,
   Clock
 } from 'lucide-react';
-import { PURPOSE_MAP } from '../../constants/purposes';
+import { PURPOSE_MAP } from '../../../constants/purposes';
 
 const formatDate = (dateString) => {
   if (!dateString) return null;

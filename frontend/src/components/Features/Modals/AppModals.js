@@ -1,9 +1,9 @@
 import React from 'react';
 import { ClipboardList, ArrowDownCircle, PackagePlus, Scale, Zap, GitFork } from 'lucide-react';
-import Modal from '../UI/Modal';
-import RequestForm from './RequestForm';
-import StockInForm from './StockInForm';
-import AddResourceForm from './AddResourceForm';
+import Modal from '../../UI/Modal';
+import RequestForm from '../Requests/RequestForm';
+import StockInForm from '../Stocks/StockInForm';
+import AddResourceForm from '../Stocks/AddResourceForm';
 
 const AppModals = ({ modals, closeModal, data, fetchData, currentUser, distributionStrategy, setDistributionStrategy, onDistribute, loading }) => {
     return (

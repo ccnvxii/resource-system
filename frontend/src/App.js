@@ -11,15 +11,15 @@ import { useFetchData } from './hooks/useFetchData';
 // Компоненти
 import Header from './components/Layout/Header';
 import SidebarNav from './components/Layout/SidebarNav';
-import StockTable from './components/Features/StockTable';
-import RequestList from './components/Features/RequestList';
-import DistributionPlan from './components/Features/DistributionPlan';
+import StockTable from './components/Features/Stocks/StockTable';
+import RequestList from './components/Features/Requests/RequestList';
+import DistributionPlan from './components/Features/Distribution/DistributionPlan';
 import Landing from './components/Layout/Landing';
-import Dashboard from './components/Features/Dashboard';
-import AdminLogs from './components/Features/AdminLogs';
+import Dashboard from './components/Features/Analytics/Dashboard';
+import AdminLogs from './components/Features/Analytics/AdminLogs';
 import AuthModal from './components/Auth/Auth';
 import ScrollToTop from './components/UI/ScrollToTop';
-import AppModals from './components/Features/AppModals';
+import AppModals from './components/Features/Modals/AppModals';
 
 function App() {
     const [currentUser, setCurrentUser] = useState(() => authService.getUser());

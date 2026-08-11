@@ -8,9 +8,9 @@ import {
   Package,
   LayoutGrid
 } from 'lucide-react';
-import DistributionChart from '../UI/DistributionChart';
-import { exportPlanToExcel } from './excelExport';
-import DistributionCard from '../UI/DistributionCard';
+import DistributionChart from './DistributionChart';
+import { exportPlanToExcel } from '../../../utils/excelExport';
+import DistributionCard from './DistributionCard';
 
 const DistributionPlan = ({ plan, purposeMap, strategy = 'fairness' }) => {
   // Стан для групування: 'destination' (по поїздці), 'resource' (по ресурсу), 'all' (всі картки)

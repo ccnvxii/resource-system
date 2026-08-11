@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { PURPOSE_MAP } from '../../constants/purposes';
+import { PURPOSE_MAP } from '../constants/purposes';
 
 // Локальна функція форматування дати для Excel
 const formatExcelDate = (dateString) => {

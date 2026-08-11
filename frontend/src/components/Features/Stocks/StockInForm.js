@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
 import {Warehouse, PackagePlus, Hash, Plus, Trash2, Save} from 'lucide-react';
 import {toast} from 'react-hot-toast';
-import api from '../../services/api';
+import api from '../../../services/api';
 
 const StockInForm = ({warehouses, resources, onSubmit, loading, onClose}) => {
     const [warehouse, setWarehouse] = useState('');
