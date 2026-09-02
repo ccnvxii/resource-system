@@ -5,9 +5,6 @@ from .models import (
     DistributionPlan, DistributionItem, Unit, RequestPurpose, UserProfile
 )
 
-
-# --- НОВІ СЕРІАЛІЗАТОРИ ДЛЯ 3NF ДОДІДНИКІВ ---
-
 class UnitSerializer(serializers.ModelSerializer):
     """Серіалізатор для довідника одиниць виміру (кг, шт, л)"""
 
@@ -85,7 +82,7 @@ class ResourceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Resource
-        fields = ['id', 'name', 'unit', 'unit_name', 'category', 'category_name']
+        fields = ['id', 'name', 'unit', 'unit_name', 'category', 'category_name', 'is_strategic']
 
 
 class WarehouseSerializer(serializers.ModelSerializer):

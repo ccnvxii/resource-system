@@ -26,7 +26,7 @@ function App() {
     const [isLandingMode, setIsLandingMode] = useState(() => localStorage.getItem('isLandingMode') !== 'false');
     const [loading, setLoading] = useState(false);
     const [plan, setPlan] = useState(null);
-    const [distributionStrategy, setDistributionStrategy] = useState('fairness');
+    const [distributionStrategy, setDistributionStrategy] = useState('hybrid');
 
     // Керування станом усіх модалок в одному місці
     const { modals, openModal, closeModal } = useModal({

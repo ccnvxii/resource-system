@@ -28,11 +28,17 @@ class Category(models.Model):
         return f"{self.name} (x{self.criticality})"
 
 
-# --- 3. РЕСУРСИ (Орієнтовані на укрупнений облік) ---
+# --- 3. РЕСУРСИ  ---
 class Resource(models.Model):
     name = models.CharField(max_length=100, verbose_name="Назва ресурсу")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, verbose_name="Логістична упаковка")
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='resources')
+
+    is_strategic = models.BooleanField(
+        default=False,
+        verbose_name="Стратегічний (Тріаж)",
+        help_text="Якщо позначено, ресурс розподілятиметься алгоритмом жорсткого пріоритету"
+    )
 
     def __str__(self):
         return f"{self.name} ({self.unit.name})"
@@ -76,7 +82,6 @@ class Stock(models.Model):
         return f"{self.warehouse.name} -> {self.resource.name}: {self.amount} {self.resource.unit.name}{exp_info}"
 
 
-# --- 7. ПРОФІЛЬ КОРИСТУВАЧА ---
 # --- 7. ПРОФІЛЬ КОРИСТУВАЧА ---
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')

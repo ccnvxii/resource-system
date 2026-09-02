@@ -53,36 +53,51 @@ const AppModals = ({ modals, closeModal, data, fetchData, currentUser, distribut
                 maxWidth="max-w-xl"
             >
                 <div className="flex flex-col items-center py-4 space-y-6">
+                    {/* ПЕРЕМИКАЧ НА 3 КНОПКИ */}
                     <div className="flex flex-col sm:flex-row bg-slate-200 p-1.5 rounded-2xl shadow-inner border border-slate-300 w-full gap-2">
                         <button
                             onClick={() => setDistributionStrategy('fairness')}
-                            className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all duration-300 flex-1 ${
+                            className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl font-bold text-sm transition-all duration-300 flex-1 ${
                                 distributionStrategy === 'fairness' 
                                 ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/5' 
                                 : 'text-slate-500 hover:text-slate-700'
                             }`}
                         >
                             <Scale size={18} />
-                            Max-Min Fairness
+                            Fairness
                         </button>
+
+                        <button
+                            onClick={() => setDistributionStrategy('hybrid')}
+                            className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl font-bold text-sm transition-all duration-300 flex-1 ${
+                                distributionStrategy === 'hybrid' 
+                                ? 'bg-white text-purple-600 shadow-md ring-1 ring-black/5' 
+                                : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <GitFork size={18} />
+                            Гібридний (Auto)
+                        </button>
+
                         <button
                             onClick={() => setDistributionStrategy('triage')}
-                            className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all duration-300 flex-1 ${
+                            className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl font-bold text-sm transition-all duration-300 flex-1 ${
                                 distributionStrategy === 'triage' 
                                 ? 'bg-white text-red-600 shadow-md ring-1 ring-black/5' 
                                 : 'text-slate-500 hover:text-slate-700'
                             }`}
                         >
                             <Zap size={18} />
-                            Тріаж (Пріоритет)
+                            Тріаж
                         </button>
                     </div>
 
-                    <div className="text-center px-2">
+                    {/* ОПИС РЕЖИМІВ */}
+                    <div className="text-center px-2 min-h-[40px] flex items-center justify-center">
                         <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                            {distributionStrategy === 'fairness'
-                                ? '⚖️ Лексикографічний розподіл забезпечує рівномірне та справедливе задоволення потреб усіх заявників відповідно до вагів.'
-                                : '⚡ Режим екстреного тріажу спрямовує ресурси в першу чергу на критичні замовлення з найвищим пріоритетом.'}
+                            {distributionStrategy === 'fairness' && '⚖️ Лексикографічний розподіл (Симплекс) забезпечує рівномірне та справедливе задоволення потреб усіх заявників.'}
+                            {distributionStrategy === 'hybrid' && '🧬 Розумна маршрутизація: стратегічні вантажі йдуть у Тріаж, а товари життєзабезпечення — у Справедливість.'}
+                            {distributionStrategy === 'triage' && '⚡ Режим екстреного тріажу (Жадібний) спрямовує всі ресурси на 100% закриття заявок з найвищим пріоритетом.'}
                         </p>
                     </div>
 
@@ -94,9 +109,9 @@ const AppModals = ({ modals, closeModal, data, fetchData, currentUser, distribut
                         disabled={loading}
                         className={`w-full py-5 rounded-2xl text-lg font-black text-white shadow-2xl transition-all ${
                             loading ? 'bg-slate-400 cursor-not-allowed' 
-                            : distributionStrategy === 'triage' 
-                                ? 'bg-red-600 hover:bg-red-700 hover:shadow-red-500/30 active:scale-95' 
-                                : 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-500/30 active:scale-95'
+                            : distributionStrategy === 'triage' ? 'bg-red-600 hover:bg-red-700 hover:shadow-red-500/30 active:scale-95' 
+                            : distributionStrategy === 'hybrid' ? 'bg-purple-600 hover:bg-purple-700 hover:shadow-purple-500/30 active:scale-95'
+                            : 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-500/30 active:scale-95'
                         }`}
                     >
                         {loading ? "ОБРОБКА..." : "ЗАПУСТИТИ РОЗПОДІЛ"}

@@ -1,3 +1,4 @@
+# backend/app/views.py
 import math
 import time
 import requests
@@ -20,7 +21,7 @@ from .services import NovaPoshtaService
 from .models import (
     Resource, Warehouse, Stock, UserRequest,
     DistributionPlan, DistributionItem, Category,
-    Unit, RequestPurpose
+    Unit, RequestPurpose, UserProfile
 )
 from .serializers import *
 from .optimizer.distribute import calculate_distribution, calculate_strict_priority
@@ -234,6 +235,7 @@ class DistributeResourcesView(APIView):
                         requests_data.append({
                             'id': r.id,
                             'resource_id': r.resource_id,
+                            'is_strategic': r.resource.is_strategic,  # НОВЕ: Зчитуємо маркер з БД
                             'amount_needed': needed,
                             'priority': float(r.priority),
                             'lat': float(r.latitude) if r.latitude else None,
@@ -250,11 +252,27 @@ class DistributeResourcesView(APIView):
                         'lng': float(s.warehouse.longitude) if s.warehouse.longitude else None
                     })
 
-                strategy = request.data.get('strategy', 'fairness')
+                # За замовчуванням тепер у нас гібридний режим
+                strategy = request.data.get('strategy', 'hybrid')
 
-                if strategy == 'triage':
+                # --- ГІБРИДНИЙ РУШІЙ РОЗПОДІЛУ (Multi-Policy Engine) ---
+                if strategy == 'hybrid':
+                    # Розділяємо заявки на два потоки залежно від налаштувань ресурсу
+                    triage_reqs = [r for r in requests_data if r.get('is_strategic')]
+                    fairness_reqs = [r for r in requests_data if not r.get('is_strategic')]
+
+                    plan_triage = calculate_strict_priority(triage_reqs, stocks_data) if triage_reqs else []
+                    plan_fairness = calculate_distribution(fairness_reqs, stocks_data) if fairness_reqs else []
+
+                    # Зливаємо результати двох алгоритмів в один план
+                    plan_items_data = plan_triage + plan_fairness
+
+                elif strategy == 'triage':
+                    # Примусово все через жорсткий пріоритет
                     plan_items_data = calculate_strict_priority(requests_data, stocks_data)
+
                 else:
+                    # Примусово все через справедливість
                     plan_items_data = calculate_distribution(requests_data, stocks_data)
 
                 if not plan_items_data:
