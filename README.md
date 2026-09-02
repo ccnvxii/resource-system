@@ -40,12 +40,11 @@
 
 ### 1. Клонування репозиторію
 ```bash
-git clone [https://github.com/](https://github.com/) твій-логін / resq-project.git
+git clone https://github.com/ccnvxii/resource-system.git
 cd resq-project
 ```
 
 ### 2. Запуск Backend
-Bash
 # Перехід у папку з бекендом та активація віртуального середовища
 ```bash
 cd backend
