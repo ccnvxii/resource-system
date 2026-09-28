@@ -310,33 +310,51 @@ def calculate_distribution(requests, stocks):
 
 def calculate_strict_priority(requests, stocks):
     """
-    Альтернативний режим (Тріаж): Розподіл строго за пріоритетом на 100%
-    із мінімізацією логістичної відстані.
+    Режим екстреного Тріажу: Жорсткий пріоритет (100% задоволення)
+    з використанням багатокритеріального ешелонування (Tie-Breaking) для вирішення нічиїх.
     """
     final_plan = []
     routing_service = DistanceMatrixService()
 
-    # Працюємо тільки з тими ресурсами, які є і в запитах, і на складах
     common_ids = set(r['resource_id'] for r in requests) & set(s['resource_id'] for s in stocks)
 
     for res_id in common_ids:
-        # Відбираємо заявки та склади для поточного ресурсу
         r_sub = [r for r in requests if r['resource_id'] == res_id]
         s_sub = [s for s in stocks if s['resource_id'] == res_id]
 
-        # 1. Сортуємо заявки за пріоритетом (від найвищого до найнижчого)
-        r_sub.sort(key=lambda x: x['priority'], reverse=True)
+        # 1. Попередній розрахунок логістичної близькості для кожної заявки
+        # Шукаємо мінімальну відстань до найближчого складу, де Є потрібний товар
+        for req in r_sub:
+            min_dist = float('inf')
+            for stk in s_sub:
+                if stk['amount'] > 0:
+                    dist = routing_service.get_distance(
+                        stk.get('lat'), stk.get('lng'),
+                        req.get('lat'), req.get('lng')
+                    )
+                    if dist < min_dist:
+                        min_dist = dist
+            req['min_distance_to_stock'] = min_dist if min_dist != float('inf') else 999999
 
-        # Створюємо словник для відстеження актуальних залишків на складах
+        # 2. БАГАТОКРИТЕРІАЛЬНЕ ЕШЕЛОНУВАННЯ (Tie-Breaking Heuristic)
+        # Python сортує кортежі по елементах зліва направо.
+        # Мінус означає сортування за спаданням (від найбільшого до найменшого).
+        r_sub.sort(key=lambda x: (
+            -int(x['priority']),           # Крок 1: Грубий ешелон (напр., 9.5 і 9.4 стають 9 і розглядаються разом)
+            -x['priority'],                # Крок 2: Точний пріоритет (якщо ешелон один, 9.5 забере раніше за 9.4)
+            x['min_distance_to_stock'],    # Крок 3: Логістична близькість (менша відстань = швидший порятунок)
+            x['amount_needed']             # Крок 4: Shortest Job First (менші заявки закриваємо першими, щоб врятувати більше точок)
+        ))
+
         stock_available = {i: s['amount'] for i, s in enumerate(s_sub)}
 
-        # 2. Йдемо по черзі від найважливішої заявки до найменш важливої
+        # 3. Жадібне закриття заявок (послідовно, без розбиття товару між рівними)
         for req in r_sub:
             demand = req['amount_needed']
             if demand <= 0:
                 continue
 
-            # 3. Збираємо відстані від усіх доступних складів до цієї конкретної заявки
+            # Знаходимо найближчі склади саме для цієї конкретної заявки
             stock_distances = []
             for i, stk in enumerate(s_sub):
                 if stock_available[i] > 0:
@@ -346,25 +364,21 @@ def calculate_strict_priority(requests, stocks):
                     )
                     stock_distances.append((dist, i, stk))
 
-            # 4. Сортуємо склади за відстанню (найближчі перші)
+            # Сортуємо склади за відстанню (беремо товар спочатку з найближчого)
             stock_distances.sort(key=lambda x: x[0])
 
-            # 5. Жадібно забираємо товар із найближчих складів, поки не закриємо потребу
+            # Вилучаємо товар
             for dist, i, stk in stock_distances:
                 if demand <= 0:
-                    break  # Заявка закрита на 100%
+                    break
 
                 if stock_available[i] == 0:
-                    continue  # Склад пустий
+                    continue
 
-                # Беремо мінімум між тим, що треба, і тим, що є на складі
                 take_amount = min(demand, stock_available[i])
-
-                # Оновлюємо залишки та потребу
                 demand -= take_amount
                 stock_available[i] -= take_amount
 
-                # Додаємо в фінальний план маршрут
                 final_plan.append({
                     'request_id': req['id'],
                     'warehouse_id': stk['warehouse_id'],
