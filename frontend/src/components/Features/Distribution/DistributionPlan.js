@@ -79,7 +79,7 @@ const DistributionPlan = ({ plan, purposeMap, strategy = 'fairness' }) => {
         </div>
       </div>
 
-      <DistributionChart items={plan.items} />
+      {/*<DistributionChart items={plan.items} />*/}
 
       {/* ПАНЕЛЬ ПЕРЕМИКАННЯ КНОПОК ГРУПУВАННЯ */}
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200">
