@@ -2,7 +2,38 @@ import numpy as np
 from ..services import DistanceMatrixService
 
 
-# --- 1. СИМПЛЕКС-МЕТОД (М-МЕТОД) ---
+# -------------------------------
+# ДОПОМІЖНІ функції
+# -------------------------------
+
+def get_common_resource_ids(requests, stocks):
+    """Знаходить і сортує ID ресурсів, які є і в заявках, і на складах."""
+    return sorted(
+        set(r['resource_id'] for r in requests)
+        & set(s['resource_id'] for s in stocks)
+    )
+
+
+def build_distance_matrix(stocks, requests_list, routing_service):
+    """
+    Створює матрицю логістичних відстаней між складами та заявниками.
+    Використовується для кешування результатів маршрутизації (O(1) доступ).
+    """
+    n_stk, n_req = len(stocks), len(requests_list)
+    dist_matrix = np.zeros((n_stk, n_req))
+
+    for i, stk in enumerate(stocks):
+        for j, req in enumerate(requests_list):
+            dist_matrix[i, j] = routing_service.get_distance(
+                stk.get('lat'), stk.get('lng'),
+                req.get('lat'), req.get('lng')
+            )
+    return dist_matrix
+
+
+# ----------------------------------------------------------
+# 1. СИМПЛЕКС-МЕТОД ТА ЛЕКСИКОГРАФІЧНИЙ РОЗПОДІЛ (EQUITY)
+# ----------------------------------------------------------
 
 def pivot_step(tableau, pivot_row, pivot_col):
     pivot_val = tableau[pivot_row, pivot_col]
@@ -66,7 +97,6 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
     tableau = np.zeros((m + 1, total_vars + 1))
     tableau[:m, :total_vars] = A_ext
     tableau[:m, -1] = b
-
     tableau[-1, :n] = -c_minimize
 
     M_val = 1e6
@@ -80,7 +110,6 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
             col = tableau[:m, j]
             unit = np.zeros(m)
             unit[i] = 1
-            # умова пошуку базису
             if np.allclose(col, unit, atol=1e-7):
                 basic_vars.append(j)
                 found = True
@@ -112,7 +141,6 @@ def simplex_solve(A, b, c_minimize, ineq_sense, max_iters=500):
         else:
             return 'iteration_limit_reached', None
 
-        # Перевіряємо, чи залишились штучні змінні в базисі з ненульовим значенням
         infeasible = False
         for i, bi in enumerate(basic_vars):
             if var_names[bi].startswith('a'):
@@ -139,29 +167,23 @@ def simplex_solve(A, b, c_minimize, ineq_sense, max_iters=500):
         return 'error', None
 
 
-# --- 2. ДВОЕТАПНА ЛЕКСИКОГРАФІЧНА ОПТИМІЗАЦІЯ ---
-
 def calculate_distribution(requests, stocks):
+    """Розподіл для стандартних ресурсів (Лінійне програмування + Equity)"""
     final_plan = []
-    common_ids = set(r['resource_id'] for r in requests) & set(s['resource_id'] for s in stocks)
-
-    # Ініціалізуємо сервіс маршрутизації ОДИН раз для всього розрахунку,
-    # щоб забезпечити роботу внутрішнього оперативнішого кешу відстаней.
     routing_service = DistanceMatrixService()
+    common_ids = get_common_resource_ids(requests, stocks)
 
     for res_id in common_ids:
         r_sub = [r for r in requests if r['resource_id'] == res_id]
         s_sub = [s for s in stocks if s['resource_id'] == res_id]
 
         n_req, n_stk = len(r_sub), len(s_sub)
-        n_vars = n_stk * n_req + 1  # x_ij + Z
+        n_vars = n_stk * n_req + 1
 
-        # Базова матриця обмежень для складів та заявок (однакова для обох етапів)
-        base_A = []
-        base_b = []
-        base_sense = []
+        dist_matrix = build_distance_matrix(s_sub, r_sub, routing_service)
 
-        # Обмеження складів <= Stock
+        base_A, base_b, base_sense = [], [], []
+
         for i in range(n_stk):
             row = np.zeros(n_vars)
             row[i * n_req: (i + 1) * n_req] = 1
@@ -169,7 +191,6 @@ def calculate_distribution(requests, stocks):
             base_b.append(s_sub[i]['amount'])
             base_sense.append('<=')
 
-        # Обмеження заявок <= Demand
         for j in range(n_req):
             row = np.zeros(n_vars)
             for i in range(n_stk):
@@ -178,7 +199,6 @@ def calculate_distribution(requests, stocks):
             base_b.append(r_sub[j]['amount_needed'])
             base_sense.append('<=')
 
-        # Обмеження Fairness (зважена рівність): sum(x_ij) + Z * weight >= 0
         for j in range(n_req):
             row = np.zeros(n_vars)
             for i in range(n_stk):
@@ -189,46 +209,31 @@ def calculate_distribution(requests, stocks):
             base_b.append(0)
             base_sense.append('>=')
 
-        # =================================================================
-        # ЕТАП 1: Максимізація чистої справедливості Z (Логістика ігнорується)
-        # =================================================================
+        # ЕТАП 1
         c_stage1 = np.zeros(n_vars)
-        c_stage1[-1] = -1.0  # Мінімізуємо -Z, тобто максимізуємо Z
-
+        c_stage1[-1] = -1.0
         status_s1, res_s1 = simplex_solve(np.array(base_A), np.array(base_b), c_stage1, base_sense)
 
         if status_s1 != 'optimal' or res_s1 is None:
-            continue  # Якщо не знайшли розв'язку для справедливості, пропускаємо ресурс
+            continue
 
-        # Зберігаємо максимально можливий рівень справедливості
         opt_Z = res_s1[-1]
 
-        # =================================================================
-        # ЕТАП 2: Оптимізація логістики при зафіксованому рівні справедливості opt_Z
-        # =================================================================
-        # Додаємо нове обмеження до базової системи: Z >= opt_Z - 0.001
-        A_stage2 = list(base_A)
-        b_stage2 = list(base_b)
-        sense_stage2 = list(base_sense)
+        # ЕТАП 2
+        A_stage2, b_stage2, sense_stage2 = list(base_A), list(base_b), list(base_sense)
 
         z_restriction_row = np.zeros(n_vars)
-        z_restriction_row[-1] = 1.0  # Фіксуємо змінну Z
+        z_restriction_row[-1] = 1.0
         A_stage2.append(z_restriction_row)
-        b_stage2.append(max(0.0, opt_Z - 0.001))  # Допуск для запобігання чисельної жорсткості
+        b_stage2.append(max(0.0, opt_Z - 0.001))
         sense_stage2.append('>=')
 
-        # Формуємо нову цільову функцію для Етапу 2: суворо логістика
         c_stage2 = np.zeros(n_vars)
         for i in range(n_stk):
             for j in range(n_req):
                 idx = i * n_req + j
 
-                # Використовуємо каскадний сервіс (Google Maps API / OSRM)
-                dist = routing_service.get_distance(
-                    s_sub[i].get('lat'), s_sub[i].get('lng'),
-                    r_sub[j].get('lat'), r_sub[j].get('lng')
-                )
-
+                dist = dist_matrix[i, j]
                 distance_bonus = 1.0 / max(dist, 1.0)
                 distance_bonus = min(distance_bonus, 0.005)
 
@@ -237,21 +242,15 @@ def calculate_distribution(requests, stocks):
                 else:
                     full_order_bonus = 0.0
 
-                # Мінімізуємо негативні бонуси = максимізуємо ефективність доставки
                 c_stage2[idx] = -(0.0001 + distance_bonus + full_order_bonus)
 
-        # Передаємо унікальний коефіцієнт для Z, щоб рушій не скидав її значення
         c_stage2[-1] = 0.0
-
         status_s2, best_x = simplex_solve(np.array(A_stage2), np.array(b_stage2), c_stage2, sense_stage2)
 
-        # Якщо етап логістики збігся з помилкою через жорсткість умов, робимо відкат до результатів Етапу 1
         if status_s2 != 'optimal' or best_x is None:
             best_x = res_s1
 
-        # =================================================================
-        # ЕТАП 3: Округлення та поштучний пріоритетний розподіл залишків
-        # =================================================================
+        # ЕТАП 3
         if best_x is not None:
             allocated = np.zeros((n_stk, n_req), dtype=int)
             exact_distribution = np.zeros((n_stk, n_req))
@@ -263,7 +262,6 @@ def calculate_distribution(requests, stocks):
             free_stock = [s['amount'] for s in s_sub]
             free_demand = [r['amount_needed'] for r in r_sub]
 
-            # Округлення вниз
             for i in range(n_stk):
                 for j in range(n_req):
                     val = exact_distribution[i, j]
@@ -273,13 +271,11 @@ def calculate_distribution(requests, stocks):
                         free_stock[i] -= floor_val
                         free_demand[j] -= floor_val
 
-            # Суворий поштучний дорозподіл залишків на основі ПРІОРИТЕТУ заявки
             remainder_candidates = []
             for i in range(n_stk):
                 for j in range(n_req):
                     fraction = exact_distribution[i, j] - np.floor(exact_distribution[i, j])
                     if fraction > 0.001 or exact_distribution[i, j] > 0:
-                        # Головний пріоритет — вага замовника, другорядний — дробовий залишок
                         score = r_sub[j]['priority'] * 10.0 + fraction
                         remainder_candidates.append((score, i, j))
 
@@ -291,7 +287,6 @@ def calculate_distribution(requests, stocks):
                     free_stock[i] -= 1
                     free_demand[j] -= 1
 
-            # Експорт результатів у систему
             for i in range(n_stk):
                 for j in range(n_req):
                     if allocated[i, j] > 0:
@@ -308,85 +303,138 @@ def calculate_distribution(requests, stocks):
     return final_plan
 
 
+# ----------------------------------------------------------
+# 2. ЖОРСТКИЙ РОЗПОДІЛ СТРАТЕГІЧНИХ ВАНТАЖІВ (TRIAGE)
+# ----------------------------------------------------------
+
 def calculate_strict_priority(requests, stocks):
-    """
-    Режим екстреного Тріажу: Жорсткий пріоритет (100% задоволення)
-    з використанням багатокритеріального ешелонування (Tie-Breaking) для вирішення нічиїх.
-    """
+    """Розподіл для стратегічних ресурсів (Жадібна евристика + Order Consolidation)"""
     final_plan = []
     routing_service = DistanceMatrixService()
-
-    common_ids = set(r['resource_id'] for r in requests) & set(s['resource_id'] for s in stocks)
+    common_ids = get_common_resource_ids(requests, stocks)
 
     for res_id in common_ids:
         r_sub = [r for r in requests if r['resource_id'] == res_id]
         s_sub = [s for s in stocks if s['resource_id'] == res_id]
 
-        # 1. Попередній розрахунок логістичної близькості для кожної заявки
-        # Шукаємо мінімальну відстань до найближчого складу, де Є потрібний товар
-        for req in r_sub:
-            min_dist = float('inf')
-            for stk in s_sub:
-                if stk['amount'] > 0:
-                    dist = routing_service.get_distance(
-                        stk.get('lat'), stk.get('lng'),
-                        req.get('lat'), req.get('lng')
-                    )
-                    if dist < min_dist:
-                        min_dist = dist
-            req['min_distance_to_stock'] = min_dist if min_dist != float('inf') else 999999
+        for idx, req in enumerate(r_sub):
+            req['_idx'] = idx
 
-        # 2. БАГАТОКРИТЕРІАЛЬНЕ ЕШЕЛОНУВАННЯ (Tie-Breaking Heuristic)
-        # Python сортує кортежі по елементах зліва направо.
-        # Мінус означає сортування за спаданням (від найбільшого до найменшого).
-        r_sub.sort(key=lambda x: (
-            -int(x['priority']),           # Крок 1: Грубий ешелон (напр., 9.5 і 9.4 стають 9 і розглядаються разом)
-            -x['priority'],                # Крок 2: Точний пріоритет (якщо ешелон один, 9.5 забере раніше за 9.4)
-            x['min_distance_to_stock'],    # Крок 3: Логістична близькість (менша відстань = швидший порятунок)
-            x['amount_needed']             # Крок 4: Shortest Job First (менші заявки закриваємо першими, щоб врятувати більше точок)
-        ))
+        stock_available = {i: int(s['amount']) for i, s in enumerate(s_sub)}
+        n_stk, n_req = len(s_sub), len(r_sub)
 
-        stock_available = {i: s['amount'] for i, s in enumerate(s_sub)}
+        dist_matrix = build_distance_matrix(s_sub, r_sub, routing_service)
 
-        # 3. Жадібне закриття заявок (послідовно, без розбиття товару між рівними)
-        for req in r_sub:
-            demand = req['amount_needed']
-            if demand <= 0:
+        for p in range(10, -1, -1):
+            if sum(stock_available.values()) == 0:
+                break
+
+            p_requests = [r for r in r_sub if int(r['priority']) == p]
+            if not p_requests:
                 continue
 
-            # Знаходимо найближчі склади саме для цієї конкретної заявки
-            stock_distances = []
-            for i, stk in enumerate(s_sub):
-                if stock_available[i] > 0:
-                    dist = routing_service.get_distance(
-                        stk.get('lat'), stk.get('lng'),
-                        req.get('lat'), req.get('lng')
-                    )
-                    stock_distances.append((dist, i, stk))
+            needs_dist_recalc = True
 
-            # Сортуємо склади за відстанню (беремо товар спочатку з найближчого)
-            stock_distances.sort(key=lambda x: x[0])
+            while p_requests:
+                if needs_dist_recalc:
+                    for req in p_requests:
+                        j = req['_idx']
+                        active_dists = [
+                            dist_matrix[i, j] for i in range(n_stk) if stock_available[i] > 0
+                        ]
+                        req['_curr_min_dist'] = min(active_dists) if active_dists else float('inf')
 
-            # Вилучаємо товар
-            for dist, i, stk in stock_distances:
-                if demand <= 0:
+                    needs_dist_recalc = False
+
+                valid_p_requests = [r for r in p_requests if r['_curr_min_dist'] != float('inf')]
+                if not valid_p_requests:
                     break
 
-                if stock_available[i] == 0:
+                valid_p_requests.sort(
+                    key=lambda x: (
+                        -float(x['priority']),
+                        x['_curr_min_dist'],
+                        int(x['amount_needed'])
+                    )
+                )
+
+                req = valid_p_requests[0]
+                p_requests.remove(req)
+                j = req['_idx']
+                demand = int(req['amount_needed'])
+
+                if demand <= 4:
+                    min_quantum = 1
+                elif demand <= 50:
+                    min_quantum = max(2, int(demand * 0.25))
+                else:
+                    min_quantum = max(10, int(demand * 0.15))
+
+                total_avail = sum(stock_available.values())
+                if total_avail < min_quantum:
                     continue
 
-                take_amount = min(demand, stock_available[i])
-                demand -= take_amount
-                stock_available[i] -= take_amount
+                candidates = []
+                for i in range(n_stk):
+                    if stock_available[i] > 0:
+                        candidates.append({
+                            'index': i,
+                            'warehouse': s_sub[i],
+                            'amount': stock_available[i],
+                            'distance': dist_matrix[i, j]
+                        })
 
-                final_plan.append({
-                    'request_id': req['id'],
-                    'warehouse_id': stk['warehouse_id'],
-                    'amount': float(take_amount),
-                    'warehouse_lat': stk.get('lat'),
-                    'warehouse_lng': stk.get('lng'),
-                    'recipient_lat': req.get('lat'),
-                    'recipient_lng': req.get('lng')
-                })
+                full_candidates = [c for c in candidates if c['amount'] >= demand]
+                if full_candidates:
+                    selected = min(full_candidates, key=lambda c: (c['distance'], c['index']))
+                    i = selected['index']
+
+                    stock_available[i] -= demand
+                    if stock_available[i] == 0:
+                        needs_dist_recalc = True
+
+                    final_plan.append({
+                        'request_id': req['id'],
+                        'warehouse_id': selected['warehouse']['warehouse_id'],
+                        'amount': float(demand),
+                        'warehouse_lat': selected['warehouse'].get('lat'),
+                        'warehouse_lng': selected['warehouse'].get('lng'),
+                        'recipient_lat': req.get('lat'),
+                        'recipient_lng': req.get('lng'),
+                    })
+                    continue
+
+                candidates.sort(key=lambda c: (-c['amount'], c['distance']))
+                alloc_plan = []
+                rem = demand
+
+                for c in candidates:
+                    if rem <= 0:
+                        break
+                    take = min(rem, c['amount'])
+                    alloc_plan.append((c['index'], c['warehouse'], take))
+                    rem -= take
+
+                allocated_total = demand - rem
+
+                if allocated_total >= min_quantum:
+                    for i, wh, take in alloc_plan:
+                        stock_available[i] -= take
+                        if stock_available[i] == 0:
+                            needs_dist_recalc = True
+
+                        final_plan.append({
+                            'request_id': req['id'],
+                            'warehouse_id': wh['warehouse_id'],
+                            'amount': float(take),
+                            'warehouse_lat': wh.get('lat'),
+                            'warehouse_lng': wh.get('lng'),
+                            'recipient_lat': req.get('lat'),
+                            'recipient_lng': req.get('lng'),
+                        })
+
+        for req in r_sub:
+            req.pop('_idx', None)
+            req.pop('_curr_min_dist', None)
 
     return final_plan
