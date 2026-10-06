@@ -12,12 +12,18 @@ const formatExcelDate = (dateString) => {
   }
 };
 
-export const exportPlanToExcel = (plan, strategy = 'fairness') => {
+export const exportPlanToExcel = (plan, strategy = 'hybrid') => {
   if (!plan || !plan.items || plan.items.length === 0) return;
 
   const dataToExport = plan.items.map(item => {
     const purposeKey = item.purpose_code || item.purpose;
     const purposeMeta = PURPOSE_MAP[purposeKey] || { label: item.purpose_name || 'Інше' };
+
+    // --- РОЗУМНЕ ВИЗНАЧЕННЯ МЕТОДУ ---
+    let methodLabel = 'Справедливість';
+    if (strategy === 'triage' || item.is_strategic) {
+        methodLabel = 'Екстрений Тріаж';
+    }
 
     return {
       "ID Операції": item.id,
@@ -31,7 +37,7 @@ export const exportPlanToExcel = (plan, strategy = 'fairness') => {
       "Отримувач": item.recipient_name,
       "Пункт призначення": `${item.city || ''} ${item.warehouse_address || ''}`.trim() || 'Адресна доставка',
       "Призначення": purposeMeta.label,
-      "Метод Розподілу": strategy === 'triage' ? 'Екстрений Тріаж' : 'Справедливість'
+      "Метод Розподілу": methodLabel // Вставляємо розумний лейбл
     };
   });
 

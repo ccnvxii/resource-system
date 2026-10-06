@@ -147,13 +147,16 @@ class DistributionItemSerializer(serializers.ModelSerializer):
     due_date = serializers.DateField(source='request.due_date', read_only=True, format="%Y-%m-%d")
     total_available_at_source = serializers.SerializerMethodField()
 
+    is_strategic = serializers.BooleanField(source='request.resource.is_strategic', read_only=True)
+
     class Meta:
         model = DistributionItem
         fields = [
             'id', 'amount', 'resource_name', 'unit_name', 'warehouse_name',
             'recipient_name', 'priority', 'city', 'warehouse_address',
             'warehouse_ref', 'quantity_requested', 'purpose_code', 'due_date',
-            'total_available_at_source'
+            'total_available_at_source',
+            'is_strategic'
         ]
 
     def get_recipient_name(self, obj):

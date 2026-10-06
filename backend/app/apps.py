@@ -83,13 +83,37 @@ def create_initial_data(sender, **kwargs):
         UserProfile.objects.get_or_create(user=volunteer_user, organization='Опорний логістичний центр ХПІ')
 
     # --- 5. РЕСУРСИ ---
-    res_tourniquet, _ = Resource.objects.get_or_create(name='Турнікети CAT Gen 7', defaults={'unit': u_box10, 'category': cat_med})
-    res_aspirin, _ = Resource.objects.get_or_create(name='Аспірин (Медичний кейс)', defaults={'unit': u_pack50, 'category': cat_med})
-    res_stew, _ = Resource.objects.get_or_create(name='Армійські Сухпайки №4', defaults={'unit': u_kit, 'category': cat_food})
-    res_clothes, _ = Resource.objects.get_or_create(name='Зимова форма / Фліс', defaults={'unit': u_bag15, 'category': cat_cloth})
-    res_generator, _ = Resource.objects.get_or_create(name='Дизель-генератор 5.5 кВт', defaults={'unit': u_pcs, 'category': cat_equip})
-    res_water, _ = Resource.objects.get_or_create(name='Вода питна ПЕТ', defaults={'unit': u_bpack, 'category': cat_water})
-    res_hygiene, _ = Resource.objects.get_or_create(name='Гігієнічні бокси', defaults={'unit': u_kit, 'category': cat_hygiene})
+    # Звичайні ресурси (розподіляються через LP - Справедливість)
+    res_tourniquet, _ = Resource.objects.update_or_create(
+        name='Турнікети CAT Gen 7',
+        defaults={'unit': u_box10, 'category': cat_med, 'is_strategic': False}
+    )
+    res_aspirin, _ = Resource.objects.update_or_create(
+        name='Аспірин (Медичний кейс)',
+        defaults={'unit': u_pack50, 'category': cat_med, 'is_strategic': False}
+    )
+    res_stew, _ = Resource.objects.update_or_create(
+        name='Армійські Сухпайки №4',
+        defaults={'unit': u_kit, 'category': cat_food, 'is_strategic': False}
+    )
+    res_clothes, _ = Resource.objects.update_or_create(
+        name='Зимова форма / Фліс',
+        defaults={'unit': u_bag15, 'category': cat_cloth, 'is_strategic': False}
+    )
+    res_water, _ = Resource.objects.update_or_create(
+        name='Вода питна ПЕТ',
+        defaults={'unit': u_bpack, 'category': cat_water, 'is_strategic': False}
+    )
+    res_hygiene, _ = Resource.objects.update_or_create(
+        name='Гігієнічні бокси',
+        defaults={'unit': u_kit, 'category': cat_hygiene, 'is_strategic': False}
+    )
+
+    # СТРАТЕГІЧНИЙ РЕСУРС (розподіляється через Тріаж - Жорсткий пріоритет)
+    res_generator, _ = Resource.objects.update_or_create(
+        name='Дизель-генератор 5.5 кВт',
+        defaults={'unit': u_pcs, 'category': cat_equip, 'is_strategic': True}
+    )
 
     # --- 6. ХАБИ (3 склади для географічного маневру) ---
     wh_center, _ = Warehouse.objects.update_or_create(
@@ -105,56 +129,51 @@ def create_initial_data(sender, **kwargs):
     # --- 7. НАПОВНЕННЯ СКЛАДІВ З РОЗКИДОМ РЕСУРСІВ ТА СТРОКАМИ ПРИДАТНОСТІ ---
     today_date = date.today()
     future_expiry = today_date + timedelta(days=365)
-    near_expiry = today_date + timedelta(days=45) # Термін аспірину у Львові добігає кінця
+    near_expiry = today_date + timedelta(days=45)
 
-    # Очищуємо старі залишки перед сидуванням
     Stock.objects.all().delete()
 
-    #  Розподіл ТУРНІКЕТІВ (Всього на складах: 40 коробок. Потреба в заявках: 75 коробок) -> ДЕФІЦИТ ~46%
+    # Турнікети (Запас: 40, Потреба: 75)
     Stock.objects.create(warehouse=wh_center, resource=res_tourniquet, amount=15, expiration_date=None)
     Stock.objects.create(warehouse=wh_west, resource=res_tourniquet, amount=10, expiration_date=None)
     Stock.objects.create(warehouse=wh_east, resource=res_tourniquet, amount=15, expiration_date=None)
 
-    #  Розподіл ГЕНЕРАТОРІВ (Всього на складах: 5 шт. Потреба в заявках: 11 шт.) -> ДЕФІЦИТ ~54%
+    # Генератори - СТРАТЕГІЧНІ (Запас: 5, Потреба: 11)
     Stock.objects.create(warehouse=wh_center, resource=res_generator, amount=2, expiration_date=None)
     Stock.objects.create(warehouse=wh_west, resource=res_generator, amount=2, expiration_date=None)
     Stock.objects.create(warehouse=wh_east, resource=res_generator, amount=1, expiration_date=None)
 
-    #  Розподіл АСПІРИНУ (Всього на складах: 25 ящиків. Потреба в заявках: 50 ящиків) -> ДЕФІЦИТ 50%
+    # Аспірин (Запас: 25, Потреба: 50)
     Stock.objects.create(warehouse=wh_center, resource=res_aspirin, amount=10, expiration_date=future_expiry)
-    Stock.objects.create(warehouse=wh_west, resource=res_aspirin, amount=5, expiration_date=near_expiry) # Ця партія під загрозою протермінування!
+    Stock.objects.create(warehouse=wh_west, resource=res_aspirin, amount=5, expiration_date=near_expiry)
     Stock.objects.create(warehouse=wh_east, resource=res_aspirin, amount=10, expiration_date=future_expiry)
 
-    #  Розподіл ОДЯГУ (Всього на складах: 30 мішків. Потреба в заявках: 60 мішків) -> ДЕФІЦИТ 50%
+    # Зимовий одяг (Запас: 30, Потреба: 60)
     Stock.objects.create(warehouse=wh_center, resource=res_clothes, amount=15, expiration_date=None)
     Stock.objects.create(warehouse=wh_west, resource=res_clothes, amount=10, expiration_date=None)
     Stock.objects.create(warehouse=wh_east, resource=res_clothes, amount=5, expiration_date=None)
 
-    #  Додаткові ресурси для масовки та бази
+    # Додаткові ресурси
     Stock.objects.create(warehouse=wh_center, resource=res_stew, amount=100, expiration_date=future_expiry)
     Stock.objects.create(warehouse=wh_center, resource=res_water, amount=200, expiration_date=None)
     Stock.objects.create(warehouse=wh_east, resource=res_water, amount=100, expiration_date=None)
 
-
-    # --- 8. ОНОВЛЕНА ЧЕРГА ЗАЯВОК З ЖОРСТКИМ ДЕФІЦИТОМ ТА РІЗНИМИ ПРІОРИТЕТАМИ ---
+    # --- 8. ОНОВЛЕНА ЧЕРГА ЗАЯВОК ---
     UserRequest.objects.all().delete()
 
-    # --- ГРУПА А: ТУРНІКЕТИ (Запит: 75, Склад: 40) ---
-    # 1. Військова частина (Слов'янськ) - Найвищий пріоритет (military, короткий дедлайн)
+    # --- ГРУПА А: ТУРНІКЕТИ (LP Справедливість) ---
     UserRequest.objects.create(
         user=volunteer_user, resource=res_tourniquet, quantity_requested=40, purpose=p_military,
         city="м. Слов'янськ, Донецька обл.", latitude=48.8521, longitude=37.6061,
         warehouse_address="Відділення №1", warehouse_ref="NP_SLV_1",
         due_date=today_date + timedelta(days=2), status='new'
     )
-    # 2. Шпиталь (Харків) - Високий пріоритет (hospital)
     UserRequest.objects.create(
         user=volunteer_user, resource=res_tourniquet, quantity_requested=20, purpose=p_hospital,
         city="м. Харків, Харківська обл.", latitude=50.0038, longitude=36.2336,
         warehouse_address="Відділення №4", warehouse_ref="NP_HRK_4",
         due_date=today_date + timedelta(days=3), status='new'
     )
-    # 3. ВПО та біженці (Запоріжжя) - Нижчий пріоритет (refugees)
     UserRequest.objects.create(
         user=volunteer_user, resource=res_tourniquet, quantity_requested=15, purpose=p_refugees,
         city="м. Запоріжжя, Запорізька обл.", latitude=47.8388, longitude=35.1396,
@@ -162,22 +181,22 @@ def create_initial_data(sender, **kwargs):
         due_date=today_date + timedelta(days=5), status='new'
     )
 
-    # --- ГРУПА Б: ДИЗЕЛЬ-ГЕНЕРАТОРИ (Запит: 11, Склад: 5) ---
-    # 1. Військовий госпіталь (Краматорськ) - Максимальний пріоритет
+    # --- ГРУПА Б: ДИЗЕЛЬ-ГЕНЕРАТОРИ (СТРАТЕГІЧНІ -> Тріаж) ---
+    # 1. Шпиталь у Краматорську (Найвищий пріоритет)
     UserRequest.objects.create(
         user=volunteer_user, resource=res_generator, quantity_requested=5, purpose=p_hospital,
         city="м. Краматорськ, Донецька обл.", latitude=48.7390, longitude=37.5834,
         warehouse_address="Медична ВЧ 412", warehouse_ref="ADDRESS_DELIVERY",
         due_date=today_date + timedelta(days=2), status='new'
     )
-    # 2. Пункт евакуації ВПО (Харків) - Середній пріоритет
+    # 2. Пункт евакуації у Харкові
     UserRequest.objects.create(
         user=volunteer_user, resource=res_generator, quantity_requested=4, purpose=p_refugees,
         city="м. Харків, Харківська обл.", latitude=50.0038, longitude=36.2336,
         warehouse_address="Відділення №12", warehouse_ref="NP_HRK_12",
         due_date=today_date + timedelta(days=6), status='new'
     )
-    # 3. Резерв шелтера (Миколаїв) - Далеко від фронту, низький пріоритет
+    # 3. Резерв шелтера у Миколаєві
     UserRequest.objects.create(
         user=volunteer_user, resource=res_generator, quantity_requested=2, purpose=p_refugees,
         city="м. Миколаїв, Миколаївська обл.", latitude=46.9750, longitude=31.9946,
@@ -185,15 +204,13 @@ def create_initial_data(sender, **kwargs):
         due_date=today_date + timedelta(days=10), status='new'
     )
 
-    # --- ГРУПА В: АСПІРИН (Запит: 50, Склад: 25) ---
-    # 1. Військовий стабілізаційний пункт (Покровськ) - Пріоритет ТОР
+    # --- ГРУПА В: АСПІРИН (LP Справедливість) ---
     UserRequest.objects.create(
         user=volunteer_user, resource=res_aspirin, quantity_requested=30, purpose=p_military,
         city="м. Покровськ, Донецька обл.", latitude=48.2810, longitude=37.1739,
         warehouse_address="Польовий склад медмайна", warehouse_ref="ADDRESS_DELIVERY",
         due_date=today_date + timedelta(days=2), status='new'
     )
-    # 2. Міська лікарня (Суми) - Середній пріоритет
     UserRequest.objects.create(
         user=volunteer_user, resource=res_aspirin, quantity_requested=20, purpose=p_hospital,
         city="м. Суми, Сумська обл.", latitude=50.9077, longitude=34.7981,
@@ -201,15 +218,13 @@ def create_initial_data(sender, **kwargs):
         due_date=today_date + timedelta(days=7), status='new'
     )
 
-    # --- ГРУПА Г: ЗИМОВИЙ ОДЯГ (Запит: 60, Склад: 30) ---
-    # 1. Забезпечення підрозділу ТрО (Куп'янський напрямок / Харків)
+    # --- ГРУПА Г: ЗИМОВИЙ ОДЯГ (LP Справедливість) ---
     UserRequest.objects.create(
         user=volunteer_user, resource=res_clothes, quantity_requested=35, purpose=p_military,
         city="м. Куп'янськ, Харківська обл.", latitude=49.7082, longitude=37.6148,
         warehouse_address="Штаб ТрО", warehouse_ref="ADDRESS_DELIVERY",
         due_date=today_date + timedelta(days=4), status='new'
     )
-    # 2. Центр допомоги біженцям (Дніпро)
     UserRequest.objects.create(
         user=admin_user, resource=res_clothes, quantity_requested=25, purpose=p_refugees,
         city="м. Дніпро, Дніпропетровська обл.", latitude=48.4647, longitude=35.0462,
