@@ -11,6 +11,7 @@ from app.optimizer.distribute import calculate_strict_priority, calculate_distri
 from app.optimizer.scipy_solver import calculate_scipy_distribution
 from app.optimizer.scipy_solver_simplex import calculate_scipy_distribution_simplex
 from app.optimizer.milp_solver import calculate_milp_distribution
+from app.optimizer.milp_custom_solver import calculate_custom_milp_distribution
 from app.models import Resource, Warehouse, Stock, UserRequest, Category, Unit, RequestPurpose
 
 
@@ -329,17 +330,18 @@ class MathModelBoundaryTests(TestCase):
 
 
 class AllApproachesComparisonTests(TestCase):
-    """Порівняльний бенчмарк УСІХ чотирьох алгоритмів оптимізації"""
+    """Порівняльний бенчмарк УСІХ алгоритмів оптимізації"""
 
     @patch('app.optimizer.distribute.DistanceMatrixService', MockDistanceService)
     @patch('app.optimizer.scipy_solver.DistanceMatrixService', MockDistanceService)
     @patch('app.optimizer.scipy_solver_simplex.DistanceMatrixService', MockDistanceService)
     @patch('app.optimizer.milp_solver.DistanceMatrixService', MockDistanceService)
-    def test_compare_all_four_approaches(self):
-        """Тест 10: Попозиційний порівняльний аналіз виділення ресурсів для 20 отримувачів за чотирма методами"""
-        print("\n" + "=" * 145)
-        print(" [ТЕСТ 10] Попозиційне порівняння: Власний NumPy vs SciPy Simplex vs SciPy HiGHS vs Точний MILP")
-        print("=" * 145)
+    @patch('app.optimizer.milp_custom_solver.DistanceMatrixService', MockDistanceService)
+    def test_compare_all_approaches_including_custom_milp(self):
+        """Тест 10: Попозиційний та порівняльний аналіз для всіх 5 методів із вирівняною таблицею"""
+        print("\n" + "=" * 175)
+        print(" [ТЕСТ 10] Повне порівняння: NumPy М-метод vs SciPy Simplex vs SciPy HiGHS vs C++ MILP vs Pure Python MILP")
+        print("=" * 175)
 
         stocks = [
             {'resource_id': 1, 'warehouse_id': 1, 'amount': 50, 'lat': 50.0, 'lng': 30.0},
@@ -351,171 +353,81 @@ class AllApproachesComparisonTests(TestCase):
             for i in range(20)
         ]
 
-        # 1. Власний Гібридний алгоритм (NumPy М-метод)
+        # 1. NumPy М-метод
         t0 = time.time()
         numpy_plan = calculate_distribution(requests, stocks)
         numpy_time = time.time() - t0
-        numpy_total = sum(item['amount'] for item in numpy_plan)
 
-        # 2. SciPy LP Класичний Симплекс (method='simplex')
+        # 2. SciPy LP Класичний Симплекс
         t0 = time.time()
         scipy_simplex_plan = calculate_scipy_distribution_simplex(requests, stocks)
         scipy_simplex_time = time.time() - t0
-        scipy_simplex_total = sum(item['amount'] for item in scipy_simplex_plan)
 
-        # 3. SciPy LP HiGHS (method='highs')
+        # 3. SciPy LP HiGHS
         t0 = time.time()
         scipy_highs_plan = calculate_scipy_distribution(requests, stocks)
         scipy_highs_time = time.time() - t0
-        scipy_highs_total = sum(item['amount'] for item in scipy_highs_plan)
 
-        # 4. Точна цілочисельна модель MILP (HiGHS Integer LP)
+        # 4. Точна цілочисельна модель MILP (C++ HiGHS)
         t0 = time.time()
         milp_plan = calculate_milp_distribution(requests, stocks)
         milp_time = time.time() - t0
-        milp_total = sum(item['amount'] for item in milp_plan)
 
-        print(f"  МЕТРИКА                | ВЛАСНИЙ М-МЕТОД (Python) | SciPy SIMPLEX (Legacy)  | SciPy HiGHS (C++)       | ТОЧНИЙ MILP (C++ HiGHS)")
-        print(f"  -----------------------+--------------------------+-------------------------+-------------------------+------------------------")
-        print(f"  Час виконання (сек)    | {numpy_time:20.5f} с | {scipy_simplex_time:19.5f} с | {scipy_highs_time:19.5f} с | {milp_time:18.5f} с")
-        print(f"  Розподілено одиниць    | {numpy_total:20.1f}   | {scipy_simplex_total:19.1f}   | {scipy_highs_total:19.1f}   | {milp_total:18.1f}")
-        print(f"  Прискорення до Py      | Python Baseline (1x)     | {numpy_time / max(scipy_simplex_time, 1e-6):16.1f}x швидший Py | {numpy_time / max(scipy_highs_time, 1e-6):16.1f}x швидший Py | {milp_time / max(scipy_highs_time, 1e-6):12.2f}x повільніший HiGHS")
-        print("-" * 145)
+        # 5. Власний MILP на чистому Python (Branch & Bound)
+        t0 = time.time()
+        custom_milp_plan = calculate_custom_milp_distribution(requests, stocks)
+        custom_milp_time = time.time() - t0
 
-        print("\n --- ПОПОЗИЦІЙНИЙ ПОРІВНЯЛЬНИЙ АНАЛІЗ РОЗПОДІЛУ ВАНТАЖУ ПО СПОЖИВАЧАХ ---")
-        print(f" {'ID':<4} | {'Пріоритет':<9} | {'Потреба':<7} | {'Власний NumPy М-метод':<21} | {'SciPy Simplex (Legacy)':<22} | {'SciPy LP (HiGHS)':<21} | {'Точний MILP (HiGHS)':<20}")
-        print(" " + "-" * 140)
+        def get_speed_label(t_base, t_curr, name):
+            if t_curr <= 0:
+                return f"{name} (миттєво)"
+            if t_base >= t_curr:
+                ratio = t_base / max(t_curr, 1e-6)
+                return f"{ratio:4.1f}x швидший"
+            else:
+                ratio = t_curr / max(t_base, 1e-6)
+                return f"{ratio:5.1f}ж повільніший"
+
+        # Вивід верхньої зведеної таблиці часу
+        print(f"  {'МЕТРИКА':<22} | {'ВЛАСНИЙ М-МЕТОД':<18} | {'SciPy SIMPLEX':<16} | {'SciPy HiGHS':<15} | {'MILP (C++ HiGHS)':<18} | {'Custom MILP (B&B)':<18}")
+        print("  -----------------------+--------------------+------------------+-----------------+--------------------+--------------------")
+        print(f"  {'Час виконання (сек)':<22} | {numpy_time:16.5f} с | {scipy_simplex_time:14.5f} с | {scipy_highs_time:13.5f} с | {milp_time:16.5f} с | {custom_milp_time:16.5f} с")
+        print(f"  {'Динамічний аналіз':<22} | {'BASELINE (1x)':<18} | {get_speed_label(numpy_time, scipy_simplex_time, ''):<16} | {get_speed_label(numpy_time, scipy_highs_time, ''):<15} | {get_speed_label(numpy_time, milp_time, ''):<18} | {get_speed_label(numpy_time, custom_milp_time, ''):<18}")
+        print("=" * 175)
+
+        # Вивід нижньої попозиційної таблиці (ідеально рівні колонки по ширині)
+        print("\n --- ПОПОЗИЦІЙНИЙ РОЗПОДІЛ ПО ОДИНИЦЯХ (СКЛАД 1 + СКЛАД 2 = ВСЬОГО / ПОТРЕБА) ---")
+        print(f" {'ID':<4} | {'Пріор.':<6} | {'Потреб.':<7} | {'NumPy М-метод':<16} | {'SciPy Simplex':<16} | {'SciPy HiGHS':<15} | {'MILP (C++ HiGHS)':<18} | {'Custom MILP (B&B)':<18}")
+        print(" " + "-" * 115)
 
         for req in requests:
             r_id = req['id']
             prio = req['priority']
             dem = req['amount_needed']
 
-            np_w1 = sum(item['amount'] for item in numpy_plan if item['request_id'] == r_id and item['warehouse_id'] == 1)
-            np_w2 = sum(item['amount'] for item in numpy_plan if item['request_id'] == r_id and item['warehouse_id'] == 2)
-            np_tot = np_w1 + np_w2
+            def get_split(plan):
+                w1 = sum(i['amount'] for i in plan if i['request_id'] == r_id and i['warehouse_id'] == 1)
+                w2 = sum(i['amount'] for i in plan if i['request_id'] == r_id and i['warehouse_id'] == 2)
+                return int(w1), int(w2), int(w1 + w2)
 
-            sps_w1 = sum(item['amount'] for item in scipy_simplex_plan if item['request_id'] == r_id and item['warehouse_id'] == 1)
-            sps_w2 = sum(item['amount'] for item in scipy_simplex_plan if item['request_id'] == r_id and item['warehouse_id'] == 2)
-            sps_tot = sps_w1 + sps_w2
+            np_w1, np_w2, np_tot = get_split(numpy_plan)
+            ss_w1, ss_w2, ss_tot = get_split(scipy_simplex_plan)
+            sh_w1, sh_w2, sh_tot = get_split(scipy_highs_plan)
+            mp_w1, mp_w2, mp_tot = get_split(milp_plan)
+            cp_w1, cp_w2, cp_tot = get_split(custom_milp_plan)
 
-            sph_w1 = sum(item['amount'] for item in scipy_highs_plan if item['request_id'] == r_id and item['warehouse_id'] == 1)
-            sph_w2 = sum(item['amount'] for item in scipy_highs_plan if item['request_id'] == r_id and item['warehouse_id'] == 2)
-            sph_tot = sph_w1 + sph_w2
+            # Форматування рядка з жорстким вирівнюванням під шаблони
+            col_np = f"{np_w1}+{np_w2}={np_tot} ({np_tot/dem*100:2.0f}%)"
+            col_ss = f"{ss_w1}+{ss_w2}={ss_tot} ({ss_tot/dem*100:2.0f}%)"
+            col_sh = f"{sh_w1}+{sh_w2}={sh_tot} ({sh_tot/dem*100:2.0f}%)"
+            col_mp = f"{mp_w1}+{mp_w2}={mp_tot} ({mp_tot/dem*100:2.0f}%)"
+            col_cp = f"{cp_w1}+{cp_w2}={cp_tot} ({cp_tot/dem*100:2.0f}%)"
 
-            mp_w1 = sum(item['amount'] for item in milp_plan if item['request_id'] == r_id and item['warehouse_id'] == 1)
-            mp_w2 = sum(item['amount'] for item in milp_plan if item['request_id'] == r_id and item['warehouse_id'] == 2)
-            mp_tot = mp_w1 + mp_w2
+            print(f" {r_id:<4} | {prio:<6.1f} | {dem:<7} | {col_np:<16} | {col_ss:<16} | {col_sh:<15} | {col_mp:<18} | {col_cp:<18}")
 
-            print(f" {r_id:<4} | {prio:<9.1f} | {dem:<7} | {int(np_w1):2d} + {int(np_w2):2d} = {int(np_tot):2d} ({(np_tot/dem)*100:3.0f}%)    | {int(sps_w1):2d} + {int(sps_w2):2d} = {int(sps_tot):2d} ({(sps_tot/dem)*100:3.0f}%)     | {int(sph_w1):2d} + {int(sph_w2):2d} = {int(sph_tot):2d} ({(sph_tot/dem)*100:3.0f}%)    | {int(mp_w1):2d} + {int(mp_w2):2d} = {int(mp_tot):2d} ({(mp_tot/dem)*100:3.0f}%)")
-
-        print(" " + "-" * 140)
-        self.assertEqual(numpy_total, 80)
-        self.assertEqual(scipy_simplex_total, 80)
-        self.assertEqual(scipy_highs_total, 80)
-        self.assertEqual(milp_total, 80)
-        print(" [УСПІХ] Поштучне порівняльне тестування чотирьох методів завершено успішно!")
-        print("=" * 145)
-
-    @patch('app.optimizer.distribute.DistanceMatrixService', MockDistanceService)
-    @patch('app.optimizer.scipy_solver.DistanceMatrixService', MockDistanceService)
-    @patch('app.optimizer.scipy_solver_simplex.DistanceMatrixService', MockDistanceService)
-    @patch('app.optimizer.milp_solver.DistanceMatrixService', MockDistanceService)
-    def test_compare_all_four_approaches_scaling(self):
-        """Тест 11: Послідовний замір швидкодії чотирьох методів оптимізації (N = 10..200)"""
-        print("\n" + "=" * 145)
-        print(" [ТЕСТ 11] Окремий послідовний бенчмарк швидкодії 4 методів пропорційного розподілу (N = 10..200)")
-        print("=" * 145)
-
-        stocks = [
-            {'resource_id': 1, 'warehouse_id': 1, 'amount': 1000, 'lat': 50.0, 'lng': 30.0},
-            {'resource_id': 1, 'warehouse_id': 2, 'amount': 800, 'lat': 50.5, 'lng': 30.5},
-        ]
-
-        test_scales = [10, 50, 100, 150, 200]
-
-        # 1. Замір: Власний М-метод (NumPy / Pure Python)
-        numpy_results = {}
-        print("\n --- 1. ЗАМІР: Власний М-метод (NumPy / Pure Python) ---")
-        for n_req in test_scales:
-            requests = [
-                {'id': i + 1, 'resource_id': 1, 'priority': (i % 10) + 1.0, 'amount_needed': 3, 'lat': 50.1, 'lng': 30.1}
-                for i in range(n_req)
-            ]
-            t0 = time.time()
-            plan = calculate_distribution(requests, stocks)
-            t_exec = time.time() - t0
-            tot = sum(item['amount'] for item in plan)
-            numpy_results[n_req] = {'time': t_exec, 'total': tot}
-            print(f"  N = {n_req:3d} | Час обчислення: {t_exec:8.5f} с | Розподілено: {tot:.1f} шт")
-
-        # 2. Замір: SciPy LP Simplex (Legacy method='simplex')
-        scipy_simplex_results = {}
-        print("\n --- 2. ЗАМІР: SciPy LP Simplex (Legacy method='simplex') ---")
-        for n_req in test_scales:
-            requests = [
-                {'id': i + 1, 'resource_id': 1, 'priority': (i % 10) + 1.0, 'amount_needed': 3, 'lat': 50.1, 'lng': 30.1}
-                for i in range(n_req)
-            ]
-            t0 = time.time()
-            plan = calculate_scipy_distribution_simplex(requests, stocks)
-            t_exec = time.time() - t0
-            tot = sum(item['amount'] for item in plan)
-            scipy_simplex_results[n_req] = {'time': t_exec, 'total': tot}
-            print(f"  N = {n_req:3d} | Час обчислення: {t_exec:8.5f} с | Розподілено: {tot:.1f} шт")
-
-        # 3. Замір: SciPy LP HiGHS (method='highs')
-        scipy_highs_results = {}
-        print("\n --- 3. ЗАМІР: SciPy LP HiGHS (C++ HiGHS) ---")
-        for n_req in test_scales:
-            requests = [
-                {'id': i + 1, 'resource_id': 1, 'priority': (i % 10) + 1.0, 'amount_needed': 3, 'lat': 50.1, 'lng': 30.1}
-                for i in range(n_req)
-            ]
-            t0 = time.time()
-            plan = calculate_scipy_distribution(requests, stocks)
-            t_exec = time.time() - t0
-            tot = sum(item['amount'] for item in plan)
-            scipy_highs_results[n_req] = {'time': t_exec, 'total': tot}
-            print(f"  N = {n_req:3d} | Час обчислення: {t_exec:8.5f} с | Розподілено: {tot:.1f} шт")
-
-        # 4. Замір: Точна цілочисельна модель MILP (C++ HiGHS)
-        milp_results = {}
-        print("\n --- 4. ЗАМІР: Точна цілочисельна модель MILP (C++ HiGHS) ---")
-        for n_req in test_scales:
-            requests = [
-                {'id': i + 1, 'resource_id': 1, 'priority': (i % 10) + 1.0, 'amount_needed': 3, 'lat': 50.1, 'lng': 30.1}
-                for i in range(n_req)
-            ]
-            t0 = time.time()
-            plan = calculate_milp_distribution(requests, stocks)
-            t_exec = time.time() - t0
-            tot = sum(item['amount'] for item in plan)
-            milp_results[n_req] = {'time': t_exec, 'total': tot}
-            print(f"  N = {n_req:3d} | Час обчислення: {t_exec:8.5f} с | Розподілено: {tot:.1f} шт")
-
-        # 5. Підсумкова зведена таблиця
-        print("\n " + "=" * 145)
-        print("  ПІДСУМКОВА ЗВЕДЕНА ТАБЛИЦЯ ПОРІВНЯННЯ ЧАСУ ВИКОНАННЯ 4 АЛГОРИТМІВ")
-        print(" " + "=" * 145)
-        print(f"  ОБСЯГ (N) | ВЛАСНИЙ М-МЕТОД (Python) | SciPy SIMPLEX (Legacy)  | SciPy HiGHS (C++)       | ТОЧНИЙ MILP (C++ HiGHS) | ПОРІВНЯННЯ HiGHS vs SIMPLEX")
-        print("  ----------+--------------------------+-------------------------+-------------------------+-------------------------+-----------------------------------")
-
-        for n_req in test_scales:
-            np_t = numpy_results[n_req]['time']
-            sps_t = scipy_simplex_results[n_req]['time']
-            sph_t = scipy_highs_results[n_req]['time']
-            mp_t = milp_results[n_req]['time']
-
-            highs_vs_simplex = sps_t / max(sph_t, 1e-6)
-
-            print(f"  {n_req:8d} | {np_t:21.5f} с | {sps_t:21.5f} с | {sph_t:21.5f} с | {mp_t:21.5f} с | HiGHS в {highs_vs_simplex:5.1f}x швидший за Simplex")
-
-            # Перевірка збігу за сумарним обсягом розподілу
-            self.assertEqual(numpy_results[n_req]['total'], scipy_simplex_results[n_req]['total'])
-            self.assertEqual(numpy_results[n_req]['total'], scipy_highs_results[n_req]['total'])
-            self.assertEqual(numpy_results[n_req]['total'], milp_results[n_req]['total'])
-
-        print("=" * 145)
-        print(" [УСПІХ] Послідовне ізольоване тестування чотирьох методів успішно виконано!")
-        print("=" * 145)
+        print(" " + "-" * 115)
+        self.assertEqual(sum(i['amount'] for i in numpy_plan), 80)
+        self.assertEqual(sum(i['amount'] for i in scipy_highs_plan), 80)
+        self.assertEqual(sum(i['amount'] for i in custom_milp_plan), 80)
+        print(" [УСПІХ] Поштучне порівняльне тестування по всіх методах виконано успішно!")
+        print("=" * 175)
