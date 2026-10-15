@@ -132,7 +132,7 @@ class UserRequest(models.Model):
         k_time = calculate_time_multiplier(self.due_date)
 
         # 3. Штраф за кількість продовжень
-        age_penalty = 1.0 - (self.extension_count * 0.1) if self.extension_count <= 5 else 0.5
+        age_penalty = (self.extension_count * 0.1) if self.extension_count <= 5 else 0.5
 
         # 4. Вагові коефіцієнти (сума = 1.0)
         alpha, beta, gamma, delta = 0.35, 0.25, 0.25, 0.15
@@ -141,7 +141,7 @@ class UserRequest(models.Model):
         weighted_sum = (alpha * k_purp) + (beta * k_time) + (gamma * k_geo) + (delta * k_crit)
 
         # Масштабуємо до 10-бальної шкали та застосовуємо штраф
-        final_index = weighted_sum * 10.0 * age_penalty
+        final_index = (weighted_sum * 10.0) - age_penalty
 
         # Округлення та захист інтервалу
         self.priority = round(max(0.0, min(10.0, final_index)), 1)

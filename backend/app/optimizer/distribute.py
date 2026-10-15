@@ -33,7 +33,7 @@ def build_distance_matrix(stocks, requests_list, routing_service):
 
 def create_plan_item(request_obj, warehouse_obj, amount):
     """
-    Фабрика створення уніфікованого запису плану розподілу.
+    Функція створення уніфікованого запису плану розподілу.
     Гарантує єдиний контракт даних для бази та API.
     """
     return {
@@ -49,7 +49,7 @@ def create_plan_item(request_obj, warehouse_obj, amount):
 
 def discretize_with_greedy_remainders(exact_distribution, stocks, requests_list):
     """
-    Цілочисельна дискретизація (Модифікований метод найбільшого залишку Гамільтона).
+    Цілочисельна дискретизація.
     1. Округлення вниз неперервного плану Симплекс-методу.
     2. Жадібний порозподіл вільних залишків (+1) за спаданням пріоритету та дробової частки.
     """
@@ -159,7 +159,7 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
     tableau[:m, -1] = b
     tableau[-1, :n] = -c_minimize
 
-    M_val = 1e6
+    M_val = 1e4
     for j in art_cols:
         tableau[-1, j] = -M_val
 
@@ -186,6 +186,11 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
 
 def simplex_solve(A, b, c_minimize, ineq_sense, max_iters=500):
     try:
+        m, n = A.shape
+        # Динамічний розрахунок ліміту ітерацій залежно від кількості змінних та обмежень
+        if max_iters is None:
+            max_iters = max(2000, 10 * (m + n))
+
         tableau, basic_vars, var_names = build_tableau_M(A, b, c_minimize, ineq_sense)
 
         for _ in range(max_iters):
