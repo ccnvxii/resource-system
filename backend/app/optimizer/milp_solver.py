@@ -87,9 +87,12 @@ def calculate_milp_distribution(requests, stocks):
             for j in range(n_req):
                 idx = i * n_req + j
                 dist = dist_matrix[i, j]
+
+                # Добавляем доминирующий вес приоритета (например, priority * 100)
+                priority_weight = r_sub[j]['priority'] * 100.0
                 distance_bonus = min(1.0 / max(dist, 1.0), 0.005)
-                full_order_bonus = 0.01 if s_sub[i]['amount'] >= r_sub[j]['amount_needed'] else 0.0
-                c_stage2[idx] = -(0.0001 + distance_bonus + full_order_bonus)
+
+                c_stage2[idx] = -(priority_weight + distance_bonus)
 
         res2 = linprog(
             c=c_stage2,
