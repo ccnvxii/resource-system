@@ -1,4 +1,5 @@
 import time
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 from django.test import TestCase
 
@@ -14,6 +15,29 @@ class MockDistanceService:
 
     def get_distance(self, lat1, lng1, lat2, lng2):
         return 15.0
+
+
+def run_isolated_web_simulation(solver_func, stocks, requests):
+    """Окрема глобальна функція: ізольований запуск веб-симуляції з паралельним розрахунком 80 відстаней"""
+    distance_service = MockDistanceService()
+    t_start = time.time()
+
+    # 1. Етап гео-розподілу (паралельний опрос матриці відстаней для кожної пари Склад-Заявка)
+    pairs = [(s['lat'], s['lng'], r['lat'], r['lng']) for s in stocks for r in requests]
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        list(executor.map(lambda p: distance_service.get_distance(p[0], p[1], p[2], p[3]), pairs))
+
+    t_after_geo = time.time()
+    geo_time = t_after_geo - t_start
+
+    # 2. Етап чистої математичної оптимізації
+    solver_func(requests, stocks)
+
+    t_end = time.time()
+    math_time = t_end - t_after_geo
+    total_time = t_end - t_start
+
+    return total_time, geo_time, math_time
 
 
 class TriageUnitTest(TestCase):
@@ -52,7 +76,8 @@ class OptimizationBenchmarks(TestCase):
     def test_compare_all_approaches_including_custom_milp(self):
         """Тест 2: Попозиційний та порівняльний аналіз для всіх 5 методів із вирівняною таблицею"""
         print("\n" + "=" * 175)
-        print(" [ТЕСТ 2] Повне порівняння: NumPy М-метод vs SciPy Simplex vs SciPy HiGHS vs C++ MILP vs Pure Python MILP")
+        print(
+            " [ТЕСТ 2] Повне порівняння: NumPy М-метод vs SciPy Simplex vs SciPy HiGHS vs C++ MILP vs Pure Python MILP")
         print("=" * 175)
 
         stocks = [
@@ -61,7 +86,8 @@ class OptimizationBenchmarks(TestCase):
         ]
 
         requests = [
-            {'id': i + 1, 'resource_id': 1, 'priority': (i % 5) + 5.0, 'amount_needed': 6, 'lat': 50.1 + (i * 0.01), 'lng': 30.1}
+            {'id': i + 1, 'resource_id': 1, 'priority': (i % 5) + 5.0, 'amount_needed': 6, 'lat': 50.1 + (i * 0.01),
+             'lng': 30.1}
             for i in range(20)
         ]
 
@@ -101,15 +127,20 @@ class OptimizationBenchmarks(TestCase):
                 return f"{ratio:5.1f}x повільніший"
 
         # Вивід верхньої зведеної таблиці часу
-        print(f"  {'МЕТРИКА':<22} | {'ВЛАСНИЙ М-МЕТОД':<18} | {'SciPy SIMPLEX':<16} | {'SciPy HiGHS':<15} | {'MILP (C++ HiGHS)':<18} | {'Custom MILP (B&B)':<18}")
-        print("  -----------------------+--------------------+------------------+-----------------+--------------------+--------------------")
-        print(f"  {'Час виконання (сек)':<22} | {numpy_time:16.5f} с | {scipy_simplex_time:14.5f} с | {scipy_highs_time:13.5f} с | {milp_time:16.5f} с | {custom_milp_time:16.5f} с")
-        print(f"  {'Динамічний аналіз':<22} | {'BASELINE (1x)':<18} | {get_speed_label(numpy_time, scipy_simplex_time):<16} | {get_speed_label(numpy_time, scipy_highs_time):<15} | {get_speed_label(numpy_time, milp_time):<18} | {get_speed_label(numpy_time, custom_milp_time):<18}")
+        print(
+            f"  {'МЕТРИКА':<22} | {'ВЛАСНИЙ М-МЕТОД':<18} | {'SciPy SIMPLEX':<16} | {'SciPy HiGHS':<15} | {'MILP (C++ HiGHS)':<18} | {'Custom MILP (B&B)':<18}")
+        print(
+            "  -----------------------+--------------------+------------------+-----------------+--------------------+--------------------")
+        print(
+            f"  {'Час виконання (сек)':<22} | {numpy_time:16.5f} с | {scipy_simplex_time:14.5f} с | {scipy_highs_time:13.5f} с | {milp_time:16.5f} с | {custom_milp_time:16.5f} с")
+        print(
+            f"  {'Динамічний аналіз':<22} | {'BASELINE (1x)':<18} | {get_speed_label(numpy_time, scipy_simplex_time):<16} | {get_speed_label(numpy_time, scipy_highs_time):<15} | {get_speed_label(numpy_time, milp_time):<18} | {get_speed_label(numpy_time, custom_milp_time):<18}")
         print("=" * 175)
 
         # Вивід нижньої попозиційної таблиці
         print("\n --- ПОПОЗИЦІЙНИЙ РОЗПОДІЛ ПО ОДИНИЦЯХ (СКЛАД 1 + СКЛАД 2 = ВСЬОГО / ПОТРЕБА) ---")
-        print(f" {'ID':<4} | {'Пріор.':<6} | {'Потреб.':<7} | {'NumPy М-метод':<16} | {'SciPy Simplex':<16} | {'SciPy HiGHS':<15} | {'MILP (C++ HiGHS)':<18} | {'Custom MILP (B&B)':<18}")
+        print(
+            f" {'ID':<4} | {'Пріор.':<6} | {'Потреб.':<7} | {'NumPy М-метод':<16} | {'SciPy Simplex':<16} | {'SciPy HiGHS':<15} | {'MILP (C++ HiGHS)':<18} | {'Custom MILP (B&B)':<18}")
         print(" " + "-" * 115)
 
         for req in requests:
@@ -128,13 +159,14 @@ class OptimizationBenchmarks(TestCase):
             mp_w1, mp_w2, mp_tot = get_split(milp_plan)
             cp_w1, cp_w2, cp_tot = get_split(custom_milp_plan)
 
-            col_np = f"{np_w1}+{np_w2}={np_tot} ({np_tot/dem*100:2.0f}%)"
-            col_ss = f"{ss_w1}+{ss_w2}={ss_tot} ({ss_tot/dem*100:2.0f}%)"
-            col_sh = f"{sh_w1}+{sh_w2}={sh_tot} ({sh_tot/dem*100:2.0f}%)"
-            col_mp = f"{mp_w1}+{mp_w2}={mp_tot} ({mp_tot/dem*100:2.0f}%)"
-            col_cp = f"{cp_w1}+{cp_w2}={cp_tot} ({cp_tot/dem*100:2.0f}%)"
+            col_np = f"{np_w1}+{np_w2}={np_tot} ({np_tot / dem * 100:2.0f}%)"
+            col_ss = f"{ss_w1}+{ss_w2}={ss_tot} ({ss_tot / dem * 100:2.0f}%)"
+            col_sh = f"{sh_w1}+{sh_w2}={sh_tot} ({sh_tot / dem * 100:2.0f}%)"
+            col_mp = f"{mp_w1}+{mp_w2}={mp_tot} ({mp_tot / dem * 100:2.0f}%)"
+            col_cp = f"{cp_w1}+{cp_w2}={cp_tot} ({cp_tot / dem * 100:2.0f}%)"
 
-            print(f" {r_id:<4} | {prio:<6.1f} | {dem:<7} | {col_np:<16} | {col_ss:<16} | {col_sh:<15} | {col_mp:<18} | {col_cp:<18}")
+            print(
+                f" {r_id:<4} | {prio:<6.1f} | {dem:<7} | {col_np:<16} | {col_ss:<16} | {col_sh:<15} | {col_mp:<18} | {col_cp:<18}")
 
         print(" " + "-" * 115)
         self.assertEqual(sum(i['amount'] for i in numpy_plan), 80)
@@ -168,12 +200,15 @@ class OptimizationBenchmarks(TestCase):
             'Custom MILP (B&B)': []
         }
 
-        print(f" {'КІЛЬКІСТЬ ЗАЯВОК (N)':<20} | {'NumPy М-метод':<18} | {'SciPy Simplex':<16} | {'SciPy HiGHS':<15} | {'MILP (C++ HiGHS)':<18} | {'Custom MILP (B&B)':<18}")
-        print(" ---------------------+--------------------+------------------+-----------------+--------------------+--------------------")
+        print(
+            f" {'КІЛЬКІСТЬ ЗАЯВОК (N)':<20} | {'NumPy М-метод':<18} | {'SciPy Simplex':<16} | {'SciPy HiGHS':<15} | {'MILP (C++ HiGHS)':<18} | {'Custom MILP (B&B)':<18}")
+        print(
+            " ---------------------+--------------------+------------------+-----------------+--------------------+--------------------")
 
         for n_req in test_scales:
             reqs_scale = [
-                {'id': i + 1, 'resource_id': 1, 'priority': (i % 5) + 5.0, 'amount_needed': 6, 'lat': 50.1 + (i * 0.001), 'lng': 30.1}
+                {'id': i + 1, 'resource_id': 1, 'priority': (i % 5) + 5.0, 'amount_needed': 6,
+                 'lat': 50.1 + (i * 0.001), 'lng': 30.1}
                 for i in range(n_req)
             ]
 
@@ -207,7 +242,8 @@ class OptimizationBenchmarks(TestCase):
             benchmark_data['Custom MILP (B&B)'].append(t_custom if t_custom > 0 else 0)
 
             custom_str = f"{t_custom:14.5f} с" if t_custom > 0 else "N/A (Timeout)"
-            print(f" N = {n_req:<17d} | {t_numpy:14.5f} с   | {t_simplex:12.5f} с   | {t_highs:11.5f} с   | {t_milp:14.5f} с   | {custom_str}")
+            print(
+                f" N = {n_req:<17d} | {t_numpy:14.5f} с   | {t_simplex:12.5f} с   | {t_highs:11.5f} с   | {t_milp:14.5f} с   | {custom_str}")
 
         print("=" * 175)
 
@@ -221,11 +257,53 @@ class OptimizationBenchmarks(TestCase):
 
     @patch('app.optimizer.distribute.DistanceMatrixService', MockDistanceService)
     @patch('app.optimizer.scipy_solver.DistanceMatrixService', MockDistanceService)
+    @patch('app.optimizer.scipy_solver_simplex.DistanceMatrixService', MockDistanceService)
+    @patch('app.optimizer.milp_solver.DistanceMatrixService', MockDistanceService)
+    @patch('app.optimizer.milp_custom_solver.DistanceMatrixService', MockDistanceService)
+    def test_real_web_simulation_benchmark(self):
+        """Тест 4: Емуляція реального веб-запиту (4 склади, 20 заявок + ізольований паралельний розрахунок)"""
+        print("\n" + "=" * 175)
+        print(" [ТЕСТ 4] ЕМУЛЯЦІЯ РЕАЛЬНОГО ВЕБ-СЕРВОРУ (4 склади, 20 заявок + Ізольований паралельний розрахунок)")
+        print("=" * 175)
+
+        stocks = [
+            {'resource_id': 1, 'warehouse_id': 1, 'amount': 150, 'lat': 50.45, 'lng': 30.52},
+            {'resource_id': 1, 'warehouse_id': 2, 'amount': 120, 'lat': 49.84, 'lng': 24.02},
+            {'resource_id': 1, 'warehouse_id': 3, 'amount': 100, 'lat': 46.48, 'lng': 30.73},
+            {'resource_id': 1, 'warehouse_id': 4, 'amount': 80, 'lat': 49.99, 'lng': 36.23},
+        ]
+
+        requests = [
+            {'id': i + 1, 'resource_id': 1, 'priority': (i % 5) + 5.0, 'amount_needed': 5, 'lat': 50.0 + (i * 0.01),
+             'lng': 30.0 + (i * 0.01)}
+            for i in range(20)
+        ]
+
+        methods = {
+            'NumPy М-метод': calculate_distribution,
+            'SciPy Simplex': calculate_scipy_distribution_simplex,
+            'SciPy HiGHS': calculate_scipy_distribution,
+            'MILP (C++ HiGHS)': calculate_milp_distribution,
+            'Custom MILP (B&B)': calculate_custom_milp_distribution,
+        }
+
+        print(
+            f" {'АЛГОРИТМ':<22} | {'ЗАГАЛЬНИЙ ЧАС У ВЕБІ':<22} | {'ЧАС ГЕО-СЕРВІСУ (80 пар)':<25} | {'ЧАС МАТ. ОПТИМІЗАТОРУ':<22}")
+        print(" -----------------------+------------------------+---------------------------+------------------------")
+
+        for name, func in methods.items():
+            total_t, geo_t, math_t = run_isolated_web_simulation(func, stocks, requests)
+            print(f" {name:<22} | {total_t:18.5f} с    | {geo_t:21.5f} с             | {math_t:18.5f} с")
+
+        print("=" * 175)
+
+    @patch('app.optimizer.distribute.DistanceMatrixService', MockDistanceService)
+    @patch('app.optimizer.scipy_solver.DistanceMatrixService', MockDistanceService)
     @patch('app.optimizer.milp_solver.DistanceMatrixService', MockDistanceService)
     def test_milp_combinatorial_explosion_real_np_hard(self):
-        """Тест 4: Стрес-тест порівняння при наявності бінарних обмежень (15 складів, 150 заявок)"""
+        """Тест 5: Стрес-тест порівняння при наявності бінарних обмежень (15 складів, 150 заявок)"""
         print("\n" + "=" * 145)
-        print(" [ТЕСТ 4] СТРЕС-ТЕСТ NP-HARD: Порівняння при наявності бінарних обмежень мінімальної партії")
+        print(" [ТЕСТ 5] СТРЕС-ТЕСТ NP-HARD: Порівняння при наявності бінарних обмежень мінімальної партії")
         print("=" * 145)
 
         stocks = [
@@ -233,7 +311,8 @@ class OptimizationBenchmarks(TestCase):
             for w in range(15)
         ]
         requests = [
-            {'id': i + 1, 'resource_id': 1, 'priority': (i % 5) + 5.0, 'amount_needed': 8, 'lat': 50.1 + (i * 0.001), 'lng': 30.1}
+            {'id': i + 1, 'resource_id': 1, 'priority': (i % 5) + 5.0, 'amount_needed': 8, 'lat': 50.1 + (i * 0.001),
+             'lng': 30.1}
             for i in range(150)
         ]
 
@@ -264,9 +343,10 @@ class OptimizationBenchmarks(TestCase):
     @patch('app.optimizer.scipy_solver.DistanceMatrixService', MockDistanceService)
     @patch('app.optimizer.milp_solver.DistanceMatrixService', MockDistanceService)
     def test_extreme_np_hard_scaling(self):
-        """Тест 5: Екстремальний стрес-тест макромасштабу (40 складів, 400 заявок)"""
+        """Тест 6: Екстремальний стрес-тест макромасштабу (40 складів, 400 заявок)"""
         print("\n" + "=" * 145)
-        print(" [ТЕСТ 5] ЕКСТРЕМАЛЬНИЙ NP-HARD: Експоненціальний вибух дерева розгалужень MILP (40 складів, 400 заявок)")
+        print(
+            " [ТЕСТ 6] ЕКСТРЕМАЛЬНИЙ NP-HARD: Експоненціальний вибух дерева розгалужень MILP (40 складів, 400 заявок)")
         print("=" * 145)
 
         stocks = [
@@ -274,7 +354,8 @@ class OptimizationBenchmarks(TestCase):
             for w in range(40)
         ]
         requests = [
-            {'id': i + 1, 'resource_id': 1, 'priority': (i % 5) + 5.0, 'amount_needed': 10, 'lat': 50.1 + (i * 0.0005), 'lng': 30.1}
+            {'id': i + 1, 'resource_id': 1, 'priority': (i % 5) + 5.0, 'amount_needed': 10, 'lat': 50.1 + (i * 0.0005),
+             'lng': 30.1}
             for i in range(400)
         ]
 
