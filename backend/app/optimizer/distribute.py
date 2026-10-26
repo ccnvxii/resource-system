@@ -14,11 +14,18 @@ def get_common_resource_ids(requests, stocks):
     )
 
 
-def build_distance_matrix(stocks, requests_list, routing_service):
+def build_distance_matrix(stocks, requests_list, routing_service=None):
     """
     Створює матрицю логістичних відстаней між складами та заявниками.
-    Використовується для кешування результатів маршрутизації (O(1) доступ).
+    Використовує OSRM Table API (Distance Matrix API) з локальним кешуванням
+    для уникнення проблеми N+1 HTTP-запитів (O(N*M)).
     """
+    if routing_service is None:
+        routing_service = DistanceMatrixService()
+
+    if hasattr(routing_service, 'get_distance_matrix'):
+        return routing_service.get_distance_matrix(stocks, requests_list)
+
     n_stk, n_req = len(stocks), len(requests_list)
     dist_matrix = np.zeros((n_stk, n_req))
 

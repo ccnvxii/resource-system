@@ -16,6 +16,10 @@ class MockDistanceService:
     def get_distance(self, lat1, lng1, lat2, lng2):
         return 15.0
 
+    def get_distance_matrix(self, sources, destinations):
+        import numpy as np
+        return np.full((len(sources), len(destinations)), 15.0)
+
 
 def run_isolated_web_simulation(solver_func, stocks, requests):
     """Окрема глобальна функція: ізольований запуск веб-симуляції з паралельним розрахунком 80 відстаней"""
@@ -382,3 +386,126 @@ class OptimizationBenchmarks(TestCase):
         print(f"  Час Точного MILP (Integer LP через C++ HiGHS солвер): {milp_time:.5f} с")
         print(f"  Динамічний висновок                                : {conclusion}")
         print("=" * 145)
+
+class DistanceMatrixServiceTableApiTest(TestCase):
+    """Тести для OSRM Table API та локального кешування (вирішення проблеми N+1)"""
+
+    def setUp(self):
+        from app.services import _ROUTING_CACHE
+        _ROUTING_CACHE.clear()
+
+    @patch('app.services.requests.get')
+    def test_osrm_table_api_single_request_for_matrix(self, mock_get):
+        """Перевірка: OSRM Table API викликається 1 раз для матриці замість N*M запитів, результат у км"""
+        from app.services import DistanceMatrixService, _ROUTING_CACHE
+
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            'code': 'Ok',
+            'distances': [
+                [10000.0, 20000.0],
+                [30000.0, 40000.0]
+            ]
+        }
+
+        service = DistanceMatrixService()
+        stocks = [
+            {'lat': 50.4501, 'lng': 30.5234},
+            {'lat': 49.8402, 'lng': 24.0305}
+        ]
+        requests = [
+            {'lat': 50.0001, 'lng': 36.2301},
+            {'lat': 46.4802, 'lng': 30.7302}
+        ]
+
+        matrix = service.get_distance_matrix(stocks, requests)
+
+        # Перевірка форми та значень у км
+        self.assertEqual(matrix.shape, (2, 2))
+        self.assertAlmostEqual(matrix[0, 0], 10.0)
+        self.assertAlmostEqual(matrix[0, 1], 20.0)
+        self.assertAlmostEqual(matrix[1, 0], 30.0)
+        self.assertAlmostEqual(matrix[1, 1], 40.0)
+
+        # Перевірка: рівно 1 HTTP-запит (замість 2*2 = 4)
+        self.assertEqual(mock_get.call_count, 1)
+
+        # Перевірка: ключ у кеші округлений до 3 знаків
+        key_00 = (round(50.4501, 3), round(30.5234, 3), round(50.0001, 3), round(36.2301, 3))
+        self.assertIn(key_00, _ROUTING_CACHE)
+        self.assertAlmostEqual(_ROUTING_CACHE[key_00], 10.0)
+
+    @patch('app.services.requests.get')
+    def test_in_memory_cache_prevents_duplicate_http_calls(self, mock_get):
+        """Перевірка: при наявності даних у кеші HTTP-запити не виконуються взагалі (0 запитів)"""
+        from app.services import DistanceMatrixService
+
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {
+            'code': 'Ok',
+            'distances': [[12000.0]]
+        }
+
+        service = DistanceMatrixService()
+        stocks = [{'lat': 50.450, 'lng': 30.520}]
+        requests = [{'lat': 50.000, 'lng': 36.230}]
+
+        # Перший виклик: заповнює кеш
+        m1 = service.get_distance_matrix(stocks, requests)
+        self.assertEqual(mock_get.call_count, 1)
+        self.assertAlmostEqual(m1[0, 0], 12.0)
+
+        # Другий виклик (з координатами в межах 3 знаків після коми)
+        stocks_near = [{'lat': 50.4502, 'lng': 30.5204}]
+        requests_near = [{'lat': 50.0003, 'lng': 36.2301}]
+        m2 = service.get_distance_matrix(stocks_near, requests_near)
+
+        # HTTP запитів не додалося (залишився 1)
+        self.assertEqual(mock_get.call_count, 1)
+        self.assertAlmostEqual(m2[0, 0], 12.0)
+
+    @patch('app.services.requests.get')
+    def test_fallback_to_geometry_when_osrm_fails(self, mock_get):
+        """Перевірка: при збої мережі спрацьовує математичний геометричний фолбек"""
+        import requests as req_lib
+        from app.services import DistanceMatrixService
+
+        mock_get.side_effect = req_lib.RequestException("OSRM server unreachable")
+
+        service = DistanceMatrixService()
+        stocks = [{'lat': 50.0, 'lng': 30.0}]
+        requests = [{'lat': 51.0, 'lng': 31.0}]
+
+        matrix = service.get_distance_matrix(stocks, requests)
+
+        # Очікуваний розрахунок: dx = (31-30)*73 = 73, dy = (51-50)*111 = 111
+        # sqrt(73^2 + 111^2) * 1.25 = sqrt(5329 + 12321) * 1.25 = sqrt(17650) * 1.25 ≈ 166.07
+        expected_dist = ((73.0**2 + 111.0**2)**0.5) * 1.25
+        self.assertAlmostEqual(matrix[0, 0], expected_dist, places=2)
+
+    def test_missing_coordinates_penalty(self):
+        """Перевірка: відсутність координат повертає штрафні 500 км"""
+        from app.services import DistanceMatrixService
+
+        service = DistanceMatrixService()
+        stocks = [{'lat': None, 'lng': 30.0}]
+        requests = [{'lat': 50.0, 'lng': None}]
+
+        matrix = service.get_distance_matrix(stocks, requests)
+        self.assertEqual(matrix[0, 0], 500.0)
+
+    def test_build_distance_matrix_delegates_to_matrix_service(self):
+        """Перевірка: build_distance_matrix делегує виконання get_distance_matrix"""
+        import numpy as np
+        from app.optimizer.distribute import build_distance_matrix
+
+        class SpyRoutingService:
+            called = False
+            def get_distance_matrix(self, stocks, requests):
+                self.called = True
+                return np.full((len(stocks), len(requests)), 42.0)
+
+        spy = SpyRoutingService()
+        res = build_distance_matrix([{'lat': 1, 'lng': 2}], [{'lat': 3, 'lng': 4}], spy)
+        self.assertTrue(spy.called)
+        self.assertEqual(res[0, 0], 42.0)
