@@ -12,7 +12,8 @@ from app.optimizer.distribute import (
 def calculate_scipy_distribution(requests, stocks):
     """
     Гібридна модель розподілу із використанням індустріального вирішувача SciPy linprog (HiGHS).
-    Етапи 1 і 2 розв'язуються як неперервна LР-задача, Етап 3 — жадібна дискретизація залишків.
+    Повністю синхронізована за логікою, обмеженнями та нормалізацією з основним вирішувачем.
+    Етапи 1 і 2 розв'язуються як неперервна LP-задача, Етап 3 — жадібна дискретизація залишків.
     """
     final_plan = []
     routing_service = DistanceMatrixService()
@@ -44,7 +45,7 @@ def calculate_scipy_distribution(requests, stocks):
             A_ub.append(row)
             b_ub.append(r_sub[j]['amount_needed'])
 
-        # 3. Обмеження зваженої справедливості: sum_i x_ij - w_j * Z >= 0 ==> -sum_i x_ij + w_j * Z <= 0
+        # 3. Обмеження зваженої справедливості: sum_i x_ij - w_j * Z >= 0  ==>  -sum_i x_ij + w_j * Z <= 0
         for j in range(n_req):
             row = np.zeros(n_vars)
             for i in range(n_stk):
@@ -73,7 +74,7 @@ def calculate_scipy_distribution(requests, stocks):
 
         opt_Z = res1.x[-1]
 
-        # ЕТАП 2: Мінімізація логістичного плеча за зафіксованого opt_Z
+        # ЕТАП 2: Мінімізація логістичного плеча за зафіксованого opt_Z з урахуванням Min-Max нормалізації
         A_ub_s2 = list(A_ub)
         b_ub_s2 = list(b_ub)
 
@@ -83,14 +84,23 @@ def calculate_scipy_distribution(requests, stocks):
         A_ub_s2.append(z_row)
         b_ub_s2.append(-max(0.0, opt_Z - 0.001))
 
+        # Визначаємо максимальну відстань у матриці для лінійної нормалізації
+        max_dist = np.max(dist_matrix) if np.max(dist_matrix) >= 1.0 else 1.0
+
         c_stage2 = np.zeros(n_vars)
         for i in range(n_stk):
             for j in range(n_req):
                 idx = i * n_req + j
                 dist = dist_matrix[i, j]
-                distance_bonus = min(1.0 / max(dist, 1.0), 0.005)
+
+                # Синхронізований розрахунок бонусів (Min-Max Scaling замість жорсткої стелі)
+                dist_norm = dist / max_dist
+                distance_bonus = 0.005 * (1.0 - dist_norm)
+
                 full_order_bonus = 0.01 if s_sub[i]['amount'] >= r_sub[j]['amount_needed'] else 0.0
                 c_stage2[idx] = -(0.0001 + distance_bonus + full_order_bonus)
+
+        c_stage2[-1] = 0.0
 
         res2 = linprog(
             c=c_stage2,
@@ -103,16 +113,17 @@ def calculate_scipy_distribution(requests, stocks):
         best_x_vars = res2.x if res2.success else res1.x
 
         # ЕТАП 3: Дискретизація залишків та формування підсумкового плану
-        exact_distribution = np.zeros((n_stk, n_req))
-        for i in range(n_stk):
-            for j in range(n_req):
-                exact_distribution[i, j] = best_x_vars[i * n_req + j]
+        if best_x_vars is not None:
+            exact_distribution = np.zeros((n_stk, n_req))
+            for i in range(n_stk):
+                for j in range(n_req):
+                    exact_distribution[i, j] = best_x_vars[i * n_req + j]
 
-        allocated = discretize_with_greedy_remainders(exact_distribution, s_sub, r_sub)
+            allocated = discretize_with_greedy_remainders(exact_distribution, s_sub, r_sub)
 
-        for i in range(n_stk):
-            for j in range(n_req):
-                if allocated[i, j] > 0:
-                    final_plan.append(create_plan_item(r_sub[j], s_sub[i], allocated[i, j]))
+            for i in range(n_stk):
+                for j in range(n_req):
+                    if allocated[i, j] > 0:
+                        final_plan.append(create_plan_item(r_sub[j], s_sub[i], allocated[i, j]))
 
     return final_plan

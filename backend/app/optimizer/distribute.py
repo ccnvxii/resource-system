@@ -301,11 +301,16 @@ def calculate_distribution(requests, stocks):
         sense_stage2.append('>=')
 
         c_stage2 = np.zeros(n_vars)
+
+        max_dist = np.max(dist_matrix) if np.max(dist_matrix) >= 1.0 else 1.0
         for i in range(n_stk):
             for j in range(n_req):
                 idx = i * n_req + j
                 dist = dist_matrix[i, j]
-                distance_bonus = min(1.0 / max(dist, 1.0), 0.005)
+
+                dist_norm = dist / max_dist
+                distance_bonus = 0.005 * (1.0 - dist_norm)
+
                 full_order_bonus = 0.01 if s_sub[i]['amount'] >= r_sub[j]['amount_needed'] else 0.0
                 c_stage2[idx] = -(0.0001 + distance_bonus + full_order_bonus)
 
