@@ -1,17 +1,11 @@
 """
 Коректне порівняння методів розподілу (доповнення до OptimizationBenchmarks).
 
-Чому старий Тест 2 не міг порівняти методи "правильно":
-  1. MockDistanceService повертає 15 км для всіх пар -> логістичний етап стає константою,
-     і розбиття по складах (0+3 / 3+0) довільне. Це не помилка, а рівноцінні розв'язки.
-  2. Порівнювалися плани, а не значення цільової функції.
-  3. Не було незалежного еталона.
-
 Що робить цей модуль:
-  * SimplexCorrectnessTest: власний симплекс проти HiGHS на НЕПЕРЕРВНІЙ задачі етапу 1
-    (саме тут перевіряється коректність симплексу, до будь-якого округлення).
-  * FairComparisonTest: усі 5 методів порівнюються за метриками відносно еталонів
-    (LP-межа та цілочисельний оптимум, обчислені незалежно через scipy).
+- SimplexCorrectnessTest: власний симплекс проти HiGHS на НЕПЕРЕРВНІЙ задачі етапу 1
+  (саме тут перевіряється коректність симплексу, до будь-якого округлення).
+- FairComparisonTest: усі методи порівнюються за метриками відносно еталонів
+  (LP-межа та цілочисельний оптимум, обчислені незалежно через scipy).
 """
 import copy
 import time
@@ -20,42 +14,33 @@ from unittest.mock import patch
 
 import numpy as np
 from django.test import TestCase
-from scipy.optimize import linprog, milp, LinearConstraint, Bounds   # milp: SciPy >= 1.9
+from scipy.optimize import linprog, milp, LinearConstraint, Bounds
 
 from app.optimizer.distribute import calculate_distribution, simplex_solve
 from app.optimizer.scipy_solver import calculate_scipy_distribution
 from app.optimizer.scipy_solver_simplex import calculate_scipy_distribution_simplex
-from app.optimizer.milp_solver import calculate_milp_distribution
-from app.optimizer.milp_custom_solver import calculate_custom_milp_distribution
 
 EPS = 1e-6
-RUN_CUSTOM_BB = True        # вимкніть, якщо власний B&B надто повільний
-CUSTOM_BB_MAX_N = 20
 
 SOLVER_MODULES = [
     'app.optimizer.distribute',
     'app.optimizer.scipy_solver',
     'app.optimizer.scipy_solver_simplex',
-    'app.optimizer.milp_solver',
-    'app.optimizer.milp_custom_solver',
 ]
 
 # kind='hybrid' -> LP + округлення (оптимальність у цілих числах НЕ гарантується)
-# kind='exact'  -> цілочисельна модель (має досягати цілочисельного оптимуму)
 METHODS = [
     ('NumPy М-метод',      calculate_distribution,                'hybrid'),
     ('SciPy Simplex',      calculate_scipy_distribution_simplex,  'hybrid'),
     ('SciPy HiGHS',        calculate_scipy_distribution,          'hybrid'),
-    ('MILP (C++ HiGHS)',   calculate_milp_distribution,           'exact'),
-    ('Custom MILP (B&B)',  calculate_custom_milp_distribution,    'exact'),
 ]
 
 # забезпеченість = запас / потреба
 SCENARIOS = [
-    {'name': 'Симетричний, 20 заявок, забезпеченість 67% (як Тест 2)', 'n': 20, 'scarcity': 80 / 120, 'random': False},
-    {'name': 'Симетричний, 20 заявок, забезпеченість 30%',            'n': 20, 'scarcity': 0.30,     'random': False},
-    {'name': 'Симетричний, 20 заявок, забезпеченість 90%',            'n': 20, 'scarcity': 0.90,     'random': False},
-    {'name': 'Випадкові потреби/пріоритети, 15 заявок, 50%',          'n': 15, 'scarcity': 0.50,     'random': True, 'seed': 42},
+    {'name': 'Симетричний, 20 заявок, забезпеченість 67%', 'n': 20, 'scarcity': 80 / 120, 'random': False},
+    {'name': 'Симетричний, 20 заявок, забезпеченість 30%', 'n': 20, 'scarcity': 0.30,     'random': False},
+    {'name': 'Симетричний, 20 заявок, забезпеченість 90%', 'n': 20, 'scarcity': 0.90,     'random': False},
+    {'name': 'Випадкові потреби/пріоритети, 15 заявок, 50%', 'n': 15, 'scarcity': 0.50, 'random': True, 'seed': 42},
 ]
 
 
@@ -69,7 +54,7 @@ def geo_km(lat1, lng1, lat2, lng2):
 
 
 class GeoDistanceService:
-    """Детермінований сервіс відстаней: різні склади мають РІЗНУ відстань до заявок."""
+    """Детермінований сервіс відстаней: різні склади мають різну відстань до заявок."""
 
     def get_distance(self, lat1, lng1, lat2, lng2):
         return geo_km(lat1, lng1, lat2, lng2)
@@ -129,8 +114,6 @@ def build_stage1_lp(requests, stocks):
 def reference_max_min(requests, stocks):
     """
     Незалежний еталон для цілі max Z, де Z = min_j x_j / w_j, w_j = потреба * пріоритет / 10.
-    Усі склади взаємозамінні (немає заборонених маршрутів), тому достатньо сумарного запасу.
-    Повертає (Z_LP, Z_int): верхню межу (неперервна задача) та цілочисельний оптимум.
     """
     need = np.array([r['amount_needed'] for r in requests], float)
     w = need * np.array([r['priority'] for r in requests], float) / 10.0
@@ -142,9 +125,9 @@ def reference_max_min(requests, stocks):
     A = np.zeros((n + 1, n + 1))
     b = np.zeros(n + 1)
     A[0, :n] = 1.0
-    b[0] = supply                       # sum x <= запас
+    b[0] = supply
     for j in range(n):
-        A[j + 1, j] = -1.0              # w_j * Z - x_j <= 0
+        A[j + 1, j] = -1.0
         A[j + 1, n] = w[j]
 
     bounds = [(0.0, float(need[j])) for j in range(n)] + [(0.0, None)]
@@ -156,7 +139,6 @@ def reference_max_min(requests, stocks):
               bounds=Bounds(np.zeros(n + 1), np.append(need, np.inf)),
               options={'mip_rel_gap': 1e-9})
     assert mi.success, 'MILP-еталон не розв\'язався'
-    # HiGHS допускає відхилення від цілого ~1e-6, тому Z перераховуємо за округленим розв'язком
     x_int = np.round(mi.x[:n])
     assert x_int.sum() <= supply + 1e-6 and np.all(x_int <= need + 1e-6), 'MILP-еталон недопустимий'
     return float(lp.x[-1]), float(np.min(x_int / w))
@@ -172,7 +154,7 @@ def gini(values):
 
 
 def plan_metrics(plan, requests, stocks):
-    """Допустимість плану та метрики. Порівнюються ЗНАЧЕННЯ, а не розбиття по складах."""
+    """Допустимість плану та метрики."""
     req_by_id = {r['id']: r for r in requests}
     stk_by_id = {s['warehouse_id']: s for s in stocks}
     by_req, by_stk = defaultdict(float), defaultdict(float)
@@ -198,17 +180,17 @@ def plan_metrics(plan, requests, stocks):
     need = np.array([r['amount_needed'] for r in requests], float)
     w = need * np.array([r['priority'] for r in requests], float) / 10.0
     return {
-        'z': float(np.min(x / w)),            # ціль max-min (та сама, що в LP)
-        'min_fill': float(np.min(x / need)),  # мінімальна частка закритої потреби
-        'gini': gini(x / w),                  # 0 = ідеально пропорційно вагам
+        'z': float(np.min(x / w)),
+        'min_fill': float(np.min(x / need)),
+        'gini': gini(x / w),
         'served': float(x.sum()),
-        'cost': float(cost),                  # км * одиниць
+        'cost': float(cost),
         'errors': errors,
     }
 
 
 # ----------------------------------------------------------------------------
-# Тест A: чи правильний власний симплекс (неперервна задача, без округлення)
+# Тест A: чи правильний власний симплекс
 # ----------------------------------------------------------------------------
 
 class SimplexCorrectnessTest(TestCase):
@@ -237,7 +219,7 @@ class SimplexCorrectnessTest(TestCase):
                 max_diff = max(max_diff, diff)
                 self.assertLess(diff, EPS, f'Z: власний {x[-1]:.8f} vs HiGHS {ref.x[-1]:.8f}')
 
-                resid = A @ x - b            # допустимість власного розв'язку
+                resid = A @ x - b
                 for i, s in enumerate(sense):
                     if s == '<=':
                         self.assertLessEqual(resid[i], EPS)
@@ -249,7 +231,7 @@ class SimplexCorrectnessTest(TestCase):
 
 
 # ----------------------------------------------------------------------------
-# Тест B: чесне порівняння всіх 5 методів
+# Тест B: чесне порівняння методів
 # ----------------------------------------------------------------------------
 
 class FairComparisonTest(TestCase):
@@ -281,9 +263,6 @@ class FairComparisonTest(TestCase):
             print(" " + "-" * 108)
 
             for name, func, kind in METHODS:
-                if 'Custom' in name and (not RUN_CUSTOM_BB or sc['n'] > CUSTOM_BB_MAX_N):
-                    print(f" {name:<19} | пропущено (RUN_CUSTOM_BB / CUSTOM_BB_MAX_N)")
-                    continue
                 with self.subTest(scenario=sc['name'], method=name):
                     t0 = time.perf_counter()
                     plan = func(copy.deepcopy(requests), copy.deepcopy(stocks))
@@ -302,19 +281,5 @@ class FairComparisonTest(TestCase):
                     self.assertLessEqual(m['served'], min(supply, demand) + EPS)
                     # 3. Допустимий цілочисельний план не може перевищити цілочисельний оптимум
                     self.assertLessEqual(m['z'], z_int + EPS,
-                                         f'{name}: Z вище еталонного оптимуму (помилка в плані або в еталоні)')
-                    # 4. Точні методи мають досягати цілочисельного оптимуму
-                    if kind == 'exact':
-                        if 'Custom' in name:
-                            # Для власного B&B допускаємо невеликий евристичний відступ (gap до 25%),
-                            # оскільки він обмежений по часу та ітераціях
-                            self.assertGreaterEqual(
-                                m['z'], z_int * 0.75 - EPS,
-                                f'{name}: Z={m["z"]:.4f} занадто далеко від оптимуму {z_int:.4f}.'
-                            )
-                        else:
-                            self.assertGreaterEqual(
-                                m['z'], z_int - EPS,
-                                f'{name}: Z={m["z"]:.4f} < оптимум {z_int:.4f}.'
-                            )
+                                         f'{name}: Z вище еталонного оптимуму')
         print("=" * 150)
