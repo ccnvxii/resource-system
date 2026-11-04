@@ -18,21 +18,18 @@ from scipy.optimize import linprog, milp, LinearConstraint, Bounds
 
 from app.optimizer.distribute import calculate_distribution, simplex_solve
 from app.optimizer.scipy_solver import calculate_scipy_distribution
-from app.optimizer.scipy_solver_simplex import calculate_scipy_distribution_simplex
 
 EPS = 1e-6
 
 SOLVER_MODULES = [
     'app.optimizer.distribute',
     'app.optimizer.scipy_solver',
-    'app.optimizer.scipy_solver_simplex',
 ]
 
 # kind='hybrid' -> LP + округлення (оптимальність у цілих числах НЕ гарантується)
 METHODS = [
-    ('NumPy М-метод',      calculate_distribution,                'hybrid'),
-    ('SciPy Simplex',      calculate_scipy_distribution_simplex,  'hybrid'),
-    ('SciPy HiGHS',        calculate_scipy_distribution,          'hybrid'),
+    ('NumPy М-метод',   calculate_distribution,     'hybrid'),
+    ('SciPy HiGHS',     calculate_scipy_distribution, 'hybrid'),
 ]
 
 # забезпеченість = запас / потреба
@@ -197,9 +194,9 @@ class SimplexCorrectnessTest(TestCase):
 
     def test_custom_simplex_matches_highs_on_stage1(self):
         """Власний М-метод vs HiGHS: значення Z етапу 1 мають збігатися до 1e-6."""
-        print("\n" + "=" * 100)
+        print("\n" + "-" * 100)
         print(" [ТЕСТ A] Власний симплекс vs HiGHS на неперервній задачі етапу 1 (20 випадкових задач)")
-        print("=" * 100)
+        print("-" * 100)
         max_diff = 0.0
         for seed in range(20):
             with self.subTest(seed=seed):
@@ -227,7 +224,7 @@ class SimplexCorrectnessTest(TestCase):
                         self.assertGreaterEqual(resid[i], -EPS)
                 self.assertGreaterEqual(x.min(), -1e-9)
         print(f" Максимальна розбіжність Z серед усіх задач: {max_diff:.2e}")
-        print("=" * 100)
+        print("-" * 100)
 
 
 # ----------------------------------------------------------------------------

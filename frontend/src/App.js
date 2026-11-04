@@ -146,7 +146,8 @@ function App() {
                 loading={loading}
             />
 
-            <div className="max-w-7xl mx-auto space-y-12 pb-24">
+            {/* Семантичний тег main для покращення Accessibility (виправлення зауваження Lighthouse) */}
+            <main className="max-w-7xl mx-auto space-y-12 pb-24">
                 <Header
                     onOpenForm={() => openModal('request')}
                     onOpenStockIn={currentUser?.is_admin ? () => openModal('stockIn') : null}
@@ -197,7 +198,7 @@ function App() {
                         )}
                     </div>
                 )}
-            </div>
+            </main>
 
             {/* Бокове меню навігації */}
             {currentUser?.is_admin && <SidebarNav onNavigate={scrollToSection} />}
