@@ -17,8 +17,6 @@ def get_common_resource_ids(requests, stocks):
 def build_distance_matrix(stocks, requests_list, routing_service=None):
     """
     Створює матрицю логістичних відстаней між складами та заявниками.
-    Використовує OSRM Table API (Distance Matrix API) з локальним кешуванням
-    для уникнення проблеми N+1 HTTP-запитів (O(N*M)).
     """
     if routing_service is None:
         routing_service = DistanceMatrixService()
@@ -40,8 +38,7 @@ def build_distance_matrix(stocks, requests_list, routing_service=None):
 
 def create_plan_item(request_obj, warehouse_obj, amount):
     """
-    Функція створення уніфікованого запису плану розподілу.
-    Гарантує єдиний контракт даних для бази та API.
+    Формування уніфікованого запису плану розподілу.
     """
     return {
         'request_id': request_obj['id'],
@@ -56,7 +53,7 @@ def create_plan_item(request_obj, warehouse_obj, amount):
 
 def discretize_with_greedy_remainders(exact_distribution, stocks, requests_list):
     """
-    Цілочисельна дискретизація.
+    Цілочисельна дискретизація:
     1. Округлення вниз неперервного плану Симплекс-методу.
     2. Жадібний порозподіл вільних залишків (+1) за спаданням пріоритету та дробової частки.
     """
@@ -76,13 +73,12 @@ def discretize_with_greedy_remainders(exact_distribution, stocks, requests_list)
                 free_stock[i] -= floor_val
                 free_demand[j] -= floor_val
 
-    # Крок 2. Формування кандидатів на залишки
+    # Крок 2. Формування кандидатів на залишки (з фільтрацією float-шуму <= 0.001)
     remainder_candidates = []
     for i in range(n_stk):
         for j in range(n_req):
             fraction = exact_distribution[i, j] - np.floor(exact_distribution[i, j])
-            if fraction > 0.001 or exact_distribution[i, j] > 0:
-                # Зважений бал: домінуючий пріоритет заявки + дробова частка
+            if fraction > 0.001:
                 score = requests_list[j]['priority'] * 10.0 + fraction
                 remainder_candidates.append((score, i, j))
 
@@ -194,7 +190,6 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
 def simplex_solve(A, b, c_minimize, ineq_sense, max_iters=500):
     try:
         m, n = A.shape
-        # Динамічний розрахунок ліміту ітерацій залежно від кількості змінних та обмежень
         if max_iters is None:
             max_iters = max(2000, 10 * (m + n))
 
@@ -239,15 +234,20 @@ def simplex_solve(A, b, c_minimize, ineq_sense, max_iters=500):
         return 'error', None
 
 
-def calculate_distribution(requests, stocks):
-    """Розподіл для стандартних ресурсів """
+def calculate_distribution(requests, stocks, routing_service=None):
+    """Розподіл для стандартних ресурсів (триетапна модель)."""
     final_plan = []
-    routing_service = DistanceMatrixService()
+    if routing_service is None:
+        routing_service = DistanceMatrixService()
+
     common_ids = get_common_resource_ids(requests, stocks)
 
     for res_id in common_ids:
         r_sub = [r for r in requests if r['resource_id'] == res_id]
         s_sub = [s for s in stocks if s['resource_id'] == res_id]
+
+        if not r_sub or not s_sub:
+            continue
 
         n_req, n_stk = len(r_sub), len(s_sub)
         n_vars = n_stk * n_req + 1
@@ -307,10 +307,8 @@ def calculate_distribution(requests, stocks):
             for j in range(n_req):
                 idx = i * n_req + j
                 dist = dist_matrix[i, j]
-
                 dist_norm = dist / max_dist
                 distance_bonus = 0.005 * (1.0 - dist_norm)
-
                 full_order_bonus = 0.01 if s_sub[i]['amount'] >= r_sub[j]['amount_needed'] else 0.0
                 c_stage2[idx] = -(0.0001 + distance_bonus + full_order_bonus)
 
@@ -327,10 +325,8 @@ def calculate_distribution(requests, stocks):
                 for j in range(n_req):
                     exact_distribution[i, j] = best_x[i * n_req + j]
 
-            # Викликаємо винесений алгоритм дискретизації
             allocated = discretize_with_greedy_remainders(exact_distribution, s_sub, r_sub)
 
-            # Формування підсумкового плану через фабрику
             for i in range(n_stk):
                 for j in range(n_req):
                     if allocated[i, j] > 0:
@@ -345,10 +341,11 @@ def calculate_distribution(requests, stocks):
 # 2. ЖОРСТКИЙ РОЗПОДІЛ СТРАТЕГІЧНИХ ВАНТАЖІВ (TRIAGE)
 # ----------------------------------------------------------
 
-def calculate_strict_priority(requests, stocks):
-    """Розподіл для стратегічних ресурсів """
+def calculate_strict_priority(requests, stocks, routing_service=None):
+    """Розподіл для стратегічних ресурсів."""
     final_plan = []
-    routing_service = DistanceMatrixService()
+    if routing_service is None:
+        routing_service = DistanceMatrixService()
     common_ids = get_common_resource_ids(requests, stocks)
 
     for res_id in common_ids:
@@ -401,7 +398,6 @@ def calculate_strict_priority(requests, stocks):
                 j = req['_idx']
                 demand = int(req['amount_needed'])
 
-                # Динамічний поріг рентабельності партії (min_quantum)
                 if demand <= 4:
                     min_quantum = 1
                 elif demand <= 50:
@@ -423,7 +419,6 @@ def calculate_strict_priority(requests, stocks):
                             'distance': dist_matrix[i, j]
                         })
 
-                # Стратегія А: Консолідація замовлення (відвантаження з одного складу)
                 full_candidates = [c for c in candidates if c['amount'] >= demand]
                 if full_candidates:
                     selected = min(full_candidates, key=lambda c: (c['distance'], c['index']))
@@ -438,7 +433,6 @@ def calculate_strict_priority(requests, stocks):
                     )
                     continue
 
-                # Стратегія Б: Розщеплене постачання (Split Delivery) з урахуванням min_quantum
                 candidates.sort(key=lambda c: (-c['amount'], c['distance']))
                 alloc_plan = []
                 rem = demand
