@@ -112,13 +112,14 @@ class UserRequestSerializer(serializers.ModelSerializer):
     due_date = serializers.DateField(format="%Y-%m-%d", required=False)
 
     current_priority = serializers.ReadOnlyField()
+    priority_score = serializers.SerializerMethodField()
 
     class Meta:
         model = UserRequest
         fields = [
             'id', 'user', 'user_full_name', 'user_email', 'resource', 'resource_name',
             'unit_name', 'quantity_requested', 'quantity_allocated', 'purpose',
-            'purpose_name', 'priority', 'current_priority', 'status', 'created_at',
+            'purpose_name', 'priority', 'priority_score', 'current_priority', 'status', 'created_at',
             'city', 'warehouse_address', 'warehouse_ref', 'due_date',
             'auto_extend'
         ]
@@ -129,6 +130,9 @@ class UserRequestSerializer(serializers.ModelSerializer):
         if not obj.user:
             return "Невідомий"
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
+
+    def get_priority_score(self, obj):
+        return round(float(obj.priority) * 10.0, 1)
 
 
 class DistributionItemSerializer(serializers.ModelSerializer):

@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import timedelta
-from .utils import calculate_front_multiplier, calculate_time_multiplier
+from .utils import calculate_front_multiplier, calculate_time_multiplier, calculate_request_priority
 
 
 # Автоматичний розрахунок базового дедлайну (Сьогодні + 5 днів)
@@ -123,29 +123,15 @@ class UserRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        # 1. Збір статичних коефіцієнтів (нормалізованих до [0; 1])
-        k_purp = float(self.purpose.weight) / 10.0
-        k_crit = float(self.resource.category.criticality) if self.resource.category else 0.5
-
-        # 2. Виклик зовнішніх математичних моделей (тепер вони самі видають [0; 1])
-        k_geo = calculate_front_multiplier(self.latitude, self.longitude)
-        k_time = calculate_time_multiplier(self.due_date)
-
-        # 3. Штраф за кількість продовжень
-        age_penalty = (self.extension_count * 0.1) if self.extension_count <= 5 else 0.5
-
-        # 4. Вагові коефіцієнти (сума = 1.0)
-        alpha, beta, gamma, delta = 0.35, 0.25, 0.25, 0.15
-
-        # 5. Розрахунок підсумкової згортки
-        weighted_sum = (alpha * k_purp) + (beta * k_time) + (gamma * k_geo) + (delta * k_crit)
-
-        # Масштабуємо до 10-бальної шкали та застосовуємо штраф
-        final_index = (weighted_sum * 10.0) - age_penalty
-
-        # Округлення та захист інтервалу
-        self.priority = round(max(0.0, min(10.0, final_index)), 1)
-
+        # Викликаємо сервіс розрахунку пріоритету
+        self.priority = calculate_request_priority(
+            purpose_weight=self.purpose.weight,
+            category_criticality=self.resource.category.criticality if self.resource.category else 0.5,
+            latitude=self.latitude,
+            longitude=self.longitude,
+            due_date=self.due_date,
+            extension_count=self.extension_count
+        )
         super().save(*args, **kwargs)
 
 
