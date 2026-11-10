@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Tag, Ruler, Layers, Save, ChevronDown } from 'lucide-react';
+import { Tag, Ruler, Layers, Save, ChevronDown } from '../../UI/icons';
 import api from '../../../services/api';
 import { toast } from 'react-hot-toast';
 

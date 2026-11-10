@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
-import { Home, Info } from 'lucide-react';
+import { Home, Info } from './components/UI/icons';
 
 // Сервіси та кастомні хуки
 import api from './services/api';
@@ -8,18 +8,20 @@ import authService from './services/authService';
 import { useModal } from './hooks/useModal';
 import { useFetchData } from './hooks/useFetchData';
 
-// Компоненти
+// Компоненти (базові/легкі та стартова сторінка для виключення waterfall на мобільних)
 import Header from './components/Layout/Header';
 import SidebarNav from './components/Layout/SidebarNav';
-import StockTable from './components/Features/Stocks/StockTable';
 import RequestList from './components/Features/Requests/RequestList';
-import DistributionPlan from './components/Features/Distribution/DistributionPlan';
-import Landing from './components/Layout/Landing';
-import Dashboard from './components/Features/Analytics/Dashboard';
-import AdminLogs from './components/Features/Analytics/AdminLogs';
-import AuthModal from './components/Auth/Auth';
 import ScrollToTop from './components/UI/ScrollToTop';
-import AppModals from './components/Features/Modals/AppModals';
+import Landing from './components/Layout/Landing';
+
+// Ліниве завантаження важких внутрішніх модулів (завантажуються тільки після входу)
+const Dashboard = lazy(() => import('./components/Features/Analytics/Dashboard'));
+const AdminLogs = lazy(() => import('./components/Features/Analytics/AdminLogs'));
+const StockTable = lazy(() => import('./components/Features/Stocks/StockTable'));
+const DistributionPlan = lazy(() => import('./components/Features/Distribution/DistributionPlan'));
+const AppModals = lazy(() => import('./components/Features/Modals/AppModals'));
+const AuthModal = lazy(() => import('./components/Auth/Auth'));
 
 function App() {
     const [currentUser, setCurrentUser] = useState(() => authService.getUser());
@@ -122,29 +124,38 @@ function App() {
                         warehouses: data.warehouses.length
                     }}
                 />
-                <AuthModal isOpen={modals.auth} onClose={() => closeModal('auth')} onSuccess={handleAuthSuccess} />
+                {modals.auth && (
+                    <Suspense fallback={null}>
+                        <AuthModal isOpen={modals.auth} onClose={() => closeModal('auth')} onSuccess={handleAuthSuccess} />
+                    </Suspense>
+                )}
                 <Toaster position="top-center" />
                 <ScrollToTop />
             </>
         );
     }
 
+    const hasOpenModal = Object.values(modals).some(Boolean);
+
     return (
-        <div className="min-h-screen bg-slate-50 p-4 md:p-10 relative">
+        <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
+            <div className="min-h-screen bg-slate-50 p-4 md:p-10 relative">
             <Toaster position="top-center" toastOptions={{ className: 'rounded-xl font-bold shadow-xl' }} />
 
-            {/* Всі модалки сайту (форми + налаштування розподілу) */}
-            <AppModals
-                modals={modals}
-                closeModal={closeModal}
-                data={data}
-                fetchData={fetchData}
-                currentUser={currentUser}
-                distributionStrategy={distributionStrategy}
-                setDistributionStrategy={setDistributionStrategy}
-                onDistribute={handleDistribute}
-                loading={loading}
-            />
+            {/* Всі модалки сайту (завантажуються ТІЛЬКИ коли модалка відкрита) */}
+            {hasOpenModal && (
+                <AppModals
+                    modals={modals}
+                    closeModal={closeModal}
+                    data={data}
+                    fetchData={fetchData}
+                    currentUser={currentUser}
+                    distributionStrategy={distributionStrategy}
+                    setDistributionStrategy={setDistributionStrategy}
+                    onDistribute={handleDistribute}
+                    loading={loading}
+                />
+            )}
 
             {/* Семантичний тег main для покращення Accessibility (виправлення зауваження Lighthouse) */}
             <main className="max-w-7xl mx-auto space-y-12 pb-24">
@@ -213,7 +224,8 @@ function App() {
             </button>
 
             <ScrollToTop />
-        </div>
+            </div>
+        </Suspense>
     );
 }
 

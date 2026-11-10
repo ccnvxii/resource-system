@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   CheckCircle2,
   PieChart,
@@ -7,14 +7,35 @@ import {
   MapPin,
   Package,
   LayoutGrid
-} from 'lucide-react';
-import DistributionChart from './DistributionChart';
+} from '../../UI/icons';
 import { exportPlanToExcel } from '../../../utils/excelExport';
 import DistributionCard from './DistributionCard';
 
 const DistributionPlan = ({ plan, purposeMap, strategy = 'fairness' }) => {
   // Стан для групування: 'destination' (по поїздці), 'resource' (по ресурсу), 'all' (всі картки)
   const [groupBy, setGroupBy] = useState('destination');
+
+  const groupedData = useMemo(() => {
+    if (!plan || !plan.items) return {};
+    if (groupBy === 'destination') {
+      const groups = {};
+      plan.items.forEach(item => {
+        const key = item.city || item.warehouse_address || 'Не вказано адресу';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(item);
+      });
+      return groups;
+    } else if (groupBy === 'resource') {
+      const groups = {};
+      plan.items.forEach(item => {
+        const key = item.resource_name || 'Невідомий ресурс';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(item);
+      });
+      return groups;
+    }
+    return {};
+  }, [plan, groupBy]);
 
   if (!plan || !plan.items || plan.items.length === 0) return null;
 
@@ -24,32 +45,6 @@ const DistributionPlan = ({ plan, purposeMap, strategy = 'fairness' }) => {
   const headerBgColor = isTriage ? 'bg-red-600 shadow-red-100' : 'bg-blue-600 shadow-blue-100';
   const algorithmName = isTriage ? 'Алгоритм екстреного тріажу (Жорсткий пріоритет)' : 'Алгоритм лексикографічного розподілу (Fairness)';
   const exportBtnColor = isTriage ? 'text-red-600' : 'text-blue-600';
-
-  // --- ЛОГІКА ГРУПУВАННЯ ---
-  const getGroupedItems = () => {
-    if (groupBy === 'destination') {
-      // Групуємо по місту / адресі доставки (куди їде)
-      const groups = {};
-      plan.items.forEach(item => {
-        const key = item.city || item.warehouse_address || 'Не вказано адресу';
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(item);
-      });
-      return groups;
-    } else if (groupBy === 'resource') {
-      // Групуємо по назві ресурсу
-      const groups = {};
-      plan.items.forEach(item => {
-        const key = item.resource_name || 'Невідомий ресурс';
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(item);
-      });
-      return groups;
-    }
-    return null;
-  };
-
-  const groupedData = getGroupedItems();
 
   return (
     <div className={`animate-fade-in-up bg-slate-50 rounded-3xl border-2 p-6 md:p-8 mb-10 text-left space-y-6 ${isTriage ? 'border-red-100' : 'border-slate-200'}`}>

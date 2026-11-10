@@ -4,7 +4,7 @@ import {zodResolver} from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import axios from 'axios';
 import {toast} from 'react-hot-toast';
-import {Mail, Lock, User, Phone, Building2, ArrowRight, ShieldCheck, CheckCircle2, Send} from 'lucide-react';
+import {Mail, Lock, User, Phone, Building2, ArrowRight, ShieldCheck, CheckCircle2, Send} from '../UI/icons';
 import Modal from '../UI/Modal';
 
 const nameRegex = /^[\p{L}\s'-]+$/u;

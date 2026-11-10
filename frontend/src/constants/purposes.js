@@ -7,7 +7,7 @@ import {
   Footprints,
   GraduationCap,
   User
-} from 'lucide-react';
+} from '../components/UI/icons';
 
 export const PURPOSE_MAP = {
   'military': {

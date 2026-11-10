@@ -7,7 +7,7 @@ import {
     Users,
     Package,
     ClipboardCheck
-} from 'lucide-react';
+} from '../UI/icons';
 
 const Landing = ({onEnter, stats}) => {
     return (
@@ -20,6 +20,8 @@ const Landing = ({onEnter, stats}) => {
                         <img
                             src={process.env.PUBLIC_URL + '/logo.ico'}
                             alt="ResQ Logo"
+                            width="32"
+                            height="32"
                             className="w-full h-full object-contain"
                         />
                     </div>
@@ -43,7 +45,7 @@ const Landing = ({onEnter, stats}) => {
                 className="inline-block px-4 py-1.5 bg-blue-50 text-blue-600 rounded-full text-xs font-black uppercase tracking-widest mb-6 border border-blue-100">
               Humanitarian Response v3.0
             </span>
-                        <h1 className="text-6xl lg:text-7xl font-black text-slate-900 leading-[1.1] mb-8">
+                        <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black text-slate-900 leading-[1.15] mb-6">
                             Справедливий <br/>
                             <span className="text-blue-600">розподіл</span> допомоги.
                         </h1>
@@ -73,12 +75,19 @@ const Landing = ({onEnter, stats}) => {
                     <div className="relative">
                         <div className="absolute -inset-4 bg-blue-400/20 blur-3xl rounded-full"></div>
                         <div
-                            className="relative bg-white border border-slate-200 rounded-3xl shadow-2xl p-4 overflow-hidden transform rotate-2">
+                            className="relative bg-white border border-slate-200 rounded-3xl shadow-2xl p-4 overflow-hidden transform rotate-2"
+                            style={{ aspectRatio: '700 / 467' }}>
                             {/* Фото: Волонтери в Україні (гуманітарна допомога) */}
                             <img
-                                src="https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&q=80&w=800"
+                                src="https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&q=70&w=700"
+                                srcSet="https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&q=65&w=420 420w, https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&q=70&w=700 700w"
+                                sizes="(max-width: 640px) 100vw, 50vw"
                                 alt="Humanitarian Aid Ukraine"
-                                className="rounded-2xl grayscale-[20%] hover:grayscale-0 transition-all duration-500"
+                                width="700"
+                                height="467"
+                                fetchPriority="high"
+                                decoding="async"
+                                className="rounded-2xl grayscale-[20%] hover:grayscale-0 transition-all duration-500 w-full h-full object-cover"
                             />
                             {/*<div className="absolute bottom-8 left-8 right-8 bg-white/90 backdrop-blur p-4 rounded-xl border border-slate-100 shadow-lg">*/}
                             {/*   <div className="flex items-center gap-3">*/}
@@ -124,7 +133,7 @@ const Landing = ({onEnter, stats}) => {
             </section>
 
             {/* FEATURES SECTION */}
-            <section className="py-32">
+            <section className="py-32" style={{ contentVisibility: 'auto', containIntrinsicSize: '600px' }}>
                 <div className="max-w-7xl mx-auto px-8">
                     <div className="text-center max-w-2xl mx-auto mb-20">
                         <h2 className="text-4xl font-black text-slate-900 mb-6">Чому обирають ResQ?</h2>
@@ -165,7 +174,7 @@ const Landing = ({onEnter, stats}) => {
             </section>
 
             {/* HOW IT WORKS SECTION */}
-            <section className="py-24 bg-slate-900 text-white overflow-hidden relative">
+            <section className="py-24 bg-slate-900 text-white overflow-hidden relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '600px' }}>
                 <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
                     <div className="absolute top-10 left-10 w-64 h-64 bg-blue-500 rounded-full blur-[100px]"></div>
                     <div
@@ -221,7 +230,7 @@ const Landing = ({onEnter, stats}) => {
             </section>
 
             {/* FAQ SECTION */}
-            <section className="py-32 bg-white">
+            <section className="py-32 bg-white" style={{ contentVisibility: 'auto', containIntrinsicSize: '500px' }}>
                 <div className="max-w-4xl mx-auto px-8">
                     <div className="text-center mb-16">
                         <h2 className="text-3xl font-black text-slate-900 mb-4">Часті запитання</h2>
@@ -257,7 +266,7 @@ const Landing = ({onEnter, stats}) => {
             </section>
 
             {/* FINAL CTA SECTION */}
-            <section className="pb-32 px-8">
+            <section className="pb-32 px-8" style={{ contentVisibility: 'auto', containIntrinsicSize: '400px' }}>
                 <div
                     className="max-w-5xl mx-auto bg-gradient-to-r from-slate-900 to-blue-900 rounded-[2.5rem] p-12 md:p-20 text-center text-white relative overflow-hidden shadow-2xl shadow-blue-900/20">
                     {/* Декоративна сітка */}
@@ -303,6 +312,10 @@ const Landing = ({onEnter, stats}) => {
                         <img
                             src={process.env.PUBLIC_URL + '/logo.ico'}
                             alt="Logo"
+                            width="24"
+                            height="24"
+                            loading="lazy"
+                            decoding="async"
                             className="w-6 h-6 brightness-110 shadow-sm"
                         />
                         <span className="text-xl font-black tracking-tight text-white">

@@ -7,7 +7,7 @@ import {
   MapPin,
   HelpCircle,
   Clock
-} from 'lucide-react';
+} from '../../UI/icons';
 import { PURPOSE_MAP } from '../../../constants/purposes';
 
 const formatDate = (dateString) => {
@@ -117,4 +117,4 @@ const DistributionCard = ({ item }) => {
   );
 };
 
-export default DistributionCard;
+export default React.memo(DistributionCard);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, BarChart3, GitFork } from 'lucide-react';
+import { Database, BarChart3, GitFork } from '../UI/icons';
 
 const SidebarNav = ({ onNavigate }) => {
     const [activeSection, setActiveSection] = useState('section-stocks');

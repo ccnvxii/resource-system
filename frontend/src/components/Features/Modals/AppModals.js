@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClipboardList, ArrowDownCircle, PackagePlus, Scale, Zap, GitFork } from 'lucide-react';
+import { ClipboardList, ArrowDownCircle, PackagePlus, Scale, Zap, GitFork } from '../../UI/icons';
 import Modal from '../../UI/Modal';
 import RequestForm from '../Requests/RequestForm';
 import StockInForm from '../Stocks/StockInForm';

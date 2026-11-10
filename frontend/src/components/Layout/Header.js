@@ -7,7 +7,7 @@ import {
     ShieldCheck,
     User,
     LogOut
-} from 'lucide-react';
+} from '../UI/icons';
 
 const Header = ({onOpenForm, onOpenStockIn, onRefresh, onAddResource, currentUser, onLogout}) => {
     const btnBase = "flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 border-2 shadow-sm";

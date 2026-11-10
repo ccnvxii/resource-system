@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { History, Package, Clock, Box, ChevronDown, ChevronUp, Layers } from 'lucide-react';
+import { History, Package, Clock, Box, ChevronDown, ChevronUp, Layers } from '../../UI/icons';
 
 const AdminLogs = ({ logs = [] }) => {
   // За замовчуванням журнал ПОВНІСТЮ ЗГОРНУТИЙ

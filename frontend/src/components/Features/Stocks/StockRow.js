@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit3, Check } from 'lucide-react';
+import { Edit3, Check } from '../../UI/icons';
 
 const StockRow = ({ stock, resource, isEditing, editValue, setEditValue, onStartEdit, onSaveEdit }) => {
     return (
@@ -52,4 +52,4 @@ const StockRow = ({ stock, resource, isEditing, editValue, setEditValue, onStart
     );
 };
 
-export default StockRow;
+export default React.memo(StockRow);

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X } from './icons';
 
 const Modal = ({ isOpen, onClose, title, subtitle, icon: Icon, children, maxWidth = "max-w-4xl" }) => {
   // Закриття на Escape

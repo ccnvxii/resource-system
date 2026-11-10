@@ -1,5 +1,5 @@
 import React, {useState, useMemo} from 'react';
-import {ListChecks, History, Filter, Package, Inbox, RotateCcw, Settings, RefreshCw} from 'lucide-react';
+import {ListChecks, Filter, Package, Inbox, RotateCcw, Settings, RefreshCw} from '../../UI/icons';
 import api from '../../../services/api';
 import Modal from '../../UI/Modal';
 import RequestCard from './RequestCard';
@@ -15,16 +15,23 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
     const [editQuantity, setEditQuantity] = useState("");
     const [editAutoExtend, setEditAutoExtend] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [visibleCount, setVisibleCount] = useState(25);
 
     const isAdmin = currentUser?.is_admin;
     const availableResources = useMemo(() => Array.from(new Set(requests.map(r => r.resource_name).filter(Boolean))), [requests]);
 
-    const displayedRequests = requests.filter(r => {
-        const matchTab = requestTab === 'active' ? r.status !== 'done' : r.status === 'done';
-        const matchStatus = statusFilter === 'all' ? true : (statusFilter === 'new' ? (!r.status || r.status === 'new') : r.status === 'partial');
-        const matchResource = resourceFilter === 'all' || r.resource_name === resourceFilter;
-        return matchTab && matchStatus && matchResource;
-    });
+    const displayedRequests = useMemo(() => {
+        return requests.filter(r => {
+            const matchTab = requestTab === 'active' ? r.status !== 'done' : r.status === 'done';
+            const matchStatus = statusFilter === 'all' ? true : (statusFilter === 'new' ? (!r.status || r.status === 'new') : r.status === 'partial');
+            const matchResource = resourceFilter === 'all' || r.resource_name === resourceFilter;
+            return matchTab && matchStatus && matchResource;
+        });
+    }, [requests, requestTab, statusFilter, resourceFilter]);
+
+    const visibleRequests = useMemo(() => {
+        return displayedRequests.slice(0, visibleCount);
+    }, [displayedRequests, visibleCount]);
 
     const handleOpenModal = (req) => {
         if (req.status === 'done') return;
@@ -116,11 +123,23 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
             </div>
 
             <div className="overflow-y-auto flex-1 p-4 pr-2 space-y-3 custom-scrollbar">
-                {displayedRequests.length > 0 ? (
-                    displayedRequests.map((req) => (
-                        <RequestCard key={req.id} req={req} purposeMap={purposeMap} isAdmin={isAdmin}
-                                     onOpenModal={handleOpenModal}/>
-                    ))
+                {visibleRequests.length > 0 ? (
+                    <>
+                        {visibleRequests.map((req) => (
+                            <RequestCard key={req.id} req={req} purposeMap={purposeMap} isAdmin={isAdmin}
+                                         onOpenModal={handleOpenModal}/>
+                        ))}
+                        {displayedRequests.length > visibleCount && (
+                            <div className="pt-2 text-center">
+                                <button
+                                    onClick={() => setVisibleCount(prev => prev + 25)}
+                                    className="text-xs font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors py-2 px-5 rounded-xl bg-blue-50 hover:bg-blue-100"
+                                >
+                                    Показати ще (+25 з {displayedRequests.length})
+                                </button>
+                            </div>
+                        )}
+                    </>
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-slate-400">
                         <Inbox size={48} className="text-slate-200 mb-2"/>

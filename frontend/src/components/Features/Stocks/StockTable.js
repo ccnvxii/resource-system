@@ -1,8 +1,10 @@
-import React, {useState} from 'react';
-import {PackageSearch, Filter, ChevronUp, ChevronDown} from 'lucide-react';
+import React, {useState, useMemo} from 'react';
+import {PackageSearch, Filter, ChevronUp, ChevronDown} from '../../UI/icons';
 import api from '../../../services/api';
 import StockRow from './StockRow';
 import FilterSelect from '../../UI/FilterSelect';
+
+const INITIAL_ROWS_COUNT = 30;
 
 const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
     const [filterCategory, setFilterCategory] = useState('all');
@@ -10,24 +12,33 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
     const [sortOrder, setSortOrder] = useState('none');
     const [editingId, setEditingId] = useState(null);
     const [editValue, setEditValue] = useState("");
+    const [visibleCount, setVisibleCount] = useState(INITIAL_ROWS_COUNT);
 
-    const categories = ['all', ...new Set(Object.values(resourcesMap).map(r => r.category_name))];
-    const warehouses = ['all', ...new Set(stocks.map(s => s.warehouse_name))];
+    const categories = useMemo(() => ['all', ...new Set(Object.values(resourcesMap).map(r => r.category_name))], [resourcesMap]);
+    const warehouses = useMemo(() => ['all', ...new Set(stocks.map(s => s.warehouse_name))], [stocks]);
 
-    const filteredStocks = stocks.filter(stock => {
-        const resource = resourcesMap[stock.resource];
-        const isPositive = Number(stock.amount) > 0;
-        const matchCategory = filterCategory === 'all' || resource?.category_name === filterCategory;
-        const matchWarehouse = filterWarehouse === 'all' || stock.warehouse_name === filterWarehouse;
-        return isPositive && matchCategory && matchWarehouse;
-    });
+    const filteredStocks = useMemo(() => {
+        return stocks.filter(stock => {
+            const resource = resourcesMap[stock.resource];
+            const isPositive = Number(stock.amount) > 0;
+            const matchCategory = filterCategory === 'all' || resource?.category_name === filterCategory;
+            const matchWarehouse = filterWarehouse === 'all' || stock.warehouse_name === filterWarehouse;
+            return isPositive && matchCategory && matchWarehouse;
+        });
+    }, [stocks, resourcesMap, filterCategory, filterWarehouse]);
 
-    const sortedStocks = [...filteredStocks].sort((a, b) => {
-        if (sortOrder === 'none') return 0;
-        const amountA = Number(a.amount) || 0;
-        const amountB = Number(b.amount) || 0;
-        return sortOrder === 'asc' ? amountA - amountB : amountB - amountA;
-    });
+    const sortedStocks = useMemo(() => {
+        return [...filteredStocks].sort((a, b) => {
+            if (sortOrder === 'none') return 0;
+            const amountA = Number(a.amount) || 0;
+            const amountB = Number(b.amount) || 0;
+            return sortOrder === 'asc' ? amountA - amountB : amountB - amountA;
+        });
+    }, [filteredStocks, sortOrder]);
+
+    const visibleStocks = useMemo(() => {
+        return sortedStocks.slice(0, visibleCount);
+    }, [sortedStocks, visibleCount]);
 
     const toggleSort = () => {
         if (sortOrder === 'none') setSortOrder('desc');
@@ -98,7 +109,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                     </tr>
                     </thead>
                     <tbody>
-                    {sortedStocks.map((stock) => (
+                    {visibleStocks.map((stock) => (
                         <StockRow
                             key={stock.id}
                             stock={stock}
@@ -119,6 +130,16 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                     ))}
                     </tbody>
                 </table>
+                {sortedStocks.length > visibleCount && (
+                    <div className="p-3 text-center border-t border-slate-100 bg-slate-50/50">
+                        <button
+                            onClick={() => setVisibleCount(prev => prev + 30)}
+                            className="text-xs font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors py-1.5 px-4 rounded-xl bg-blue-50 hover:bg-blue-100"
+                        >
+                            Показати ще (+30 з {sortedStocks.length})
+                        </button>
+                    </div>
+                )}
             </div>
         </section>
     );

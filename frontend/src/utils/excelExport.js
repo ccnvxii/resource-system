@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { PURPOSE_MAP } from '../constants/purposes';
 
 // Локальна функція форматування дати для Excel
@@ -12,8 +11,11 @@ const formatExcelDate = (dateString) => {
   }
 };
 
-export const exportPlanToExcel = (plan, strategy = 'hybrid') => {
+export const exportPlanToExcel = async (plan, strategy = 'hybrid') => {
   if (!plan || !plan.items || plan.items.length === 0) return;
+
+  // Динамічний імпорт xlsx — виключає важку бібліотеку з головного бандлу
+  const XLSX = await import('xlsx');
 
   const dataToExport = plan.items.map(item => {
     const purposeKey = item.purpose_code || item.purpose;
@@ -37,7 +39,7 @@ export const exportPlanToExcel = (plan, strategy = 'hybrid') => {
       "Отримувач": item.recipient_name,
       "Пункт призначення": `${item.city || ''} ${item.warehouse_address || ''}`.trim() || 'Адресна доставка',
       "Призначення": purposeMeta.label,
-      "Метод Розподілу": methodLabel // Вставляємо розумний лейбл
+      "Метод Розподілу": methodLabel
     };
   });
 

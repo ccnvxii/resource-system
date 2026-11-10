@@ -2,8 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
-import { TrendingDown, Package, Download, BarChart3, ChevronDown, AlertTriangle } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { TrendingDown, Package, Download, BarChart3, ChevronDown, AlertTriangle } from '../../UI/icons';
 
 const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
   const [isVisible, setIsVisible] = useState(true);
@@ -75,8 +74,9 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
     }
   }, [requests, stocks, resourcesMap]);
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (!Array.isArray(requests) || !requests.length) return;
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(requests);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Звіт");

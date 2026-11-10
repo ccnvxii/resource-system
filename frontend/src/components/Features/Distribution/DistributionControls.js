@@ -1,5 +1,5 @@
 import React from 'react';
-import { Scale, Zap, GitFork } from 'lucide-react';
+import { Scale, Zap, GitFork } from '../../UI/icons';
 
 const DistributionControls = ({ strategy, setStrategy, onDistribute, loading }) => {
     return (

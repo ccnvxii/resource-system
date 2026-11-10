@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, AlertCircle, Clock, CheckCircle2, MapPin, RefreshCw, Settings } from 'lucide-react';
+import { User, AlertCircle, Clock, CheckCircle2, MapPin, RefreshCw, Settings } from '../../UI/icons';
 
 const RequestCard = ({ req, purposeMap, isAdmin, onOpenModal }) => {
     const purposeData = purposeMap[req.purpose] || { label: 'Інше', icon: '📦', color: 'bg-gray-100' };
@@ -117,4 +117,4 @@ const RequestCard = ({ req, purposeMap, isAdmin, onOpenModal }) => {
     );
 };
 
-export default RequestCard;
+export default React.memo(RequestCard);
