@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClipboardList, ArrowDownCircle, PackagePlus, Scale, Zap, GitFork } from '../../UI/icons';
+import { ClipboardList, ArrowDownCircle, PackagePlus, Scale, Zap, GitFork, Play, Sliders } from '../../UI/icons';
 import Modal from '../../UI/Modal';
 import RequestForm from '../Requests/RequestForm';
 import StockInForm from '../Stocks/StockInForm';
@@ -49,7 +49,7 @@ const AppModals = ({ modals, closeModal, data, fetchData, currentUser, distribut
                 onClose={() => closeModal('distribute')}
                 title="Параметри оптимізації розподілу"
                 subtitle="Алгоритми прийняття рішень"
-                icon={GitFork}
+                icon={Sliders}
                 maxWidth="max-w-xl"
             >
                 <div className="flex flex-col items-center py-4 space-y-6">
@@ -92,13 +92,38 @@ const AppModals = ({ modals, closeModal, data, fetchData, currentUser, distribut
                         </button>
                     </div>
 
-                    {/* ОПИС РЕЖИМІВ */}
-                    <div className="text-center px-2 min-h-[40px] flex items-center justify-center">
-                        <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                            {distributionStrategy === 'fairness' && '⚖️ Лексикографічний розподіл (Симплекс) забезпечує рівномірне та справедливе задоволення потреб усіх заявників.'}
-                            {distributionStrategy === 'hybrid' && '🧬 Розумна маршрутизація: стратегічні вантажі йдуть у Тріаж, а товари життєзабезпечення — у Справедливість.'}
-                            {distributionStrategy === 'triage' && '⚡ Режим екстреного тріажу (Жадібний) спрямовує всі ресурси на 100% закриття заявок з найвищим пріоритетом.'}
-                        </p>
+                    {/* ОПИС РЕЖИМІВ З ІКОНКАМИ LUCIDE-REACT */}
+                    <div className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl p-4 min-h-[64px] flex items-center justify-center text-left">
+                        {distributionStrategy === 'fairness' && (
+                            <div className="flex items-center gap-3 animate-in fade-in duration-200">
+                                <div className="p-2 bg-blue-100 text-blue-600 rounded-xl shrink-0">
+                                    <Scale size={20} />
+                                </div>
+                                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                                    <strong className="text-slate-800">Лексикографічний розподіл (Симплекс):</strong> забезпечує рівномірне та справедливе задоволення потреб усіх заявників.
+                                </p>
+                            </div>
+                        )}
+                        {distributionStrategy === 'hybrid' && (
+                            <div className="flex items-center gap-3 animate-in fade-in duration-200">
+                                <div className="p-2 bg-purple-100 text-purple-600 rounded-xl shrink-0">
+                                    <GitFork size={20} />
+                                </div>
+                                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                                    <strong className="text-slate-800">Розумна маршрутизація:</strong> стратегічні вантажі йдуть у Тріаж, а товари життєзабезпечення — у Справедливість.
+                                </p>
+                            </div>
+                        )}
+                        {distributionStrategy === 'triage' && (
+                            <div className="flex items-center gap-3 animate-in fade-in duration-200">
+                                <div className="p-2 bg-red-100 text-red-600 rounded-xl shrink-0">
+                                    <Zap size={20} />
+                                </div>
+                                <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                                    <strong className="text-slate-800">Екстрений тріаж (Жадібний):</strong> спрямовує всі ресурси на 100% закриття заявок з найвищим пріоритетом.
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     <button
@@ -107,14 +132,15 @@ const AppModals = ({ modals, closeModal, data, fetchData, currentUser, distribut
                             closeModal('distribute');
                         }}
                         disabled={loading}
-                        className={`w-full py-5 rounded-2xl text-lg font-black text-white shadow-2xl transition-all ${
+                        className={`w-full py-4 sm:py-5 rounded-2xl text-base sm:text-lg font-black text-white shadow-2xl transition-all flex items-center justify-center gap-3 ${
                             loading ? 'bg-slate-400 cursor-not-allowed' 
                             : distributionStrategy === 'triage' ? 'bg-red-600 hover:bg-red-700 hover:shadow-red-500/30 active:scale-95' 
                             : distributionStrategy === 'hybrid' ? 'bg-purple-600 hover:bg-purple-700 hover:shadow-purple-500/30 active:scale-95'
                             : 'bg-blue-600 hover:bg-blue-700 hover:shadow-blue-500/30 active:scale-95'
                         }`}
                     >
-                        {loading ? "ОБРОБКА..." : "ЗАПУСТИТИ РОЗПОДІЛ"}
+                        <Play size={20} className="fill-current" />
+                        <span>{loading ? "ОБРОБКА..." : "ЗАПУСТИТИ РОЗПОДІЛ"}</span>
                     </button>
                 </div>
             </Modal>

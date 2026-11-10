@@ -1,10 +1,10 @@
 import React, {useState, useEffect, useMemo} from 'react';
 import {
     User, Package, Hash, Target, Plus, Trash2, Save,
-    AlertCircle, CheckCircle2, MapPin, Truck, Map as MapIcon, X, Home, Calendar, RefreshCw
+    AlertCircle, CheckCircle2, Truck, Home, Calendar, RefreshCw
 } from '../../UI/icons';
 import {toast} from 'react-hot-toast';
-import api from '../../../services/api';
+import api, { extractErrorMessage } from '../../../services/api';
 
 // Допоміжна функція для генерації дати за замовчуванням (Сьогодні + 5 днів)
 const getFutureDate = (daysAhead = 5) => {
@@ -92,6 +92,8 @@ const RequestForm = ({
     };
 
     const fetchCityDetails = async (city) => {
+        // Зберігаємо оригінальні поля міста (включно з Ref та SettlementRef для пошуку вулиць)
+        const cityBase = {...city};
         try {
             const response = await api.post('/novaposhta/', {
                 action: 'get_warehouses',
@@ -100,15 +102,15 @@ const RequestForm = ({
             if (response.data && response.data.length > 0) {
                 const centerData = response.data[0];
                 setSelectedCity({
-                    ...city,
+                    ...cityBase,
                     Latitude: centerData.Latitude,
                     Longitude: centerData.Longitude
                 });
             } else {
-                setSelectedCity(city);
+                setSelectedCity(cityBase);
             }
         } catch (err) {
-            setSelectedCity(city);
+            setSelectedCity(cityBase);
         }
     };
 
@@ -178,11 +180,14 @@ const RequestForm = ({
                 streetSearch.length >= 2 &&
                 !selectedStreet
             ) {
-                const cityUuid = selectedCity.SettlementRef || selectedCity.DeliveryCity;
+                // НП searchSettlementStreets очікує SettlementRef (Ref самого населеного пункту)
+                // searchSettlements повертає: Ref (Ref населеного пункту) та SettlementRef (може бути Ref батьківського)
+                // Для вулиць завжди використовуємо Ref або SettlementRef в правильному порядку
+                const cityUuid = selectedCity.Ref || selectedCity.SettlementRef || selectedCity.DeliveryCity;
                 if (cityUuid) {
                     fetchStreets(cityUuid, streetSearch);
                 } else {
-                    console.warn("У вибраного міста відсутній SettlementRef!");
+                    console.warn("У вибраного міста відсутній Ref/SettlementRef!", selectedCity);
                 }
             }
         }, 400);
@@ -208,37 +213,116 @@ const RequestForm = ({
     };
 
     const handleSubmit = async () => {
-        if (!selectedCity) return toast.error("Оберіть місто зі списку");
-        if (!isDeliveryAvailable) return toast.error("Доставка в цей населений пункт неможлива");
+        // 1. Перевірка заявника для адміна
+        if (currentUser?.is_admin && !selectedUserId) {
+            toast.dismiss();
+            return toast.error("Оберіть заявника зі списку (для кого створюється заявка)", { id: 'req-form-toast' });
+        }
+        const targetUserId = selectedUserId || currentUser?.id;
+        if (!targetUserId) {
+            toast.dismiss();
+            return toast.error("Не вдалося визначити заявника. Оберіть користувача зі списку", { id: 'req-form-toast' });
+        }
 
+        // 2. Перевірка терміну виконання
+        if (!dueDate) {
+            toast.dismiss();
+            return toast.error("Вкажіть термін виконання (поле 'Виконати до')", { id: 'req-form-toast' });
+        }
+        if (dueDate < todayStr) {
+            toast.dismiss();
+            return toast.error("Граничний термін виконання не може бути у минулому", { id: 'req-form-toast' });
+        }
+
+        // 3. Перевірка міста
+        if (!selectedCity) {
+            toast.dismiss();
+            if (citySearch && citySearch.trim().length > 0) {
+                return toast.error("Оберіть місто зі списку підказок під полем вводу", { id: 'req-form-toast' });
+            }
+            return toast.error("Вкажіть та оберіть місто зі списку", { id: 'req-form-toast' });
+        }
+        if (!isDeliveryAvailable) {
+            toast.dismiss();
+            return toast.error("Доставка в цей населений пункт тимчасово недоступна", { id: 'req-form-toast' });
+        }
+
+        // 4. Перевірка способу отримання
         const isAddressMode = deliveryType === 'address';
+        if (isAddressMode) {
+            if (!streetSearch || !streetSearch.trim()) {
+                toast.dismiss();
+                return toast.error("Вкажіть назву вулиці для адресної доставки", { id: 'req-form-toast' });
+            }
+            if (!houseNumber || !houseNumber.trim()) {
+                toast.dismiss();
+                return toast.error("Вкажіть номер будинку", { id: 'req-form-toast' });
+            }
+        } else {
+            if (!selectedWarehouse || !selectedWarehouse.Ref) {
+                toast.dismiss();
+                return toast.error("Оберіть відділення Нової Пошти зі списку", { id: 'req-form-toast' });
+            }
+        }
+
         const finalAddress = isAddressMode
-            ? (streetSearch && houseNumber ? `вул. ${streetSearch}, буд. ${houseNumber}` : null)
+            ? `вул. ${streetSearch.trim()}, буд. ${houseNumber.trim()}`
             : selectedWarehouse?.Description;
 
-        if (!finalAddress) return toast.error("Вкажіть конкретну точку отримання");
-        if (!dueDate) return toast.error("Вкажіть граничний термін виконання заявки");
+        if (!finalAddress) {
+            toast.dismiss();
+            return toast.error("Вкажіть коректну адресу отримання", { id: 'req-form-toast' });
+        }
+
+        // 5. Перевірка позицій ресурсів
+        if (!formRows || formRows.length === 0) {
+            toast.dismiss();
+            return toast.error("Додайте хоча б один ресурс до заявки", { id: 'req-form-toast' });
+        }
+
+        for (let i = 0; i < formRows.length; i++) {
+            const row = formRows[i];
+            const num = formRows.length > 1 ? ` (позиція #${i + 1})` : '';
+
+            if (!row.resource) {
+                toast.dismiss();
+                return toast.error(`Оберіть ресурс зі списку${num}`, { id: 'req-form-toast' });
+            }
+            const qty = parseInt(row.quantity, 10);
+            if (!row.quantity || isNaN(qty) || qty <= 0) {
+                toast.dismiss();
+                return toast.error(`Вкажіть кількість більше нуля${num}`, { id: 'req-form-toast' });
+            }
+            if (!row.purpose) {
+                toast.dismiss();
+                return toast.error(`Оберіть ціль призначення${num}`, { id: 'req-form-toast' });
+            }
+        }
 
         setIsSubmitting(true);
         try {
             await Promise.all(formRows.map(row => api.post('/requests/', {
-                resource: parseInt(row.resource),
-                quantity_requested: parseInt(row.quantity),
-                purpose: parseInt(row.purpose),
-                user: selectedUserId || currentUser?.id,
+                resource: parseInt(row.resource, 10),
+                quantity_requested: parseInt(row.quantity, 10),
+                purpose: parseInt(row.purpose, 10),
+                user: targetUserId,
                 city: selectedCity.Present || selectedCity.Description,
                 warehouse_address: finalAddress,
                 warehouse_ref: isAddressMode ? 'ADDRESS_DELIVERY' : selectedWarehouse?.Ref,
-                latitude: isAddressMode ? selectedCity?.Latitude : selectedWarehouse?.Latitude,
-                longitude: isAddressMode ? selectedCity?.Longitude : selectedWarehouse?.Longitude,
+                latitude: isAddressMode ? (selectedCity?.Latitude || null) : (selectedWarehouse?.Latitude || null),
+                longitude: isAddressMode ? (selectedCity?.Longitude || null) : (selectedWarehouse?.Longitude || null),
                 due_date: dueDate,
-                auto_extend: autoExtend // ❗ Передаємо параметр автопродовження дефіциту на бекенд
-            })));
-            toast.success("Заявку успішно створено!");
-            fetchData();
-            onClose();
+                auto_extend: Boolean(autoExtend)
+            }, { _suppressToast: true })));
+
+            toast.dismiss();
+            toast.success("Заявку успішно створено!", { id: 'req-form-toast' });
+            if (typeof fetchData === 'function') fetchData();
+            if (typeof onClose === 'function') onClose();
         } catch (err) {
-            toast.error("Помилка при збереженні");
+            toast.dismiss();
+            const errorText = extractErrorMessage(err, "Помилка при збереженні заявки");
+            toast.error(errorText, { id: 'req-form-toast' });
         } finally {
             setIsSubmitting(false);
         }
@@ -397,8 +481,8 @@ const RequestForm = ({
                         ) : (
                             /* АДРЕСНА ДОСТАВКА З ВИПАДАЮЧИМ МЕНЮ ВУЛИЦЬ */
                             <div
-                                className="grid grid-cols-3 gap-3 animate-in slide-in-from-top-2 duration-300 relative">
-                                <div className="col-span-2 relative">
+                                className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-in slide-in-from-top-2 duration-300 relative">
+                                <div className="sm:col-span-2 relative">
                                     <label
                                         className="text-[9px] font-bold text-slate-500 uppercase mb-1 block ml-1">Вулиця</label>
                                     <input
@@ -464,7 +548,7 @@ const RequestForm = ({
             </div>
 
             {/* 3. ПЕРЕЛІК РЕСУРСІВ */}
-            <div className="space-y-4 max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-4">
                 <label className="text-[10px] font-black uppercase text-slate-400 italic block tracking-widest">
                     3. Перелік ресурсів
                 </label>
@@ -477,8 +561,8 @@ const RequestForm = ({
 
                     return (
                         <div key={row.id}
-                             className="bg-white p-5 rounded-2xl border hover:border-blue-100 transition-all shadow-sm">
-                            <div className="flex flex-col md:flex-row gap-4 items-end">
+                             className="bg-white p-4 sm:p-5 rounded-2xl border hover:border-blue-100 transition-all shadow-sm">
+                            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
                                 <div className="flex-1 w-full text-left">
                                     <label
                                         className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Package
@@ -497,7 +581,7 @@ const RequestForm = ({
                                         })}
                                     </select>
                                 </div>
-                                <div className="w-24 text-left">
+                                <div className="w-full sm:w-28 text-left">
                                     <label
                                         className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Hash
                                         size={12} className="inline mr-1"/>К-сть</label>
@@ -521,9 +605,14 @@ const RequestForm = ({
                                     </select>
                                 </div>
                                 {formRows.length > 1 && (
-                                    <button onClick={() => setFormRows(formRows.filter(r => r.id !== row.id))}
-                                            className="text-slate-300 p-2 hover:text-red-500 transition-colors"><Trash2
-                                        size={18}/></button>
+                                    <div className="flex justify-end sm:self-end">
+                                        <button onClick={() => setFormRows(formRows.filter(r => r.id !== row.id))}
+                                                className="text-slate-400 hover:text-red-500 p-2 transition-colors flex items-center gap-1 text-xs font-bold"
+                                                aria-label="Видалити позицію">
+                                            <Trash2 size={18}/>
+                                            <span className="sm:hidden text-xs">Видалити</span>
+                                        </button>
+                                    </div>
                                 )}
                             </div>
 
@@ -560,14 +649,15 @@ const RequestForm = ({
                 <Plus size={16}/> Додати ще одну позицію
             </button>
 
-            <div className="flex gap-4 justify-end pt-4 border-t border-slate-100">
+            <div className="flex flex-col-reverse sm:flex-row gap-3 justify-end pt-4 border-t border-slate-100">
                 <button type="button" onClick={onClose}
-                        className="px-8 py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors">Скасувати
+                        className="w-full sm:w-auto px-6 py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors text-center text-sm">
+                    Скасувати
                 </button>
                 <button type="button" onClick={handleSubmit} disabled={isSubmitting || !isDeliveryAvailable}
-                        className="px-10 py-3 bg-blue-600 text-white font-black rounded-2xl hover:bg-slate-900 shadow-xl shadow-blue-200 active:scale-95 transition-all disabled:bg-slate-300 disabled:shadow-none">
+                        className="w-full sm:w-auto px-8 py-3.5 bg-blue-600 text-white font-black rounded-2xl hover:bg-slate-900 shadow-xl shadow-blue-200 active:scale-95 transition-all disabled:bg-slate-300 disabled:shadow-none flex items-center justify-center gap-2 text-sm">
                     {isSubmitting ? "ЗБЕРЕЖЕННЯ..." :
-                        <div className="flex items-center gap-2"><Save size={20}/>ЗБЕРЕГТИ ЗАЯВКУ</div>}
+                        <><Save size={18}/><span>ЗБЕРЕГТИ ЗАЯВКУ</span></>}
                 </button>
             </div>
         </div>

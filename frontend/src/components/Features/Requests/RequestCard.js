@@ -1,8 +1,8 @@
 import React from 'react';
-import { User, AlertCircle, Clock, CheckCircle2, MapPin, RefreshCw, Settings } from '../../UI/icons';
+import { User, AlertCircle, Clock, CheckCircle2, MapPin, RefreshCw, Settings, Package } from '../../UI/icons';
 
 const RequestCard = ({ req, purposeMap, isAdmin, onOpenModal }) => {
-    const purposeData = purposeMap[req.purpose] || { label: 'Інше', icon: '📦', color: 'bg-gray-100' };
+    const purposeData = purposeMap[req.purpose] || { label: 'Інше', icon: <Package size={13} />, color: 'bg-gray-100' };
     const isHistory = req.status === 'done';
     const hasAutoExtend = req.auto_extend ?? true;
 

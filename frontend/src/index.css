@@ -8,6 +8,20 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Зменшення базового розміру шрифту на мобільних телефонах для компактного та акуратного вигляду */
+@media (max-width: 640px) {
+  html {
+    font-size: 13.5px;
+  }
+}
+
+/* Ще менший шрифт для дуже малих екранів (iPhone SE та аналоги) */
+@media (max-width: 390px) {
+  html {
+    font-size: 12.5px;
+  }
+}
+
 /* Оптимізація рендерингу позаекранних зображень на мобільних */
 img {
   content-visibility: auto;

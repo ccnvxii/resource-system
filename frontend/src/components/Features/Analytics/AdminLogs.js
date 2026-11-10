@@ -29,37 +29,37 @@ const AdminLogs = ({ logs = [] }) => {
       {/* ГОЛОВНА ШАПКА ЖУРНАЛУ (Згорнута за замовчуванням) */}
       <div
         onClick={() => setIsJournalVisible(!isJournalVisible)}
-        className="flex items-center justify-between px-6 py-4 bg-slate-800 rounded-3xl cursor-pointer hover:bg-slate-900 transition-all shadow-lg border border-slate-700"
+        className="flex items-center justify-between p-3.5 sm:px-6 sm:py-4 bg-slate-800 rounded-2xl sm:rounded-3xl cursor-pointer hover:bg-slate-900 transition-all shadow-lg border border-slate-700 gap-2"
       >
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-500 p-2 rounded-xl text-white shadow-inner">
-            <History size={20} />
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="bg-blue-500 p-2 rounded-xl text-white shadow-inner shrink-0">
+            <History size={18} />
           </div>
-          <div>
-            <h3 className="font-black text-white uppercase text-xs tracking-widest leading-none">
-              Журнал автоматизованого розподілу
+          <div className="min-w-0 text-left">
+            <h3 className="font-black text-white uppercase text-xs tracking-wider leading-tight truncate">
+              Журнал розподілу
             </h3>
-            <p className="text-slate-500 text-[10px] font-black uppercase mt-1">
-              Система аудиту та логування сесій
+            <p className="text-slate-400 text-[10px] font-bold uppercase mt-0.5 truncate">
+              Система аудиту та логування
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-            <div className="bg-slate-700/50 text-slate-400 px-3 py-1 rounded-full text-[9px] font-black uppercase border border-slate-600">
+        <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden sm:block bg-slate-700/50 text-slate-400 px-3 py-1 rounded-full text-[9px] font-black uppercase border border-slate-600">
                 {isJournalVisible ? 'Приховати історію' : 'Показати історію'}
             </div>
-            <div className={`transition-transform duration-300 ${isJournalVisible ? 'rotate-180' : ''}`}>
-                <ChevronDown className="text-white" size={20} />
+            <div className={`transition-transform duration-300 text-white p-1 rounded-lg ${isJournalVisible ? 'rotate-180' : ''}`}>
+                <ChevronDown size={18} />
             </div>
         </div>
       </div>
 
       {/* ВМІСТ ЖУРНАЛУ */}
-      <div className={`space-y-6 overflow-hidden transition-all duration-500 ease-in-out ${isJournalVisible ? 'max-h-[5000px] opacity-100 mt-6' : 'max-h-0 opacity-0 pointer-events-none'}`}>
+      <div className={`space-y-4 sm:space-y-6 overflow-hidden transition-all duration-500 ease-in-out ${isJournalVisible ? 'max-h-[5000px] opacity-100 mt-4 sm:mt-6' : 'max-h-0 opacity-0 pointer-events-none'}`}>
 
         {sortedPlanIds.length === 0 ? (
-            <div className="bg-white rounded-[2rem] border-2 border-dashed border-slate-200 p-10 text-center">
-                <Layers className="mx-auto text-slate-200 mb-2" size={40} />
+            <div className="bg-white rounded-2xl sm:rounded-[2rem] border-2 border-dashed border-slate-200 p-8 sm:p-10 text-center">
+                <Layers className="mx-auto text-slate-200 mb-2" size={36} />
                 <p className="text-slate-400 font-black text-xs uppercase tracking-widest">Дані про розподіл відсутні</p>
             </div>
         ) : (
@@ -70,22 +70,26 @@ const AdminLogs = ({ logs = [] }) => {
                 const isExpanded = !!expandedPlans[planId];
 
                 return (
-                <div key={planId} className="bg-white rounded-[2rem] border-2 border-slate-100 shadow-sm overflow-hidden transition-all hover:border-blue-200">
+                <div key={planId} className="bg-white rounded-2xl sm:rounded-[2rem] border-2 border-slate-100 shadow-sm overflow-hidden transition-all hover:border-blue-200">
                     <div
                       onClick={(e) => togglePlan(planId, e)}
-                      className="bg-slate-50/50 p-5 border-b border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-100/50 transition-colors"
+                      className="bg-slate-50/50 p-3.5 sm:p-5 border-b border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-100/50 transition-colors gap-2"
                     >
-                        <div className="flex items-center gap-4">
-                            <div className="bg-slate-200 p-2.5 rounded-xl text-slate-600 shadow-sm transition-colors group-hover:bg-blue-600 group-hover:text-white">
-                                <Box size={18} />
+                        <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
+                            <div className="bg-slate-200 p-2 sm:p-2.5 rounded-xl text-slate-600 shadow-sm shrink-0">
+                                <Box size={16} />
                             </div>
-                            <div>
-                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-tighter leading-none">План #{planId}</div>
-                                <h4 className="font-black text-slate-800 text-lg leading-tight">Результат оптимізації</h4>
+                            <div className="min-w-0 text-left">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">План #{planId}</span>
+                                    <span className="text-[10px] font-bold text-blue-600 md:hidden">• {planItems.length} оп.</span>
+                                </div>
+                                <h4 className="font-black text-slate-800 text-sm sm:text-base leading-tight truncate">Результат оптимізації</h4>
+                                <div className="text-[10px] text-slate-400 md:hidden mt-0.5">{planDate}</div>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-3 shrink-0">
                             <div className="hidden md:flex flex-col items-end">
                                 <div className="flex items-center gap-1.5 text-slate-500 text-xs font-bold">
                                     <Clock size={12} className="text-blue-400" />
@@ -93,14 +97,36 @@ const AdminLogs = ({ logs = [] }) => {
                                 </div>
                                 <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{planItems.length} операцій</div>
                             </div>
-                            <div className="bg-white p-2 rounded-full border border-slate-200 text-slate-400">
+                            <div className="bg-white p-1.5 sm:p-2 rounded-full border border-slate-200 text-slate-400">
                                 {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                             </div>
                         </div>
                     </div>
 
-                    <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                        <div className="overflow-x-auto">
+                    <div className={`transition-all duration-300 overflow-hidden ${isExpanded ? 'max-h-[3000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                        {/* 1. Мобільний вигляд (акуратні картки для < md) */}
+                        <div className="block md:hidden p-3 space-y-2 bg-slate-50/30">
+                            {planItems.map((log) => (
+                                <div key={log.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs text-left space-y-1.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <Package size={14} className="text-blue-500 shrink-0" />
+                                            <span className="text-xs font-black text-slate-800 truncate">{log.resource_name}</span>
+                                        </div>
+                                        <span className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-black text-xs border border-blue-100 shrink-0">
+                                            +{Math.round(log.amount)} {log.unit || 'од.'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+                                        <span className="font-bold text-slate-700 truncate max-w-[150px]">{log.user_full_name}</span>
+                                        <span className="text-slate-400 text-[10px] uppercase font-bold truncate max-w-[120px]">{log.warehouse_name}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* 2. Десктопний вигляд (таблиця для >= md) */}
+                        <div className="hidden md:block overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-slate-50/30">

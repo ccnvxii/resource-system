@@ -352,6 +352,9 @@ class NovaPoshtaProxyView(APIView):
         if action == "get_cities":
             res = np.get_cities(request.data.get("search", ""))
             settlements = (res.get("data", []) and res["data"][0].get("Addresses", [])) or []
+            # Debug: виводимо перший результат щоб бачити поля
+            if settlements:
+                print(f"[NP Cities] Sample keys: {list(settlements[0].keys())}")
             return Response(settlements)
 
         if action == "get_warehouses":
@@ -360,24 +363,39 @@ class NovaPoshtaProxyView(APIView):
 
         if action == "get_streets":
             city_ref = request.data.get("city_ref")
-            res = np.get_streets(city_ref, request.data.get("search", ""))
-            raw_data = res.get("data", [])
-            streets_list = []
+            search = request.data.get("search", "").strip()
 
+            res = np.get_streets(city_ref, search)
+            raw_data = res.get("data", [])
+
+            streets_list = []
             if raw_data and isinstance(raw_data, list) and len(raw_data) > 0:
-                if "AddressesList" in raw_data[0]:
-                    streets_list = raw_data[0].get("AddressesList", [])
-                elif "Addresses" in raw_data[0]:
-                    streets_list = raw_data[0].get("Addresses", [])
+                first = raw_data[0]
+                if isinstance(first, dict):
+                    if "Addresses" in first and isinstance(first["Addresses"], list):
+                        streets_list = first["Addresses"]
+                    elif "AddressesList" in first and isinstance(first["AddressesList"], list):
+                        streets_list = first["AddressesList"]
+                    elif "Streets" in first and isinstance(first["Streets"], list):
+                        streets_list = first["Streets"]
+                    elif "Description" in first:
+                        streets_list = raw_data
                 else:
                     streets_list = raw_data
 
             final_streets = []
             for s in streets_list:
                 if isinstance(s, dict):
-                    desc = s.get("Description") or s.get("Presentation") or s.get("SettlementStreetDescription")
+                    desc = (s.get("Present")
+                            or s.get("SettlementStreetDescription")
+                            or s.get("Description")
+                            or s.get("StreetDescription"))
                     if desc:
+                        st_type = s.get("StreetsType")
+                        if st_type and not desc.startswith(st_type) and not s.get("Present"):
+                            desc = f"{st_type} {desc}"
                         s["Description"] = desc
+                        s["Presentation"] = desc
                         final_streets.append(s)
 
             return Response(final_streets)

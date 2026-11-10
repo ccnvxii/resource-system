@@ -1,10 +1,12 @@
-import React, {useState, useMemo} from 'react';
+import React, {useState, useMemo, useEffect} from 'react';
 import {PackageSearch, Filter, ChevronUp, ChevronDown} from '../../UI/icons';
 import api from '../../../services/api';
 import StockRow from './StockRow';
+import StockMobileCard from './StockMobileCard';
 import FilterSelect from '../../UI/FilterSelect';
 
 const INITIAL_ROWS_COUNT = 30;
+const MOBILE_STOCK_PAGE_SIZE = 6;
 
 const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
     const [filterCategory, setFilterCategory] = useState('all');
@@ -13,6 +15,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
     const [editingId, setEditingId] = useState(null);
     const [editValue, setEditValue] = useState("");
     const [visibleCount, setVisibleCount] = useState(INITIAL_ROWS_COUNT);
+    const [mobilePage, setMobilePage] = useState(1);
 
     const categories = useMemo(() => ['all', ...new Set(Object.values(resourcesMap).map(r => r.category_name))], [resourcesMap]);
     const warehouses = useMemo(() => ['all', ...new Set(stocks.map(s => s.warehouse_name))], [stocks]);
@@ -36,9 +39,20 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
         });
     }, [filteredStocks, sortOrder]);
 
+    useEffect(() => {
+        setMobilePage(1);
+    }, [filterCategory, filterWarehouse, sortOrder]);
+
     const visibleStocks = useMemo(() => {
         return sortedStocks.slice(0, visibleCount);
     }, [sortedStocks, visibleCount]);
+
+    // Мобільна пагінація карток
+    const totalMobilePages = Math.ceil(sortedStocks.length / MOBILE_STOCK_PAGE_SIZE) || 1;
+    const mobileVisibleStocks = useMemo(() => {
+        const start = (mobilePage - 1) * MOBILE_STOCK_PAGE_SIZE;
+        return sortedStocks.slice(start, start + MOBILE_STOCK_PAGE_SIZE);
+    }, [sortedStocks, mobilePage]);
 
     const toggleSort = () => {
         if (sortOrder === 'none') setSortOrder('desc');
@@ -59,34 +73,59 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
 
     return (
         <section
-            className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[650px]">
-            <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-4">
+            className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-auto md:h-[650px]">
+            <div className="p-3.5 sm:p-4 border-b border-slate-100 bg-slate-50/50 space-y-3 sm:space-y-4">
                 <div className="flex justify-between items-center h-10">
-                    <div className="flex items-center gap-2 text-slate-800">
-                        <PackageSearch size={22} className="text-blue-600"/>
-                        <h2 className="text-lg font-bold">Запаси на складах</h2>
+                    <div className="flex items-center gap-2 text-slate-800 min-w-0">
+                        <PackageSearch size={22} className="text-blue-600 shrink-0"/>
+                        <h2 className="text-base sm:text-lg font-bold truncate">Запаси на складах</h2>
                     </div>
+
+                    {/* Швидке сортування на мобільних телефонах */}
+                    <button
+                        onClick={toggleSort}
+                        className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:text-blue-600 shadow-sm transition-colors active:scale-95 shrink-0"
+                        aria-label="Сортувати за кількістю"
+                    >
+                        <span>К-сть</span>
+                        <span className="flex flex-col text-slate-400">
+                            <ChevronUp size={10} className={`-mb-1 ${sortOrder === 'asc' ? 'text-blue-600 stroke-[3]' : ''}`}/>
+                            <ChevronDown size={10} className={`${sortOrder === 'desc' ? 'text-blue-600 stroke-[3]' : ''}`}/>
+                        </span>
+                    </button>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60">
-                    <div className="flex items-center gap-1 text-[10px] font-black uppercase text-slate-400 mr-1">
+                    <div className="hidden sm:flex items-center gap-1 text-[10px] font-black uppercase text-slate-400 mr-1">
                         <Filter size={12}/> Фільтри:
                     </div>
-                    <FilterSelect icon={PackageSearch} value={filterCategory}
-                                  onChange={(e) => setFilterCategory(e.target.value)}>
+                    <FilterSelect
+                        icon={PackageSearch}
+                        value={filterCategory}
+                        onChange={(e) => setFilterCategory(e.target.value)}
+                        className="flex-1 min-w-[120px]"
+                    >
                         <option value="all">Усі категорії</option>
-                        {categories.filter(c => c !== 'all' && c).map(cat => <option key={cat}
-                                                                                     value={cat}>{cat}</option>)}
+                        {categories.filter(c => c !== 'all' && c).map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                        ))}
                     </FilterSelect>
-                    <FilterSelect icon={PackageSearch} value={filterWarehouse}
-                                  onChange={(e) => setFilterWarehouse(e.target.value)}>
+                    <FilterSelect
+                        icon={PackageSearch}
+                        value={filterWarehouse}
+                        onChange={(e) => setFilterWarehouse(e.target.value)}
+                        className="flex-1 min-w-[120px]"
+                    >
                         <option value="all">Усі склади</option>
-                        {warehouses.filter(w => w !== 'all' && w).map(wh => <option key={wh} value={wh}>{wh}</option>)}
+                        {warehouses.filter(w => w !== 'all' && w).map(wh => (
+                            <option key={wh} value={wh}>{wh}</option>
+                        ))}
                     </FilterSelect>
                 </div>
             </div>
 
-            <div className="overflow-y-auto flex-1 custom-scrollbar pr-1">
+            {/* 1. Десктопний вигляд: Таблиця (показується на екранах від md і ширше) */}
+            <div className="hidden md:block overflow-y-auto flex-1 custom-scrollbar pr-1">
                 <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 sticky top-0 uppercase text-[10px] font-bold text-slate-400">
                     <tr>
@@ -130,17 +169,71 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                     ))}
                     </tbody>
                 </table>
-                {sortedStocks.length > visibleCount && (
-                    <div className="p-3 text-center border-t border-slate-100 bg-slate-50/50">
-                        <button
-                            onClick={() => setVisibleCount(prev => prev + 30)}
-                            className="text-xs font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors py-1.5 px-4 rounded-xl bg-blue-50 hover:bg-blue-100"
-                        >
-                            Показати ще (+30 з {sortedStocks.length})
-                        </button>
+            </div>
+
+            {/* 2. Спеціальний мобільний формат: акуратні картки без скрол-трепу */}
+            <div className="md:hidden p-3 space-y-2.5">
+                {mobileVisibleStocks.length > 0 ? (
+                    <>
+                        {mobileVisibleStocks.map((stock) => (
+                            <StockMobileCard
+                                key={stock.id}
+                                stock={stock}
+                                resource={resourcesMap[stock.resource] || {
+                                    name: '...',
+                                    category_name: '...',
+                                    unit_name: '?'
+                                }}
+                                isEditing={editingId === stock.id}
+                                editValue={editValue}
+                                setEditValue={setEditValue}
+                                onStartEdit={(id, val) => {
+                                    setEditingId(id);
+                                    setEditValue(val);
+                                }}
+                                onSaveEdit={handleSaveEdit}
+                            />
+                        ))}
+                        {totalMobilePages > 1 && (
+                            <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs font-bold text-slate-500 select-none">
+                                <button
+                                    disabled={mobilePage <= 1}
+                                    onClick={() => setMobilePage(p => Math.max(1, p - 1))}
+                                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 active:scale-95 transition-all shadow-xs"
+                                >
+                                    ← Попередня
+                                </button>
+                                <span className="text-slate-600 font-mono text-xs">
+                                    {mobilePage} / {totalMobilePages} <span className="text-slate-400 font-sans font-normal text-[11px]">({sortedStocks.length})</span>
+                                </span>
+                                <button
+                                    disabled={mobilePage >= totalMobilePages}
+                                    onClick={() => setMobilePage(p => Math.min(totalMobilePages, p + 1))}
+                                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 active:scale-95 transition-all shadow-xs"
+                                >
+                                    Наступна →
+                                </button>
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <div className="text-center py-10 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                        Запасів не знайдено
                     </div>
                 )}
             </div>
+
+            {/* Кнопка довантаження порцій для десктопу */}
+            {sortedStocks.length > visibleCount && (
+                <div className="hidden md:block p-3 text-center border-t border-slate-100 bg-slate-50/50">
+                    <button
+                        onClick={() => setVisibleCount(prev => prev + 30)}
+                        className="text-xs font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors py-1.5 px-4 rounded-xl bg-blue-50 hover:bg-blue-100"
+                    >
+                        Показати ще (+30 з {sortedStocks.length})
+                    </button>
+                </div>
+            )}
         </section>
     );
 };

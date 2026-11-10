@@ -307,16 +307,37 @@ class NovaPoshtaService:
             {"SettlementRef": city_ref}
         )
 
-    def get_streets(self, settlement_ref, search):
-        return self._safe_request(
+    def get_streets(self, city_ref, search):
+        # 1. Спершу пробуємо метод searchSettlementStreets (для SettlementRef)
+        res = self._safe_request(
             "Address",
             "searchSettlementStreets",
             {
-                "SettlementRef": settlement_ref,
+                "SettlementRef": city_ref,
                 "StreetName": search,
                 "Limit": 50
             }
         )
+        data = res.get("data", [])
+        if data and isinstance(data, list) and len(data) > 0:
+            addresses = data[0].get("Addresses", [])
+            if addresses:
+                return res
+
+        # 2. Якщо не знайдено — пробуємо метод getStreet (для CityRef/DeliveryCity)
+        res_city = self._safe_request(
+            "Address",
+            "getStreet",
+            {
+                "CityRef": city_ref,
+                "FindByString": search,
+                "Limit": 50
+            }
+        )
+        if res_city.get("data"):
+            return res_city
+
+        return res
 
     def get_warehouse_coordinates(self, warehouse_ref):
         """ Отримуємо координати конкретного відділення за його унікальним Ref """

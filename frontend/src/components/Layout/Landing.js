@@ -4,8 +4,6 @@ import {
     Zap,
     BarChart3,
     ArrowRight,
-    Users,
-    Package,
     ClipboardCheck
 } from '../UI/icons';
 
@@ -85,7 +83,7 @@ const Landing = ({onEnter, stats}) => {
                                 alt="Humanitarian Aid Ukraine"
                                 width="700"
                                 height="467"
-                                fetchPriority="high"
+                                loading="lazy"
                                 decoding="async"
                                 className="rounded-2xl grayscale-[20%] hover:grayscale-0 transition-all duration-500 w-full h-full object-cover"
                             />

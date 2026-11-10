@@ -3,13 +3,13 @@ import { Edit3, Check } from '../../UI/icons';
 
 const StockRow = ({ stock, resource, isEditing, editValue, setEditValue, onStartEdit, onSaveEdit }) => {
     return (
-        <tr className="border-b border-slate-50 group hover:bg-blue-50/30">
-            <td className="px-6 py-4 italic text-slate-500">{stock.warehouse_name}</td>
-            <td className="px-6 py-4">
-                <div className="font-bold text-slate-800">{resource.name}</div>
+        <tr className="border-b border-slate-50 group hover:bg-blue-50/30 transition-colors">
+            <td className="px-4 md:px-6 py-3.5 md:py-4 italic text-slate-500 text-xs md:text-sm">{stock.warehouse_name}</td>
+            <td className="px-4 md:px-6 py-3.5 md:py-4">
+                <div className="font-bold text-slate-800 text-xs md:text-sm">{resource.name}</div>
                 <div className="text-[10px] text-blue-500 font-bold uppercase">{resource.category_name}</div>
             </td>
-            <td className="px-6 py-4 text-right">
+            <td className="px-4 md:px-6 py-3.5 md:py-4 text-right">
                 <div className="relative flex items-center justify-end h-10">
                     {isEditing ? (
                         <div className="flex items-center gap-1 animate-in fade-in zoom-in duration-200">

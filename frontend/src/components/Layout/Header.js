@@ -3,105 +3,122 @@ import {
     PlusCircle,
     RefreshCw,
     ClipboardList,
-    PackagePlus,
     ShieldCheck,
     User,
     LogOut
 } from '../UI/icons';
 
 const Header = ({onOpenForm, onOpenStockIn, onRefresh, onAddResource, currentUser, onLogout}) => {
-    const btnBase = "flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 border-2 shadow-sm";
-
     // Визначаємо, чи є користувач адміном
     const isAdmin = currentUser?.is_admin || currentUser?.username === 'admin';
 
     return (
         <header
-            className="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-            <div className="flex items-center gap-4">
-                <div
-                    className="hidden sm:flex bg-white p-1 rounded-xl shadow-sm border-2 border-blue-100 items-center justify-center overflow-hidden w-12 h-12 shrink-0">
-                    <img
-                        src={process.env.PUBLIC_URL + '/logo.ico'}
-                        alt="ResQ Logo"
-                        className="w-full h-full object-contain"
-                    />
+            className="bg-white p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3.5 md:space-y-0 md:flex md:justify-between md:items-center">
+            
+            {/* Верхній блок (логотип, користувач, бейдж та мобільні утиліти) */}
+            <div className="flex items-center justify-between gap-3 w-full md:w-auto">
+                <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                    <div
+                        className="bg-white p-1 rounded-xl shadow-xs border border-blue-100 flex items-center justify-center overflow-hidden w-9 h-9 sm:w-11 sm:h-11 shrink-0">
+                        <img
+                            src={process.env.PUBLIC_URL + '/logo.ico'}
+                            alt="ResQ Logo"
+                            className="w-full h-full object-contain"
+                        />
+                    </div>
+
+                    <div className="min-w-0 text-left">
+                        <div className="flex items-center gap-1.5 sm:gap-2">
+                            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight leading-none">
+                                <span className="text-blue-600">ResQ</span> System
+                            </h1>
+
+                            {/* ПЛАШКА СТАТУСУ */}
+                            {isAdmin ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded-full text-[9px] font-black uppercase tracking-wider shrink-0">
+                                    <ShieldCheck size={10} className="fill-white/20"/>
+                                    Admin
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[9px] font-black uppercase tracking-wider border border-slate-200 shrink-0">
+                                    <User size={10}/>
+                                    Волонтер
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-slate-500 mt-1 font-medium text-xs leading-none">
+                            <span className="font-bold text-slate-700 truncate max-w-[140px] sm:max-w-[220px] md:max-w-none">
+                                {currentUser?.username || 'Користувач'}
+                            </span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-[11px] text-slate-400">
+                                {isAdmin ? 'Повний доступ' : 'Обмежений'}
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
-                <div>
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight">
-                            <span className="text-blue-600">ResQ</span> System
-                        </h1>
-
-                        {/* ПЛАШКА СТАТУСУ */}
-                        {isAdmin ? (
-                            <div
-                                className="flex items-center gap-1.5 px-3 py-1 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-100">
-                                <ShieldCheck size={12} className="fill-white/20"/>
-                                <span
-                                    className="text-[10px] font-black uppercase tracking-wider text-white">Адміністратор</span>
-                            </div>
-                        ) : (
-                            <div
-                                className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-600 rounded-full border border-slate-200">
-                                <User size={12}/>
-                                <span className="text-[10px] font-black uppercase tracking-wider">Волонтер</span>
-                            </div>
-                        )}
-                    </div>
-                    <p className="text-slate-500 mt-0.5 font-medium text-xs md:text-sm italic">
-                        {currentUser?.username || 'Користувач'}: {isAdmin ? 'Повний доступ' : 'Обмежений доступ'}
-                    </p>
+                {/* Швидкі кнопки оновлення та виходу для мобільних екранів (< md) */}
+                <div className="flex md:hidden items-center gap-1.5 shrink-0">
+                    <button
+                        onClick={onRefresh}
+                        className="p-2 bg-slate-50 text-slate-600 rounded-xl border border-slate-200 hover:bg-slate-100 active:scale-95 transition-all shadow-2xs"
+                        title="Оновити дані"
+                        aria-label="Оновити дані"
+                    >
+                        <RefreshCw size={16}/>
+                    </button>
+                    <button
+                        onClick={onLogout}
+                        className="p-2 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-100 active:scale-95 transition-all shadow-2xs"
+                        title="Вийти з акаунту"
+                        aria-label="Вийти"
+                    >
+                        <LogOut size={16}/>
+                    </button>
                 </div>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-3 mt-6 md:mt-0">
-                {/* Поставка — зазвичай тільки для адміна або складу */}
+            {/* Блок основних дій */}
+            <div className="flex items-center gap-2 sm:gap-2.5 w-full md:w-auto">
+                {/* Поставка — для адміна */}
                 {isAdmin && (
                     <button
                         onClick={onOpenStockIn}
-                        className={`${btnBase} bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100 hover:border-emerald-200`}
+                        className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 active:scale-95 transition-all shadow-2xs"
                     >
-                        <PlusCircle size={18}/>
-                        Поставка
+                        <PlusCircle size={16}/>
+                        <span>Поставка</span>
                     </button>
                 )}
 
-                {/* Заявка — відкрита для ВСІХ авторизованих користувачів */}
+                {/* Створення заявки */}
                 <button
                     onClick={onOpenForm}
-                    className={`${btnBase} bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100 hover:border-blue-200`}
+                    className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-blue-600 text-white hover:bg-slate-900 active:scale-95 transition-all shadow-md shadow-blue-100"
                 >
-                    <ClipboardList size={18}/>
-                    Заявка
+                    <ClipboardList size={16}/>
+                    <span>Створити заявку</span>
                 </button>
 
-                {/*{isAdmin && (*/}
-                {/*    <button*/}
-                {/*        onClick={onAddResource}*/}
-                {/*        className={`${btnBase} bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100 hover:border-indigo-200`}*/}
-                {/*    >*/}
-                {/*        <PackagePlus size={18}/>*/}
-                {/*        Ресурси*/}
-                {/*    </button>*/}
-                {/*)}*/}
-
-                <div className="flex gap-2 ml-2 pl-4 border-l-2 border-slate-100">
+                {/* Десктопні кнопки оновлення та виходу (тільки >= md) */}
+                <div className="hidden md:flex items-center gap-2 ml-2 pl-3 border-l border-slate-200">
                     <button
                         onClick={onRefresh}
-                        className="p-2.5 bg-slate-50 text-slate-500 rounded-xl border-2 border-slate-100 hover:bg-slate-100 hover:border-slate-200 transition-all active:scale-95 shadow-sm"
+                        className="p-2.5 bg-slate-50 text-slate-500 rounded-xl border border-slate-200 hover:bg-slate-100 transition-all active:scale-95 shadow-2xs"
                         title="Оновити дані"
                     >
-                        <RefreshCw size={20}/>
+                        <RefreshCw size={18}/>
                     </button>
 
                     <button
                         onClick={onLogout}
-                        className="p-2.5 bg-red-50 text-red-500 rounded-xl border-2 border-red-100 hover:bg-red-100 hover:border-red-200 transition-all active:scale-95 shadow-sm"
-                        title="Вийти з аккаунту"
+                        className="p-2.5 bg-red-50 text-red-500 rounded-xl border border-red-100 hover:bg-red-100 transition-all active:scale-95 shadow-2xs"
+                        title="Вийти з акаунту"
                     >
-                        <LogOut size={20}/>
+                        <LogOut size={18}/>
                     </button>
                 </div>
             </div>

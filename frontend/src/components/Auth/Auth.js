@@ -4,7 +4,7 @@ import {zodResolver} from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import axios from 'axios';
 import {toast} from 'react-hot-toast';
-import {Mail, Lock, User, Phone, Building2, ArrowRight, ShieldCheck, CheckCircle2, Send} from '../UI/icons';
+import {Mail, Lock, User, Phone, Building2, ArrowRight, ShieldCheck, CheckCircle2, Send, Eye, EyeOff, KeyRound} from '../UI/icons';
 import Modal from '../UI/Modal';
 
 const nameRegex = /^[\p{L}\s'-]+$/u;
@@ -39,9 +39,14 @@ const schema = z.object({
 
 const AuthModal = ({isOpen, onClose, onSuccess}) => {
     const [isLogin, setIsLogin] = useState(true);
+    const [showPassword, setShowPassword] = useState(false);
     // Стан для відображення модалки успішної реєстрації з інструкцією
     const [showSuccessModal, setShowSuccessModal] = useState(false);
     const [registeredEmail, setRegisteredEmail] = useState('');
+    // Стан для форми скидання пароля
+    const [showForgotModal, setShowForgotModal] = useState(false);
+    const [forgotEmail, setForgotEmail] = useState('');
+    const [isSendingReset, setIsSendingReset] = useState(false);
 
     window.isLoginModeGlobal = isLogin;
 
@@ -59,9 +64,8 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
                     password: data.password
                 });
 
+                // Не показуємо тост тут — App.js вже очистить тости та покаже одне "Вітаємо, ..."
                 onSuccess({username: data.identifier, email: data.identifier}, response.data);
-                toast.success("Вхід успішний!");
-                onClose();
             } else {
                 // --- РЕЄСТРАЦІЯ ---
                 const regData = {
@@ -115,6 +119,27 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
         }
     };
 
+    // Обробник запиту на скидання пароля (надсилає email адміну)
+    const handleForgotPassword = async () => {
+        if (!forgotEmail || forgotEmail.length < 3) {
+            toast.error("Введіть вашу пошту або логін");
+            return;
+        }
+        setIsSendingReset(true);
+        try {
+            await axios.post('/api/password-reset/', {email: forgotEmail});
+            toast.success("Запит надіслано! Перевірте пошту або зверніться до адміністратора.");
+            setShowForgotModal(false);
+            setForgotEmail('');
+        } catch (e) {
+            // Якщо endpoint не налаштований — показуємо інструкцію зв'язатись з адміном
+            toast("Зверніться до адміністратора: admin@resq.ua", {icon: '📧', duration: 6000});
+            setShowForgotModal(false);
+        } finally {
+            setIsSendingReset(false);
+        }
+    };
+
     return (
         <>
             {/* Головне вікно входу / реєстрації */}
@@ -123,7 +148,7 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
 
                     {!isLogin && (
                         <>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                 <div className="text-left">
                                     <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Ім'я</label>
                                     <input {...register("firstName")}
@@ -182,12 +207,33 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
                         <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Пароль</label>
                         <div className="relative">
                             <Lock className="absolute left-3 top-3.5 text-slate-400" size={18}/>
-                            <input {...register("password")} type="password"
-                                   className="w-full pl-10 pr-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold focus:border-blue-500 outline-none transition-all"/>
+                            <input {...register("password")} type={showPassword ? "text" : "password"}
+                                   className="w-full pl-10 pr-11 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold focus:border-blue-500 outline-none transition-all text-sm"/>
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(prev => !prev)}
+                                className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 p-0.5 focus:outline-none transition-colors"
+                                aria-label={showPassword ? "Сховати пароль" : "Показати пароль"}
+                            >
+                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
                         </div>
                         {errors.password &&
                             <span className="text-[9px] text-red-500 font-bold">{errors.password.message}</span>}
                     </div>
+
+                    {/* Посилання "Забули пароль?" — тільки для форми входу */}
+                    {isLogin && (
+                        <div className="text-right -mt-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowForgotModal(true)}
+                                className="text-[11px] font-bold text-slate-400 hover:text-blue-500 transition-colors"
+                            >
+                                Забули пароль?
+                            </button>
+                        </div>
+                    )}
 
                     <button
                         type="submit"
@@ -207,6 +253,47 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
                         </button>
                     </div>
                 </form>
+            </Modal>
+
+            {/* Модальне вікно скидання пароля */}
+            <Modal
+                isOpen={showForgotModal}
+                onClose={() => setShowForgotModal(false)}
+                title="Скидання пароля"
+                subtitle="Відновлення доступу"
+                icon={Lock}
+            >
+                <div className="space-y-5 text-left">
+                    <p className="text-sm text-slate-500 leading-relaxed">
+                        Введіть вашу пошту або логін. Якщо акаунт існує — ми надішлемо інструкції. Або зверніться до адміністратора напряму.
+                    </p>
+                    <div className="text-left">
+                        <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Email або логін</label>
+                        <div className="relative mt-1">
+                            <Mail className="absolute left-3 top-3.5 text-slate-400" size={18}/>
+                            <input
+                                type="text"
+                                value={forgotEmail}
+                                onChange={e => setForgotEmail(e.target.value)}
+                                placeholder="email@test.com"
+                                className="w-full pl-10 pr-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold focus:border-blue-500 outline-none transition-all"
+                            />
+                        </div>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-700 font-bold">
+                        Або напишіть адміністратору:&nbsp;
+                        <a href="mailto:admin@resq.ua?subject=Скидання пароля ResQ" className="underline text-blue-600">admin@resq.ua</a>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleForgotPassword}
+                        disabled={isSendingReset}
+                        className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl hover:bg-blue-600 disabled:bg-slate-400 transition-all active:scale-95 flex items-center justify-center gap-3"
+                    >
+                        {isSendingReset ? 'НАДСИЛАННЯ...' : 'НАДІСЛАТИ ЗАПИТ'}
+                        {!isSendingReset && <ArrowRight size={20}/>}
+                    </button>
+                </div>
             </Modal>
 
             {/* Додаткове модальне вікно успішної реєстрації з інструкцією */}

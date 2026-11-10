@@ -1,6 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
-import { Home, Info } from './components/UI/icons';
+import { Home, Info, PackageSearch, ListChecks } from './components/UI/icons';
 
 // Сервіси та кастомні хуки
 import api from './services/api';
@@ -29,6 +29,7 @@ function App() {
     const [loading, setLoading] = useState(false);
     const [plan, setPlan] = useState(null);
     const [distributionStrategy, setDistributionStrategy] = useState('hybrid');
+    const [activeAdminTab, setActiveAdminTab] = useState('stocks');
 
     // Керування станом усіх модалок в одному місці
     const { modals, openModal, closeModal } = useModal({
@@ -57,7 +58,8 @@ function App() {
         setCurrentUser(userWithRole);
         setIsLandingMode(false);
         closeModal('auth');
-        toast.success(`Вітаємо, ${userData.first_name || 'користувачу'}!`);
+        toast.dismiss();
+        toast.success(`Вітаємо, ${userData.first_name || 'користувачу'}!`, { id: 'auth-success-toast' });
     };
 
     const handleLogout = () => {
@@ -65,7 +67,8 @@ function App() {
         setCurrentUser(null);
         setIsLandingMode(true);
         setPlan(null);
-        toast.success("Вихід виконано");
+        toast.dismiss();
+        toast.success("Вихід виконано", { id: 'logout-toast' });
     };
 
     const handleDeleteRequest = async (requestId) => {
@@ -113,36 +116,32 @@ function App() {
         }
     };
 
-    if (isLandingMode) {
-        return (
-            <>
-                <Landing
-                    onEnter={() => currentUser ? setIsLandingMode(false) : openModal('auth')}
-                    stats={{
-                        stocks: data.stocks.length,
-                        requests: data.requests.length,
-                        warehouses: data.warehouses.length
-                    }}
-                />
-                {modals.auth && (
-                    <Suspense fallback={null}>
-                        <AuthModal isOpen={modals.auth} onClose={() => closeModal('auth')} onSuccess={handleAuthSuccess} />
-                    </Suspense>
-                )}
-                <Toaster position="top-center" />
-                <ScrollToTop />
-            </>
-        );
-    }
-
     const hasOpenModal = Object.values(modals).some(Boolean);
 
     return (
-        <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
-            <div className="min-h-screen bg-slate-50 p-4 md:p-10 relative">
+        <>
             <Toaster position="top-center" toastOptions={{ className: 'rounded-xl font-bold shadow-xl' }} />
-
-            {/* Всі модалки сайту (завантажуються ТІЛЬКИ коли модалка відкрита) */}
+            {isLandingMode ? (
+                <>
+                    <Landing
+                        onEnter={() => currentUser ? setIsLandingMode(false) : openModal('auth')}
+                        stats={{
+                            stocks: data.stocks.length,
+                            requests: data.requests.length,
+                            warehouses: data.warehouses.length
+                        }}
+                    />
+                    {modals.auth && (
+                        <Suspense fallback={null}>
+                            <AuthModal isOpen={modals.auth} onClose={() => closeModal('auth')} onSuccess={handleAuthSuccess} />
+                        </Suspense>
+                    )}
+                    <ScrollToTop />
+                </>
+            ) : (
+                <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
+                    <div className="min-h-screen bg-slate-50 p-3 sm:p-6 md:p-10 relative">
+                    {/* Всі модалки сайту (завантажуються ТІЛЬКИ коли модалка відкрита) */}
             {hasOpenModal && (
                 <AppModals
                     modals={modals}
@@ -158,7 +157,7 @@ function App() {
             )}
 
             {/* Семантичний тег main для покращення Accessibility (виправлення зауваження Lighthouse) */}
-            <main className="max-w-7xl mx-auto space-y-12 pb-24">
+            <main className="max-w-7xl mx-auto space-y-4 sm:space-y-8 md:space-y-10 pb-16 sm:pb-24">
                 <Header
                     onOpenForm={() => openModal('request')}
                     onOpenStockIn={currentUser?.is_admin ? () => openModal('stockIn') : null}
@@ -169,24 +168,56 @@ function App() {
                 />
 
                 {/* Секція 1: Запаси та Заявки */}
-                <div id="section-stocks" className={`grid gap-8 pt-4 ${currentUser?.is_admin ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+                <div id="section-stocks" className="pt-2">
+                    {/* Мобільний тач-перемикач тільки для телефонів (ховається на md+) */}
                     {currentUser?.is_admin && (
-                        <StockTable stocks={data.stocks} resourcesMap={data.resourcesMap} onRefresh={fetchData} />
+                        <div className="md:hidden flex bg-slate-200/80 p-1 rounded-2xl mb-3 shadow-inner">
+                            <button
+                                onClick={() => setActiveAdminTab('stocks')}
+                                className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                                    activeAdminTab === 'stocks'
+                                        ? 'bg-white text-blue-600 shadow-sm'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                <PackageSearch size={15} />
+                                <span>Запаси ({data.stocks.length})</span>
+                            </button>
+                            <button
+                                onClick={() => setActiveAdminTab('requests')}
+                                className={`flex-1 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                                    activeAdminTab === 'requests'
+                                        ? 'bg-white text-blue-600 shadow-sm'
+                                        : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                            >
+                                <ListChecks size={15} />
+                                <span>Заявки ({data.requests.length})</span>
+                            </button>
+                        </div>
                     )}
-                    <div className="w-full">
-                        <RequestList
-                            requests={data.requests}
-                            purposeMap={data.purposeMap}
-                            onRefresh={fetchData}
-                            currentUser={currentUser}
-                            onDeleteRequest={handleDeleteRequest}
-                        />
+
+                    <div className={`grid gap-4 sm:gap-6 md:gap-8 ${currentUser?.is_admin ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+                        {currentUser?.is_admin && (
+                            <div className={`w-full ${activeAdminTab === 'stocks' ? 'block' : 'hidden md:block'}`}>
+                                <StockTable stocks={data.stocks} resourcesMap={data.resourcesMap} onRefresh={fetchData} />
+                            </div>
+                        )}
+                        <div className={`w-full ${currentUser?.is_admin && activeAdminTab !== 'requests' ? 'hidden md:block' : 'block'}`}>
+                            <RequestList
+                                requests={data.requests}
+                                purposeMap={data.purposeMap}
+                                onRefresh={fetchData}
+                                currentUser={currentUser}
+                                onDeleteRequest={handleDeleteRequest}
+                            />
+                        </div>
                     </div>
                 </div>
 
                 {/* Секція 2: Аналітика */}
                 {currentUser?.is_admin && (
-                    <div id="section-analytics" className="space-y-8 pt-6">
+                    <div id="section-analytics" className="space-y-4 sm:space-y-6 pt-2 sm:pt-4">
                         <Dashboard stocks={data.stocks} requests={data.requests} resourcesMap={data.resourcesMap} />
                         <AdminLogs logs={data.logs || []} />
                     </div>
@@ -194,11 +225,11 @@ function App() {
 
                 {/* Секція 3: Розподіл (Кнопка виклику модалки та результати) */}
                 {currentUser?.is_admin && (
-                    <div id="section-distribution" className="space-y-8 pt-6 border-t border-slate-200">
-                        <div className="flex justify-center py-4">
+                    <div id="section-distribution" className="space-y-4 sm:space-y-6 pt-2 sm:pt-4 border-t border-slate-200">
+                        <div className="flex justify-center py-2 sm:py-3">
                             <button
                                 onClick={() => openModal('distribute')}
-                                className="px-12 py-4 bg-slate-900 text-white font-black rounded-2xl shadow-xl hover:bg-blue-600 transition-all active:scale-95 flex items-center gap-3"
+                                className="w-full sm:w-auto px-8 sm:px-12 py-3.5 sm:py-4 bg-slate-900 text-white font-black rounded-2xl shadow-xl hover:bg-blue-600 transition-all active:scale-95 flex items-center justify-center gap-3 text-sm sm:text-base"
                             >
                                 Налаштувати та запустити розподіл
                             </button>
@@ -217,15 +248,17 @@ function App() {
             {/* Кнопка повернення на головну */}
             <button
                 onClick={() => setIsLandingMode(true)}
-                className="fixed bottom-8 left-8 flex items-center gap-2 px-6 py-4 bg-white shadow-2xl rounded-2xl border border-slate-100 text-slate-500 hover:text-blue-600 transition-all hover:-translate-y-1 active:scale-95 z-40"
+                className="fixed bottom-4 left-4 sm:bottom-8 sm:left-8 flex items-center gap-2 px-3.5 sm:px-6 py-2.5 sm:py-4 bg-white shadow-2xl rounded-2xl border border-slate-100 text-slate-500 hover:text-blue-600 transition-all hover:-translate-y-1 active:scale-95 z-40"
             >
-                <Home size={20} />
-                <span className="text-xs font-black uppercase tracking-widest">Головна</span>
+                <Home size={18} />
+                <span className="text-xs font-black uppercase tracking-widest hidden sm:inline">Головна</span>
             </button>
 
             <ScrollToTop />
             </div>
         </Suspense>
+        )}
+        </>
     );
 }
 

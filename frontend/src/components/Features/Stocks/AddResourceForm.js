@@ -72,7 +72,7 @@ const AddResourceForm = ({ units, onResourceAdded, onClose }) => {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
 
           {/* ОДИНИЦЯ ВИМІРУ (3NF: Вибір з довідника Unit) */}
           <div>
@@ -131,18 +131,18 @@ const AddResourceForm = ({ units, onResourceAdded, onClose }) => {
       )}
 
       {/* КНОПКИ ДІЙ */}
-      <div className="flex gap-4 justify-end pt-4">
+      <div className="flex flex-col-reverse sm:flex-row gap-3 justify-end pt-4 border-t border-slate-100">
         <button
           type="button"
           onClick={onClose}
-          className="px-6 py-3 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors"
+          className="w-full sm:w-auto px-6 py-3 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors text-center text-sm"
         >
           Скасувати
         </button>
         <button
           type="submit"
           disabled={loading}
-          className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg active:scale-95 disabled:bg-slate-300 transition-all flex items-center"
+          className="w-full sm:w-auto px-8 py-3.5 bg-indigo-600 text-white font-bold rounded-xl shadow-lg active:scale-95 disabled:bg-slate-300 transition-all flex items-center justify-center text-sm"
         >
           {loading ? (
             "Збереження..."

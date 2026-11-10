@@ -20,6 +20,41 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Допоміжна функція для вилучення зрозумілого тексту помилки з бекенду
+export const extractErrorMessage = (error, fallback = "Сталася помилка") => {
+  if (!error.response) {
+    return "Немає зв'язку з сервером. Перевірте з'єднання.";
+  }
+  const data = error.response.data;
+  if (!data) return fallback;
+  if (typeof data === 'string') return data;
+  if (data.detail) return data.detail;
+  if (data.error) return data.error;
+  if (Array.isArray(data.non_field_errors) && data.non_field_errors.length) {
+    return data.non_field_errors.join(', ');
+  }
+  if (typeof data === 'object') {
+    const messages = [];
+    const fieldTranslations = {
+      resource: 'Ресурс',
+      quantity_requested: 'Кількість',
+      purpose: 'Ціль',
+      user: 'Заявник',
+      city: 'Місто',
+      warehouse_address: 'Адреса',
+      warehouse_ref: 'Відділення',
+      due_date: 'Термін виконання'
+    };
+    for (const [key, val] of Object.entries(data)) {
+      const fieldTitle = fieldTranslations[key] || key;
+      const fieldMsg = Array.isArray(val) ? val.join(', ') : String(val);
+      messages.push(`${fieldTitle}: ${fieldMsg}`);
+    }
+    if (messages.length) return messages.join('\n');
+  }
+  return fallback;
+};
+
 // --- RESPONSE INTERCEPTOR ---
 // Обробка помилок та автоматичне оновлення токена
 api.interceptors.response.use(
@@ -55,11 +90,13 @@ api.interceptors.response.use(
     }
 
     // Централізована обробка помилок для toast
-    const errorMessage = error.response?.data?.detail || error.response?.data?.error || "Помилка сервера";
-
     // Не показуємо помилку 401 тут, бо ми її обробляємо вище
-    if (error.response?.status !== 401) {
-      toast.error(errorMessage);
+    // Також не показуємо якщо запит передав _suppressToast: true або для запитів створення заявок
+    const isSuppressed = error.config?._suppressToast || error.config?.url?.includes('/requests/');
+    if (error.response?.status !== 401 && !isSuppressed) {
+      const errorMessage = extractErrorMessage(error, "Помилка при виконанні запиту");
+      toast.dismiss();
+      toast.error(errorMessage, { id: 'global-api-error' });
     }
 
     return Promise.reject(error);

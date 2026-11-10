@@ -83,6 +83,12 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
 ]
 
+# Дозволяємо всі стандартні та кастомні заголовки
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'x-suppress-toast',
+]
+
 # Також важливо для CSRF захисту (Django потребує цього для POST запитів)
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",

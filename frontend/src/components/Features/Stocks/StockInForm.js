@@ -73,7 +73,7 @@ const StockInForm = ({warehouses, resources, onSubmit, loading, onClose}) => {
             </div>
 
             {/* Список ресурсів */}
-            <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+            <div className="space-y-3">
                 {rows.map((row, index) => (
                     <div key={index}
                          className="flex flex-col md:flex-row gap-4 items-end bg-slate-50 p-4 rounded-2xl border border-slate-200 transition-all hover:border-emerald-200 group hover:bg-white hover:shadow-sm">
@@ -146,24 +146,24 @@ const StockInForm = ({warehouses, resources, onSubmit, loading, onClose}) => {
                 <Plus size={16}/> Додати ще одну позицію
             </button>
 
-            <div className="pt-6 flex gap-4 justify-end border-t border-slate-100">
+            <div className="pt-6 flex flex-col-reverse sm:flex-row gap-3 justify-end border-t border-slate-100">
                 <button
                     type="button"
                     onClick={onClose}
-                    className="px-6 py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors"
+                    className="w-full sm:w-auto px-6 py-3 text-slate-400 font-bold hover:text-slate-600 transition-colors text-center text-sm"
                 >
                     Скасувати
                 </button>
                 <button
                     type="submit"
                     disabled={loading || localLoading}
-                    className="flex items-center gap-3 px-10 py-4 bg-emerald-600 text-white font-black rounded-2xl hover:bg-slate-900 shadow-xl shadow-emerald-100 disabled:bg-slate-300 transition-all active:scale-95"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3.5 bg-emerald-600 text-white font-black rounded-2xl hover:bg-slate-900 shadow-xl shadow-emerald-100 disabled:bg-slate-300 transition-all active:scale-95 text-sm"
                 >
                     {(loading || localLoading) ? (
                         "Зарахування..."
                     ) : (
                         <>
-                            <Save size={20}/>
+                            <Save size={18}/>
                             <span>ЗАРАХУВАТИ ПОСТАВКУ</span>
                         </>
                     )}

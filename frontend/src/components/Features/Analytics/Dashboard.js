@@ -4,8 +4,22 @@ import {
 } from 'recharts';
 import { TrendingDown, Package, Download, BarChart3, ChevronDown, AlertTriangle } from '../../UI/icons';
 
+// Хук для визначення ширини вікна (для адаптивних графіків)
+const useWindowWidth = () => {
+  const [width, setWidth] = React.useState(window.innerWidth);
+  React.useEffect(() => {
+    const handler = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return width;
+};
+
 const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
-  const [isVisible, setIsVisible] = useState(true);
+  // На телефонах (< 768px) за замовчуванням приховано, на комп'ютері — розкрито
+  const [isVisible, setIsVisible] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 768 : false));
+  const windowWidth = useWindowWidth();
+  const isMobile = windowWidth < 640;
 
   // БЕЗПЕЧНИЙ розрахунок залишків на складах (з урахуванням нульових позицій)
   const stockData = useMemo(() => {
@@ -83,30 +97,34 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
     XLSX.writeFile(wb, "ResQ_Report.xlsx");
   };
 
-  // РОЗУМНИЙ БАГАТОРЯДКОВИЙ ПІДПИС ОСІ X (без нахилу, з перенесенням слів)
+  // РОЗУМНИЙ БАГАТОРЯДКОВИЙ ПІДПИС ОСІ X (адаптивний для мобільних та десктопу)
   const CustomXAxisTick = ({ x, y, payload }) => {
     const itemData = stockData.find(d => d.name === payload.value);
     const isZero = itemData ? itemData.isZero : false;
     const fullName = payload.value;
 
-    // Розбиваємо довгі назви на слова, щоб формувати рядки по ~10 символів
+    // На мобільних — коротші рядки (7 символів), на десктопі — 11
+    const maxChars = isMobile ? 7 : 11;
+    const tickFontSize = isMobile ? 8 : 10;
+
+    // Розбиваємо довгі назви на слова, щоб формувати рядки по maxChars символів
     const words = fullName.split(' ');
     let lines = [];
     let currentLine = '';
 
     words.forEach(word => {
-      if ((currentLine + ' ' + word).trim().length <= 11) {
+      if ((currentLine + ' ' + word).trim().length <= maxChars) {
         currentLine = currentLine ? `${currentLine} ${word}` : word;
       } else {
         if (currentLine) lines.push(currentLine);
-        currentLine = word;
+        currentLine = word.length > maxChars ? word.substring(0, maxChars - 1) + '…' : word;
       }
     });
     if (currentLine) lines.push(currentLine);
 
     // Якщо рядків вийшло більше 2, обрізаємо до 2, щоб не захаращувати графік
     if (lines.length > 2) {
-      lines = [`${lines[0]}`, `${lines[1].substring(0, 8)}...`];
+      lines = [`${lines[0]}`, `${lines[1].substring(0, maxChars - 2)}…`];
     }
 
     return (
@@ -116,7 +134,7 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
           y={0}
           textAnchor="middle"
           fill={isZero ? "#ef4444" : "#64748b"}
-          fontSize={10}
+          fontSize={tickFontSize}
           fontWeight={isZero ? "900" : "bold"}
           className={isZero ? "animate-pulse" : ""}
         >
@@ -173,7 +191,7 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
       <div className="flex justify-end">
         <button
           onClick={exportToExcel}
-          className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl font-black text-[10px] uppercase text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+          className="flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 bg-white border border-slate-200 rounded-2xl font-black text-[10px] uppercase text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95 w-full sm:w-auto"
         >
           <Download size={14} /> Експорт повного звіту у Excel
         </button>
@@ -182,7 +200,7 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
       {/* ГОЛОВНА ШАПКА ДАШБОРДУ */}
       <div
         onClick={() => setIsVisible(!isVisible)}
-        className="flex items-center justify-between px-6 py-4 bg-white rounded-3xl cursor-pointer hover:bg-slate-50 transition-all shadow-sm border border-slate-200"
+        className="flex items-center justify-between p-4 sm:px-6 sm:py-4 bg-white rounded-2xl sm:rounded-3xl cursor-pointer hover:bg-slate-50 transition-all shadow-sm border border-slate-200"
       >
         <div className="flex items-center gap-3">
           <div className="bg-blue-50 p-2 rounded-xl text-blue-600">
@@ -208,87 +226,97 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
       </div>
 
       {/* КОНТЕНТ ДАШБОРДУ (Згортається) */}
-      <div className={`space-y-6 overflow-hidden transition-all duration-500 ease-in-out ${isVisible ? 'max-h-[1000px] opacity-100 mt-2' : 'max-h-0 opacity-0 pointer-events-none'}`}>
-
-        {stockData.length === 0 && deficitData.length === 0 ? (
-          <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm text-center">
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Немає достатньо даних для побудови графіків</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-            {/* Графік залишків */}
-            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
-              <div className="flex items-center gap-2 mb-6">
-                <Package className="text-blue-600" size={20} />
-                <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Запаси на складах</h3>
-              </div>
-              {/* Збільшили висоту та відступ знизу, щоб дворядкові підписи ідеально поміщалися */}
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stockData} margin={{ bottom: 40, top: 10, right: 10, left: -15 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-
-                    <XAxis
-                      dataKey="name"
-                      axisLine={false}
-                      tickLine={false}
-                      height={45}
-                      interval={0}
-                      tick={<CustomXAxisTick />}
-                    />
-
-                    <YAxis fontSize={10} axisLine={false} tickLine={false} />
-
-                    <Tooltip content={<CustomStockTooltip />} cursor={{fill: '#f8fafc'}} />
-
-                    <Bar dataKey="displayAmount" radius={[4, 4, 0, 0]} barSize={24}>
-                      {stockData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={entry.isZero ? '#ef4444' : '#3b82f6'}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+      {isVisible && (
+        <div className="space-y-6 animate-in fade-in duration-300 mt-2">
+          {stockData.length === 0 && deficitData.length === 0 ? (
+            <div className="bg-white p-8 rounded-2xl sm:rounded-[2rem] border border-slate-200 shadow-sm text-center">
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Немає достатньо даних для побудови графіків</p>
             </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            {/* Графік дефіциту */}
-            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm">
-              <div className="flex items-center gap-2 mb-6">
-                <TrendingDown className="text-red-500" size={20} />
-                <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Критичний дефіцит</h3>
+              {/* Графік залишків */}
+              <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-slate-200 shadow-sm min-w-0">
+                <div className="flex items-center gap-2 mb-6">
+                  <Package className="text-blue-600" size={20} />
+                  <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Запаси на складах</h3>
+                </div>
+                {/* Збільшили висоту та відступ знизу, щоб дворядкові підписи ідеально поміщалися */}
+                <div className="h-64 sm:h-72 w-full min-w-0">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
+                    <BarChart data={stockData} margin={{ bottom: 42, top: 10, right: 8, left: isMobile ? -20 : -15 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+
+                      <XAxis
+                        dataKey="name"
+                        axisLine={false}
+                        tickLine={false}
+                        height={48}
+                        interval={0}
+                        tick={<CustomXAxisTick />}
+                      />
+
+                      <YAxis fontSize={isMobile ? 8 : 10} axisLine={false} tickLine={false} />
+
+                      <Tooltip content={<CustomStockTooltip />} cursor={{fill: '#f8fafc'}} />
+
+                      <Bar dataKey="displayAmount" radius={[4, 4, 0, 0]} barSize={isMobile ? 16 : 24}>
+                        {stockData.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={entry.isZero ? '#ef4444' : '#3b82f6'}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={deficitData} layout="vertical" margin={{ top: 10, right: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" fontSize={10} width={95} fontWeight="bold" axisLine={false} tickLine={false} />
 
-                    <Tooltip
-                      cursor={{fill: '#fef2f2'}}
-                      contentStyle={{borderRadius: '12px', border: 'none', backgroundColor: '#0f172a', color: '#fff', fontSize: '12px'}}
-                      itemStyle={{color: '#f87171'}}
-                      formatter={(value) => [`${value} од.`, 'Нестача (Дефіцит)']}
-                    />
+              {/* Графік дефіциту */}
+              <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-slate-200 shadow-sm min-w-0">
+                <div className="flex items-center gap-2 mb-6">
+                  <TrendingDown className="text-red-500" size={20} />
+                  <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Критичний дефіцит</h3>
+                </div>
+                <div className="h-64 sm:h-72 w-full min-w-0">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
+                    <BarChart data={deficitData} layout="vertical" margin={{ top: 10, right: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                      <XAxis type="number" hide />
+                      {/* На мобільних зменшуємо ширину підпису YAxis та обрізаємо довгі назви */}
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        fontSize={isMobile ? 8 : 10}
+                        width={isMobile ? 72 : 95}
+                        fontWeight="bold"
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={v => isMobile && v.length > 10 ? v.substring(0, 10) + '…' : v}
+                      />
 
-                    <Bar dataKey="deficit" radius={[0, 4, 4, 0]} barSize={14}>
-                      {deficitData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={index === 0 ? '#ef4444' : '#f87171'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                      <Tooltip
+                        cursor={{fill: '#fef2f2'}}
+                        contentStyle={{borderRadius: '12px', border: 'none', backgroundColor: '#0f172a', color: '#fff', fontSize: '12px'}}
+                        itemStyle={{color: '#f87171'}}
+                        formatter={(value) => [`${value} од.`, 'Нестача (Дефіцит)']}
+                      />
+
+                      <Bar dataKey="deficit" radius={[0, 4, 4, 0]} barSize={14}>
+                        {deficitData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={index === 0 ? '#ef4444' : '#f87171'} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
+
             </div>
-
-          </div>
-        )}
-
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

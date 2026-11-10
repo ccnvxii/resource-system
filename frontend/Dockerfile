@@ -9,4 +9,5 @@ COPY . .
 
 EXPOSE 3000
 
+# Запускаємо CRA dev-сервер — підтримує proxy до backend та hot-reload
 CMD ["npm", "start"]
