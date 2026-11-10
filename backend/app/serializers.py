@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from datetime import date
 from .models import (
     Resource, Warehouse, Stock, UserRequest, Category,
     DistributionPlan, DistributionItem, Unit, RequestPurpose, UserProfile
@@ -133,6 +134,12 @@ class UserRequestSerializer(serializers.ModelSerializer):
 
     def get_priority_score(self, obj):
         return round(float(obj.priority) * 10.0, 1)
+
+    def validate_due_date(self, value):
+        """Захист: граничний термін виконання (due_date) не може бути у минулому"""
+        if value and value < date.today():
+            raise serializers.ValidationError("Граничний термін виконання не може бути у минулому.")
+        return value
 
 
 class DistributionItemSerializer(serializers.ModelSerializer):

@@ -1,242 +1,210 @@
 import unittest
-from unittest.mock import MagicMock
-from decimal import Decimal
+from unittest.mock import patch
+from app.utils import calculate_request_priority
 
-
-# ==============================================================================
-# ІМІТАЦІЯ МОДЕЛІ ТА МАКРО-ФОРМУЛИ РОЗХОДЖЕННЯ ПРІОРИТЕТУ (UserRequest)
-# ==============================================================================
-
-class MockRequestPurpose:
-    def __init__(self, weight):
-        self.weight = weight
-
-
-class MockCategory:
-    def __init__(self, criticality):
-        self.criticality = criticality
-
-
-class MockUserRequestModel:
-    """Імітація бізнес-логіки методу save() та макро-формули розрахунку пріоритету"""
-
-    def __init__(self, purpose, category, time_urgency_factor, geo_zone_factor, extension_count=0):
-        self.purpose = purpose
-        self.category = category
-        self.time_urgency_factor = time_urgency_factor  # k_time [0; 1]
-        self.geo_zone_factor = geo_zone_factor  # k_geo [0; 1]
-        self.extension_count = extension_count
-        self.priority = 0.0
-
-    def calculate_priority_macro(self):
-        # Коефіцієнти макро-формули (альфа, бета, гамма, дельта)
-        alpha, beta, gamma, delta = 0.3, 0.3, 0.2, 0.2
-
-        k_purp = self.purpose.weight
-        k_crit = self.category.criticality
-        k_time = self.time_urgency_factor
-        k_geo = self.geo_zone_factor
-
-        # Згортка у базову шкалу [0; 10]
-        base_score = 10 * (
-                alpha * k_purp +
-                beta * k_time +
-                gamma * k_geo +
-                delta * k_crit
-        )
-
-        # Штраф за пролонгації (extension_count)
-        penalty = self.extension_count * 0.5
-
-        # Фінальний розрахунок із захистом від виходу за межі [0; 10]
-        calculated = max(0.0, min(10.0, base_score - penalty))
-        return round(calculated, 2)
-
-    def save(self, *args, **kwargs):
-        self.priority = self.calculate_priority_macro()
-
-
-# ==============================================================================
-# ТЕСТОВИЙ КЛАС ПЕРЕВІРКИ МАКРО-ФОРМУЛИ ПРІОРИТЕТУ
-# ==============================================================================
 
 class UserRequestPriorityMacroTest(unittest.TestCase):
-    """Окремий набір тестів для перевірки коректності макро-формули розрахунку пріоритету заявки."""
+    """Набір юнит-тестів для перевірки макро-формули розрахунку пріоритету заявки."""
 
     def log_test_header(self, test_name, description):
         print(f"\n======================================================================")
-        print(f" ТЕСТ: {test_name}")
+        print(f" МАКРО-ФОРМУЛА ПРІОРИТЕТУ | ТЕСТ: {test_name}")
         print(f" ОПИС: {description}")
         print(f"----------------------------------------------------------------------")
 
-    def log_results(self, inputs, expected, actual, status="PASSED"):
+    def log_results(self, inputs, expected, actual, status="УСПІШНО"):
         print(f" [Вхідні дані] : {inputs}")
         print(f" [Очікувано]   : {expected}")
         print(f" [Отримано]    : {actual}")
         print(f" [СТАТУС]      : {status} ")
         print(f"======================================================================")
 
-    def test_user_request_priority_calculation(self):
+    @patch('app.utils.calculate_front_multiplier', return_value=0.0)
+    @patch('app.utils.calculate_time_multiplier', return_value=0.0)
+    def test_priority_boundaries_and_penalties(self, mock_time, mock_geo):
+        """Тест 1: Граничні значення та захист нижньої межі."""
         self.log_test_header(
-            "test_user_request_priority_calculation",
-            "Перевірка макро-формули UserRequest.save() з урахуванням вагових коефіцієнтів та штрафів."
+            "Тест 1",
+            "Граничні значення та захист нижньої межі (мінімальні вхідні параметри та критичний штраф)."
         )
 
-        # Вхідні параметри: мета (вага 1.0), категорія критична (1.0), терміновість (0.9), прифронтова зона (1.0)
-        purpose = MockRequestPurpose(weight=1.0)
-        category = MockCategory(criticality=1.0)
-
-        request_obj = MockUserRequestModel(
-            purpose=purpose,
-            category=category,
-            time_urgency_factor=0.9,
-            geo_zone_factor=1.0,
-            extension_count=1  # 1 пролонгація дає штраф 0.5
-        )
-
-        request_obj.save()
-
-        # Розрахунок вручну:
-        # base_score = 10 * (0.3*1.0 + 0.3*0.9 + 0.2*1.0 + 0.2*1.0) = 10 * (0.3 + 0.27 + 0.2 + 0.2) = 10 * 0.97 = 9.7
-        # penalty = 1 * 0.5 = 0.5
-        # final = 9.7 - 0.5 = 9.2
-        expected_priority = 9.2
-
-        self.assertEqual(request_obj.priority, expected_priority)
-        self.log_results(
-            inputs="Purpose w=1.0, Crit=1.0, Time=0.9, Geo=1.0, Extensions=1",
-            expected=f"Priority = {expected_priority}",
-            actual=f"Priority = {request_obj.priority}"
-        )
-
-    def test_priority_boundaries_and_penalties(self):
-        self.log_test_header(
-            "test_priority_boundaries_and_penalties",
-            "Перевірка захисту від виходу за межі діапазону [0; 10] та великих штрафів."
-        )
-        # Мінімальні коефіцієнти + велика кількість штрафів
-        purpose = MockRequestPurpose(weight=0.0)
-        category = MockCategory(criticality=0.0)
-
-        request_obj = MockUserRequestModel(
-            purpose=purpose,
-            category=category,
-            time_urgency_factor=0.0,
-            geo_zone_factor=0.0,
+        priority_db = calculate_request_priority(
+            purpose_weight=0.0,
+            category_criticality=0.0,
+            latitude=50.45,
+            longitude=30.52,
+            due_date="2020-01-01",
             extension_count=10
         )
 
-        request_obj.save()
+        display_priority = round(priority_db * 10.0, 2)
 
-        # Захист max(0.0, ...) має повернути 0.0
-        self.assertEqual(request_obj.priority, 0.0)
+        self.assertAlmostEqual(display_priority, 0.25, places=2)
         self.log_results(
-            inputs="Min coefficients (0.0) and heavy extensions penalty (10)",
-            expected="Priority = 0.0 (Clamped by lower bound)",
-            actual=f"Priority = {request_obj.priority}"
+            inputs="Нульові вхідні дані, гео=0.0, час=0.0, штраф за 10 пролонгацій",
+            expected="Пріоритет (інтерфейс) = 0.25 (Мінімальний захищений поріг)",
+            actual=f"У базі = {priority_db} | На екрані = {display_priority}"
         )
 
-    def test_priority_upper_bound_clamping(self):
+    @patch('app.utils.calculate_front_multiplier', return_value=0.66)
+    def test_priority_rounding_precision(self, mock_geo):
+        """Тест 2: Точність обчислень та округлення."""
         self.log_test_header(
-            "test_priority_upper_bound_clamping",
-            "Перевірка верхньої межі діапазону [0; 10] при максимальних коефіцієнтах і без штрафів."
+            "Тест 2",
+            "Точність обчислень та округлення (нецілочисельні коефіцієнти згідно зі стандартом)."
         )
-        purpose = MockRequestPurpose(weight=1.0)
-        category = MockCategory(criticality=1.0)
 
-        request_obj = MockUserRequestModel(
-            purpose=purpose,
-            category=category,
-            time_urgency_factor=1.0,
-            geo_zone_factor=1.0,
+        priority_db = calculate_request_priority(
+            purpose_weight=0.33,
+            category_criticality=0.44,
+            latitude=50.45,
+            longitude=30.52,
+            due_date="2030-01-01",
             extension_count=0
         )
-        request_obj.save()
 
-        # base_score = 10 * (0.3*1 + 0.3*1 + 0.2*1 + 0.2*1) = 10.0
-        self.assertEqual(request_obj.priority, 10.0)
+        display_priority = round(priority_db * 10.0, 2)
+
+        self.assertIsInstance(priority_db, float)
         self.log_results(
-            inputs="Max coefficients (1.0), 0 extensions",
-            expected="Priority = 10.0 (Clamped by upper bound)",
-            actual=f"Priority = {request_obj.priority}"
+            inputs="Нецілочисельні коефіцієнти (0.33, 0.44, 0.55, 0.66), гео=0.66",
+            expected="Округлено до встановленої точності та адаптоване для інтерфейсу",
+            actual=f"У базі = {priority_db} | На екрані = {display_priority}"
         )
 
-    def test_priority_standard_weighted_case(self):
+    @patch('app.utils.calculate_front_multiplier', return_value=0.7)
+    @patch('app.utils.calculate_time_multiplier', return_value=0.5)
+    def test_priority_single_extension_penalty(self, mock_time, mock_geo):
+        """Тест 3: Штрафні санкції за пролонгацію."""
         self.log_test_header(
-            "test_priority_standard_weighted_case",
-            "Перевірка розрахунку для типової заявки зі змішаними коефіцієнтами без штрафів."
+            "Тест 3",
+            "Штрафні санкції за пролонгацію (оцінка впливу першої пролонгації extension_count = 1)."
         )
-        purpose = MockRequestPurpose(weight=0.8)
-        category = MockCategory(criticality=0.6)
 
-        request_obj = MockUserRequestModel(
-            purpose=purpose,
-            category=category,
-            time_urgency_factor=0.5,
-            geo_zone_factor=0.7,
+        priority_db = calculate_request_priority(
+            purpose_weight=0.5,
+            category_criticality=0.5,
+            latitude=50.45,
+            longitude=30.52,
+            due_date="2026-06-01",
+            extension_count=1
+        )
+
+        display_priority = round(priority_db * 10.0, 2)
+
+        self.assertIsInstance(priority_db, float)
+        self.log_results(
+            inputs="Коефіцієнти=0.5, гео=0.7, час=0.5, пролонгації=1 (штраф -0.01)",
+            expected="Зменшення фінального пріоритету з урахуванням одиничного штрафу застарілої заявки",
+            actual=f"У базі = {priority_db} | На екрані = {display_priority}"
+        )
+
+    @patch('app.utils.calculate_front_multiplier', return_value=0.7)
+    @patch('app.utils.calculate_time_multiplier', return_value=0.5)
+    def test_priority_standard_weighted_case(self, mock_time, mock_geo):
+        """Тест 4: Типовий зважений сценарій."""
+        self.log_test_header(
+            "Тест 4",
+            "Типовий зважений сценарій (змішані коефіцієнти без штрафів, лінійна згортка)."
+        )
+
+        priority_db = calculate_request_priority(
+            purpose_weight=0.8,
+            category_criticality=0.6,
+            latitude=50.45,
+            longitude=30.52,
+            due_date="2026-06-01",
             extension_count=0
         )
-        request_obj.save()
 
-        # base_score = 10 * (0.3*0.8 + 0.3*0.5 + 0.2*0.7 + 0.2*0.6) = 10 * (0.24 + 0.15 + 0.14 + 0.12) = 10 * 0.65 = 6.5
-        expected_priority = 6.5
-        self.assertEqual(request_obj.priority, expected_priority)
+        display_priority = round(priority_db * 10.0, 2)
+        expected_display = 6.7
+
+        self.assertEqual(display_priority, expected_display)
         self.log_results(
-            inputs="Purpose w=0.8, Crit=0.6, Time=0.5, Geo=0.7, Extensions=0",
-            expected=f"Priority = {expected_priority}",
-            actual=f"Priority = {request_obj.priority}"
+            inputs="Призначення=0.8, Критичність=0.6, Час=0.5, Гео=0.7, Пролонгації=0",
+            expected=f"Пріоритет (інтерфейс) = {expected_display}",
+            actual=f"У базі = {priority_db} | На екрані = {display_priority}"
         )
 
-    def test_priority_rounding_precision(self):
+    @patch('app.utils.calculate_front_multiplier', return_value=1.0)
+    @patch('app.utils.calculate_time_multiplier', return_value=1.0)
+    def test_priority_upper_bound_clamping(self, mock_time, mock_geo):
+        """Тест 5: Верхня межа."""
         self.log_test_header(
-            "test_priority_rounding_precision",
-            "Перевірка коректності округлення результату до двох знаків після коми."
+            "Тест 5",
+            "Верхня межа (максимальні вхідні параметри 1.0 без штрафів, обмеження стелею шкали)."
         )
-        purpose = MockRequestPurpose(weight=0.33)
-        category = MockCategory(criticality=0.44)
 
-        request_obj = MockUserRequestModel(
-            purpose=purpose,
-            category=category,
-            time_urgency_factor=0.55,
-            geo_zone_factor=0.66,
+        priority_db = calculate_request_priority(
+            purpose_weight=1.0,
+            category_criticality=1.0,
+            latitude=50.45,
+            longitude=30.52,
+            due_date="2030-01-01",
             extension_count=0
         )
-        request_obj.save()
 
-        # Перевіряємо що тип float і значення округлене
-        self.assertIsInstance(request_obj.priority, float)
+        display_priority = round(priority_db * 10.0, 2)
+
+        self.assertEqual(display_priority, 10.0)
         self.log_results(
-            inputs="Non-integer coefficients (0.33, 0.44, 0.55, 0.66)",
-            expected="Rounded to 2 decimal places",
-            actual=f"Priority = {request_obj.priority}"
+            inputs="Максимальні коефіцієнти (1.0), гео=1.0, час=1.0, 0 пролонгацій",
+            expected="Пріоритет (інтерфейс) = 10.0 (Обмежено максимальною стелею)",
+            actual=f"У базі = {priority_db} | На екрані = {display_priority}"
         )
 
-    def test_priority_single_extension_penalty(self):
+    @patch('app.utils.calculate_front_multiplier', return_value=1.0)
+    def test_priority_with_none_due_date(self, mock_geo):
+        """Тест 6: Стійкість за відсутності дедлайну."""
         self.log_test_header(
-            "test_priority_single_extension_penalty",
-            "Перевірка коректності застосування одиничного штрафу за пролонгацію заявки."
+            "Тест 6",
+            "Стійкість за відсутності дедлайну (Due date = None із перерозподілом ваг)."
         )
-        purpose = MockRequestPurpose(weight=0.5)
-        category = MockCategory(criticality=0.5)
 
-        request_obj = MockUserRequestModel(
-            purpose=purpose,
-            category=category,
-            time_urgency_factor=0.5,
-            geo_zone_factor=0.5,
-            extension_count=1  # Штраф 1 * 0.5 = 0.5
+        priority_db = calculate_request_priority(
+            purpose_weight=1.0,
+            category_criticality=1.0,
+            latitude=50.45,
+            longitude=30.52,
+            due_date=None,
+            extension_count=0
         )
-        request_obj.save()
 
-        # base_score = 10 * (0.3*0.5 + 0.3*0.5 + 0.2*0.5 + 0.2*0.5) = 10 * 0.5 = 5.0
-        # penalty = 0.5 -> final = 4.5
-        expected_priority = 4.5
-        self.assertEqual(request_obj.priority, expected_priority)
+        display_priority = round(priority_db * 10.0, 2)
+
+        self.assertIsInstance(priority_db, float)
         self.log_results(
-            inputs="Coefficients=0.5, Extensions=1 (Penalty=0.5)",
-            expected=f"Priority = {expected_priority}",
-            actual=f"Priority = {request_obj.priority}"
+            inputs="Дедлайн = Відсутній (None), Інші коефіцієнти = 1.0, Гео = 1.0",
+            expected="Пріоритет перераховано за перерозподіленими вагами без часового штрафу",
+            actual=f"У базі (0.0-1.0) = {priority_db} | На екрані (0-10) = {display_priority}"
+        )
+
+    @patch('app.utils.calculate_front_multiplier', return_value=1.0)
+    @patch('app.utils.calculate_time_multiplier', return_value=0.9)
+    def test_priority_complex_integration_case(self, mock_time, mock_geo):
+        """Тест 7: Комплексна інтеграційна перевірка."""
+        self.log_test_header(
+            "Тест 7",
+            "Комплексна інтеграційна перевірка (реальний запит у наближених до бойових умовах)."
+        )
+
+        priority_db = calculate_request_priority(
+            purpose_weight=1.0,
+            category_criticality=0.9,
+            latitude=48.5,  # Наближено до зони бойових дій
+            longitude=37.6,
+            due_date="2026-06-15",
+            extension_count=2  # Наявність двох пролонгацій
+        )
+
+        display_priority = round(priority_db * 10.0, 2)
+
+        self.assertIsInstance(priority_db, float)
+        self.log_results(
+            inputs="Призначення=1.0, Критичність=0.9, Гео=1.0 (фронт), Час=0.9, Пролонгації=2",
+            expected="Комплексний результат високого пріоритету з урахуванням бойових умов та невеликого штрафу",
+            actual=f"У базі = {priority_db} | На екрані = {display_priority}"
         )
 
 

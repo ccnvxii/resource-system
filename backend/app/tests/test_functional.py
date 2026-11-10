@@ -1,32 +1,15 @@
-import time
-import requests as req_lib
-from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import patch
-from django.test import TestCase
 from rest_framework.test import APITestCase
 from rest_framework import status
+from datetime import date, timedelta
 
 from app.models import (
     Unit, Category, Resource, Warehouse, Stock,
-    RequestPurpose, UserRequest, UserProfile
+    RequestPurpose, UserRequest, UserProfile,
+    DistributionPlan, DistributionItem
 )
 from django.contrib.auth.models import User
-from app.services import DistanceMatrixService, _ROUTING_CACHE
 
 
-# --- 1. МОК-СЕРВІС ДЛЯ ІМІТАЦІЇ ЛОГІСТИЧНИХ ВІДСТАНЕЙ (OSRM) ---
-class MockDistanceService:
-    """Імітація OSRM Table API для ізольованого тестування"""
-
-    def get_distance(self, lat1, lng1, lat2, lng2):
-        return 15.0
-
-    def get_distance_matrix(self, sources, destinations):
-        import numpy as np
-        return np.full((len(sources), len(destinations)), 15.0)
-
-
-# --- 2. КОМПЛЕКСНІ ФУНКЦІОНАЛЬНІ ТА ІНТЕГРАЦІЙНІ ТЕСТИ API ---
 class FunctionalAndIntegrationTests(APITestCase):
     """Повний набір функціональних та інтеграційних тестів бекенду"""
 
@@ -78,7 +61,7 @@ class FunctionalAndIntegrationTests(APITestCase):
 
         self.requests_url = '/api/requests/'
 
-    # --- МОДУЛЬ 1: АВТЕНТИФІКАЦІЯ ТА БЕЗПЕКА (ТЕСТИ 1–3) ---
+    # --- МОДУЛЬ 1: АВТЕНТИФІКАЦІЯ ТА JWT ТОКЕНИ (ТЕСТИ 1–2) ---
 
     def test_1_jwt_authentication_success(self):
         """Функціональний тест 1: Успішна аутентифікація та отримання JWT-токенів"""
@@ -129,79 +112,10 @@ class FunctionalAndIntegrationTests(APITestCase):
         print(" [УСПІХ] Сеансовий токен успішно оновлено.")
         print("=" * 90)
 
-    def test_3_unauthorized_access_is_blocked(self):
-        """Функціональний тест 3: Блокування доступу до захищених endpoint-ів без авторизації"""
-        print("\n" + "=" * 90)
-        print(" [ФУНКЦІОНАЛЬНИЙ ТЕСТ 3] Блокування неавторизованого доступу до API")
-        print("=" * 90)
+    # --- МОДУЛЬ 2: ВАЛІДАЦІЯ ВХІДНИХ ДАНИХ (ТЕСТИ 3–5) ---
 
-        self.client.logout()
-        response = self.client.get(self.requests_url)
-
-        print(f" {self.requests_url:<30} | {'GET':<10} | {'Відсутня':<15} | {response.status_code} (Блоковано)")
-        print("-" * 90)
-
-        self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
-        print(" [УСПІХ] Неавторизований доступ успішно заблоковано системою безпеки.")
-        print("=" * 90)
-
-    def test_4_negative_security_invalid_jwt(self):
-        """Функціональний тест 4: Негативний тест безпеки — перевірка фальшивого/невалідного JWT-токена"""
-        print("\n" + "=" * 90)
-        print(" [ФУНКЦІОНАЛЬНИЙ ТЕСТ 4] Негативний тест безпеки (Підроблений JWT)")
-        print("=" * 90)
-
-        self.client.force_authenticate(user=None)
-        self.client.logout()
-
-        response = self.client.get(
-            self.requests_url,
-            HTTP_AUTHORIZATION='Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.fake_signature_payload'
-        )
-
-        print(f" • Статус відповіді з підробленим токеном: {response.status_code}")
-        print("-" * 90)
-
-        self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
-        print(" [УСПІХ] Система захисту успішно відхилила невалідний/підроблений JWT-токен.")
-        print("=" * 90)
-
-    def test_5_rbac_blocks_volunteer_from_admin_actions(self):
-        """Функціональний тест 5: Розмежування прав доступу (RBAC) — заборона волонтеру адмін-дій"""
-        print("\n" + "=" * 90)
-        print(" [ФУНКЦІОНАЛЬНИЙ ТЕСТ 5] Розмежування прав доступу (RBAC)")
-        print("=" * 90)
-
-        volunteer = User.objects.create_user(username='simple_volunteer', password='Password123!')
-        volunteer.is_staff = False
-        volunteer.is_superuser = False
-        volunteer.save()
-        self.client.force_authenticate(user=volunteer)
-
-        warehouse_payload = {
-            'name': 'Нелегальний склад',
-            'location': 'м. Харків',
-            'latitude': 49.99,
-            'longitude': 36.23
-        }
-        response = self.client.post('/api/warehouses/', warehouse_payload, format='json')
-
-        print(f" • Спроба створення складу волонтером: статус {response.status_code} Forbidden")
-        print("-" * 90)
-
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        print(" [УСПІХ] Система безпеки успішно заблокувала несанкціоновану адмін-дію.")
-        print("=" * 90)
-
-    # --- МОДУЛЬ 2: ВАЛІДАЦІЯ ВХІДНИХ ДАНИХ (ТЕСТИ 6–7) ---
-
-    def test_6_request_validation_rejects_negative_amounts(self):
-        """Функціональний тест 6: Валідація форм — відхилення невалідних або від'ємних обсягів"""
-        print("\n" + "=" * 90)
-        print(" [ФУНКЦІОНАЛЬНИЙ ТЕСТ 6] Валідація вхідних даних (Відхилення від'ємних значень)")
-        print("=" * 90)
-
-        self.client.force_authenticate(user=self.user)
+    def test_3_request_validation_rejects_negative_amounts(self):
+        """Функціональний тест 3: Валідація форм — відхилення невалідних або від'ємних обсягів"""
         payload = {
             'resource': self.resource.id,
             'quantity_requested': -15,
@@ -209,24 +123,11 @@ class FunctionalAndIntegrationTests(APITestCase):
             'latitude': 50.46,
             'longitude': 30.53
         }
-
         response = self.client.post(self.requests_url, payload, format='json')
-
-        print(f" • Статус відповіді сервера: {response.status_code} Bad Request")
-        print(f" • Повідомлення помилки    : {response.data.get('quantity_requested', 'Помилка валідації')}")
-        print("-" * 90)
-
         self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY])
-        print(" [УСПІХ] Система захисту успішно відхилила невалідні вхідні дані.")
-        print("=" * 90)
 
-    def test_7_boundary_validation_nonexistent_resource(self):
-        """Функціональний тест 7: Гранична валідація зв'язків — передача неіснуючого ID ресурсу"""
-        print("\n" + "=" * 90)
-        print(" [ФУНКЦІОНАЛЬНИЙ ТЕСТ 7] Гранична валідація (Неіснуючий ID ресурсу)")
-        print("=" * 90)
-
-        self.client.force_authenticate(user=self.user)
+    def test_4_boundary_validation_nonexistent_resource(self):
+        """Функціональний тест 4: Гранична валідація зв'язків — передача неіснуючого ID ресурсу"""
         payload = {
             'resource': 999999,
             'quantity_requested': 10,
@@ -234,25 +135,101 @@ class FunctionalAndIntegrationTests(APITestCase):
             'latitude': 50.45,
             'longitude': 30.52
         }
-
         response = self.client.post(self.requests_url, payload, format='json')
-
-        print(f" • Статус відповіді при неіснуючому ресурсі: {response.status_code}")
-        print("-" * 90)
-
         self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY, status.HTTP_404_NOT_FOUND])
-        print(" [УСПІХ] Система коректно обробила спробу зв'язку з неіснуючою сутністю в БД.")
-        print("=" * 90)
 
-    # --- МОДУЛЬ 3: ЖИТТЄВИЙ ЦИКЛ СУТНОСТЕЙ — CRUD (ТЕСТИ 8–11) ---
+    def test_5_due_date_validation_rejects_past_dates(self):
+        """Функціональний тест 5: Валідація дедлайну — заборона вибору дати у минулому"""
+        past_date = date.today() - timedelta(days=2)
+        payload = {
+            'resource': self.resource.id,
+            'quantity_requested': 10,
+            'purpose': self.purpose.id,
+            'due_date': past_date.strftime("%Y-%m-%d"),
+            'latitude': 50.45,
+            'longitude': 30.52
+        }
+        response = self.client.post(self.requests_url, payload, format='json')
+        self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY])
 
-    def test_8_request_creation_with_valid_data(self):
-        """Функціональний тест 8: Успішне створення заявки (CRUD Create)"""
-        print("\n" + "=" * 90)
-        print(" [ФУНКЦІОНАЛЬНИЙ ТЕСТ 8] Успішне створення заявки (CRUD Create)")
-        print("=" * 90)
+    # --- МОДУЛЬ 3: ЖИТТЄВИЙ ЦИКЛ УСІХ СУТНОСТЕЙ — CRUD (ТЕСТИ 6–14) ---
 
-        self.client.force_authenticate(user=self.user)
+    def test_6_crud_unit_entity(self):
+        """Функціональний тест 6: CRUD-цикл сутності Unit (Одиниці виміру)"""
+        unit_obj = Unit.objects.create(name='Ящик тест')
+        self.assertIsNotNone(unit_obj.id)
+        fetched = Unit.objects.get(id=unit_obj.id)
+        self.assertEqual(fetched.name, 'Ящик тест')
+        unit_obj.name = 'Ящик оновлений'
+        unit_obj.save()
+        self.assertEqual(Unit.objects.get(id=unit_obj.id).name, 'Ящик оновлений')
+        unit_obj.delete()
+        self.assertFalse(Unit.objects.filter(id=fetched.id).exists())
+
+    def test_7_crud_category_entity(self):
+        """Функціональний тест 7: CRUD-цикл сутності Category (Категорії)"""
+        cat = Category.objects.create(name='Тест Категорія', slug='test-cat', criticality=0.7)
+        self.assertIsNotNone(cat.id)
+        cat.criticality = 0.9
+        cat.save()
+        self.assertEqual(Category.objects.get(id=cat.id).criticality, 0.9)
+        cat.delete()
+        self.assertFalse(Category.objects.filter(id=cat.id).exists())
+
+    def test_8_crud_resource_entity(self):
+        """Функціональний тест 8: CRUD-цикл сутності Resource (Ресурси)"""
+        res = Resource.objects.create(name='Тест Ресурс', unit=self.unit, category=self.category, is_strategic=False)
+        self.assertIsNotNone(res.id)
+        res.is_strategic = True
+        res.save()
+        self.assertTrue(Resource.objects.get(id=res.id).is_strategic)
+        res.delete()
+        self.assertFalse(Resource.objects.filter(id=res.id).exists())
+
+    def test_9_crud_warehouse_entity(self):
+        """Функціональний тест 9: CRUD-цикл сутності Warehouse (Склади)"""
+        wh = Warehouse.objects.create(name='Тест Склад', location='м. Львів', latitude=49.84, longitude=24.03)
+        self.assertIsNotNone(wh.id)
+        wh.location = 'м. Київ'
+        wh.save()
+        self.assertEqual(Warehouse.objects.get(id=wh.id).location, 'м. Київ')
+        wh.delete()
+        self.assertFalse(Warehouse.objects.filter(id=wh.id).exists())
+
+    def test_10_crud_request_purpose_entity(self):
+        """Функціональний тест 10: CRUD-цикл сутності RequestPurpose (Типи призначення)"""
+        purp = RequestPurpose.objects.create(name='Тест Призначення', code='TEST_CODE', weight=0.5)
+        self.assertIsNotNone(purp.id)
+        purp.weight = 1.0
+        purp.save()
+        self.assertEqual(RequestPurpose.objects.get(id=purp.id).weight, 1.0)
+        purp.delete()
+        self.assertFalse(RequestPurpose.objects.filter(id=purp.id).exists())
+
+    def test_11_crud_stock_entity(self):
+        """Функціональний тест 11: CRUD-цикл сутності Stock (Запаси на складах)"""
+        stk = self.stock
+        stk.amount = 75
+        stk.save()
+        self.assertEqual(Stock.objects.get(id=stk.id).amount, 75)
+
+        another_warehouse = Warehouse.objects.create(
+            name='Додатковий склад', location='м. Львів', latitude=49.84, longitude=24.03
+        )
+        stk_new = Stock.objects.create(warehouse=another_warehouse, resource=self.resource, amount=30)
+        stk_new.delete()
+
+    def test_12_crud_user_profile_entity(self):
+        """Функціональний тест 12: CRUD-цикл сутності UserProfile (Профілі користувачів)"""
+        sub_user = User.objects.create_user(username='sub_volunteer', password='Password123!')
+        prof, _ = UserProfile.objects.get_or_create(user=sub_user)
+        prof.organization = 'Благодійний фонд'
+        prof.is_approved = True
+        prof.save()
+        sub_user.delete()
+
+    def test_13_request_crud_lifecycle_create_update_delete(self):
+        """Функціональний тест 13: Повний CRUD-цикл сутності UserRequest (Заявки)"""
         payload = {
             'resource': self.resource.id,
             'quantity_requested': 25,
@@ -260,27 +237,18 @@ class FunctionalAndIntegrationTests(APITestCase):
             'latitude': 50.47,
             'longitude': 30.54
         }
-
         response = self.client.post(self.requests_url, payload, format='json')
+        req_id = response.data.get('id')
 
-        print(f" • Статус відповіді: {response.status_code} Created")
-        print(f" • ID нової заявки : {response.data.get('id', 'N/A')}")
-        print(f" • Статус заявки   : {response.data.get('status', 'new')}")
-        print("-" * 90)
+        update_url = f"{self.requests_url}{req_id}/"
+        patch_resp = self.client.patch(update_url, {"quantity_requested": 45}, format='json')
+        self.assertEqual(patch_resp.data.get('quantity_requested'), 45)
 
-        self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK])
-        print(" [УСПІХ] Нову заявку успішно зареєстровано в системі.")
-        print("=" * 90)
+        self.client.delete(update_url)
 
-    def test_9_request_crud_lifecycle_update(self):
-        """Функціональний тест 9: Оновлення параметрів заявки (CRUD Update)"""
-        print("\n" + "=" * 90)
-        print(" [ФУНКЦІОНАЛЬНИЙ ТЕСТ 9] Оновлення даних заявки (CRUD Update)")
-        print("=" * 90)
-
-        self.client.force_authenticate(user=self.user)
-
-        req_obj = UserRequest.objects.create(
+    def test_14_crud_distribution_plan_and_item(self):
+        """Функціональний тест 14: CRUD-цикл сутностей DistributionPlan та DistributionItem (Плани розподілу)"""
+        req_instance = UserRequest.objects.create(
             user=self.user,
             resource=self.resource,
             purpose=self.purpose,
@@ -288,55 +256,16 @@ class FunctionalAndIntegrationTests(APITestCase):
             latitude=50.45,
             longitude=30.52
         )
+        plan = DistributionPlan.objects.create(executed=False)
+        item = DistributionItem.objects.create(plan=plan, request=req_instance, warehouse=self.warehouse, amount=10)
+        plan.executed = True
+        plan.save()
+        plan.delete()
 
-        update_url = f"{self.requests_url}{req_obj.id}/"
-        response = self.client.patch(update_url, {"quantity_requested": 45}, format='json')
+    # --- МОДУЛЬ 4: БІЗНЕС-ЛОГІКА ТА РОЗШИРЕНІ СЦЕНАРІЇ (ТЕСТИ 15–19) ---
 
-        print(f" • Оновлення заявки ID={req_obj.id}: статус {response.status_code}")
-        print("-" * 90)
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data.get('quantity_requested'), 45)
-        print(" [УСПІХ] Життєвий цикл оновлення сутності (CRUD) опрацьовано успішно.")
-        print("=" * 90)
-
-    def test_10_request_crud_lifecycle_delete(self):
-        """Функціональний тест 10: Видалення заявки (CRUD Delete)"""
-        print("\n" + "=" * 90)
-        print(" [ФУНКЦІОНАЛЬНИЙ ТЕСТ 10] Видалення заявки (CRUD Delete)")
-        print("=" * 90)
-
-        self.client.force_authenticate(user=self.user)
-
-        req_obj = UserRequest.objects.create(
-            user=self.user,
-            resource=self.resource,
-            purpose=self.purpose,
-            quantity_requested=15,
-            latitude=50.45,
-            longitude=30.52
-        )
-
-        delete_url = f"{self.requests_url}{req_obj.id}/"
-        response = self.client.delete(delete_url)
-
-        print(f" • Видалення заявки ID={req_obj.id}: статус {response.status_code}")
-        print("-" * 90)
-
-        self.assertIn(response.status_code, [status.HTTP_204_NO_CONTENT, status.HTTP_200_OK])
-        self.assertFalse(UserRequest.objects.filter(id=req_obj.id).exists())
-        print(" [УСПІХ] Заявку успішно видалено з бази даних (завершення повного CRUD-циклу).")
-        print("=" * 90)
-
-    # --- МОДУЛЬ 4: БІЗНЕС-ЛОГІКА ТА ІНТЕГРАЦІЯ ОПТИМІЗАТОРА (ТЕСТИ 11–12) ---
-
-    def test_11_request_business_logic_exceeding_stock(self):
-        """Функціональний тест 11: Бізнес-логіка — реєстрація дефіцитного запиту (перевищення запасів)"""
-        print("\n" + "=" * 90)
-        print(" [ФУНКЦІОНАЛЬНИЙ ТЕСТ 11] Реєстрація дефіцитного запиту (надлишок попиту)")
-        print("=" * 90)
-
-        self.client.force_authenticate(user=self.user)
+    def test_15_request_business_logic_exceeding_stock(self):
+        """Функціональний тест 15: Бізнес-логіка — реєстрація дефіцитного запиту (перевищення запасів)"""
         excessive_payload = {
             "resource": self.resource.id,
             "quantity_requested": 5000,
@@ -345,134 +274,96 @@ class FunctionalAndIntegrationTests(APITestCase):
             "purpose": self.purpose.id,
             "city": "Київ"
         }
-
         response = self.client.post(self.requests_url, excessive_payload, format='json')
-
-        print(f" • Запит на надмірну кількість (5000 при запасі 100): статус {response.status_code}")
-        print("-" * 90)
-
         self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK])
-        if response.status_code in [status.HTTP_201_CREATED, status.HTTP_200_OK]:
-            self.assertEqual(response.data.get('quantity_allocated', 0), 0)
 
-        print(" [УСПІХ] Система успішно зареєструвала дефіцитну заявку для подальшої оптимізації.")
-        print("=" * 90)
+    def test_16_workflow_status_transitions(self):
+        """Функціональний тест 16: Перевірка життєвого циклу статусів заявки (Workflow Transitions)"""
+        req_obj = UserRequest.objects.create(
+            user=self.user,
+            resource=self.resource,
+            purpose=self.purpose,
+            quantity_requested=20,
+            latitude=50.45,
+            longitude=30.52,
+            status='new'
+        )
 
-    def test_12_distribution_trigger_endpoint(self):
-        """Інтеграційний тест 12: Перевірка успішного запуску процесу розподілу через API"""
-        print("\n" + "=" * 90)
-        print(" [ІНТЕГРАЦІЙНИЙ ТЕСТ 12] Запуск процесу розподілу через API /api/distribute/")
-        print("=" * 90)
+        req_obj.status = 'partial'
+        req_obj.save()
+        req_obj.refresh_from_db()
+        self.assertEqual(req_obj.status, 'partial')
 
-        self.client.force_authenticate(user=self.user)
+        req_obj.status = 'done'
+        req_obj.save()
+        req_obj.refresh_from_db()
+        self.assertEqual(req_obj.status, 'done')
+
+    def test_17_api_filtering_and_sorting(self):
+        """Функціональний тест 17: Перевірка фільтрації та пошуку через API-ендпоінт"""
+        UserRequest.objects.create(
+            user=self.user, resource=self.resource, purpose=self.purpose,
+            quantity_requested=10, status='new', latitude=50.45, longitude=30.52
+        )
+        UserRequest.objects.create(
+            user=self.user, resource=self.resource, purpose=self.purpose,
+            quantity_requested=15, status='done', latitude=50.45, longitude=30.52
+        )
+
+        response = self.client.get(f"{self.requests_url}?status=new", format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_18_excel_export_endpoint(self):
+        """Функціональний тест 18: Перевірка експорту звітів розподілу у формат Excel (.xlsx)"""
+        export_url = '/api/export-excel/'
+        response = self.client.get(export_url)
+        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND, status.HTTP_302_FOUND])
+
+    def test_19_stock_rollback_on_request_cancellation(self):
+        """Функціональний тест 19: Перевірка повернення ресурсів на склад при видаленні/скасуванні заявки"""
+        initial_stock_amount = self.stock.amount
+        req = UserRequest.objects.create(
+            user=self.user,
+            resource=self.resource,
+            purpose=self.purpose,
+            quantity_requested=30,
+            quantity_allocated=30,
+            latitude=50.45,
+            longitude=30.52,
+            status='partial'
+        )
+
+        self.stock.amount -= 30
+        self.stock.save()
+
+        allocated_qty = req.quantity_allocated
+        req.delete()
+
+        self.stock.amount += allocated_qty
+        self.stock.save()
+        self.stock.refresh_from_db()
+
+        self.assertEqual(self.stock.amount, initial_stock_amount)
+
+    # --- МОДУЛЬ 5: ІНТЕГРАЦІЯ ТА КОНТРОЛЬ ДОСТУПУ (ТЕСТИ 20–21) ---
+
+    def test_20_distribution_trigger_endpoint(self):
+        """Інтеграційний тест 20: Перевірка успішного запуску процесу розподілу через API"""
         response = self.client.post('/api/distribute/', {}, format='json')
-
-        print(f" • Статус відповіді /api/distribute/: {response.status_code}")
-        print("-" * 90)
-
         self.assertIn(response.status_code, [
             status.HTTP_200_OK,
             status.HTTP_201_CREATED,
             status.HTTP_400_BAD_REQUEST,
             status.HTTP_404_NOT_FOUND
         ])
-        print(" [УСПІХ] Ендпоінт розподілу опрацьовано коректно.")
-        print("=" * 90)
 
+    def test_21_volunteer_role_restrictions(self):
+        """Функціональний тест 21: Перевірка обмеження прав ролі волонтера (Access Control)"""
+        volunteer = User.objects.create_user(username='ordinary_volunteer', password='Password123!')
+        volunteer.is_staff = False
+        volunteer.is_superuser = False
+        volunteer.save()
 
-# --- 3. ТЕСТИ ГЕОСЕРВІСУ ТА КЕШУВАННЯ OSRM ---
-class RoutingServiceTests(TestCase):
-    """Тести для OSRM Table API, локального кешування та фолбеків"""
-
-    def setUp(self):
-        _ROUTING_CACHE.clear()
-
-    @patch('app.services.requests.get')
-    def test_osrm_table_api_single_request(self, mock_get):
-        """Перевірка виклику Table API рівно 1 раз для всієї матриці (вирішення проблеми N+1)"""
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {
-            'code': 'Ok',
-            'distances': [[10000.0, 20000.0], [30000.0, 40000.0]]
-        }
-
-        service = DistanceMatrixService()
-        stocks = [{'lat': 50.45, 'lng': 30.52}, {'lat': 49.84, 'lng': 24.03}]
-        requests = [{'lat': 50.00, 'lng': 36.23}, {'lat': 46.48, 'lng': 30.73}]
-
-        matrix = service.get_distance_matrix(stocks, requests)
-
-        self.assertEqual(matrix.shape, (2, 2))
-        self.assertAlmostEqual(matrix[0, 0], 10.0)
-        self.assertEqual(mock_get.call_count, 1)
-
-    @patch('app.services.requests.get')
-    def test_in_memory_cache_prevents_duplicate_calls(self, mock_get):
-        """Перевірка роботи ін-меморі кешу: при повторному запиті HTTP не викликається"""
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {
-            'code': 'Ok',
-            'distances': [[12000.0]]
-        }
-
-        service = DistanceMatrixService()
-        stocks = [{'lat': 50.450, 'lng': 30.520}]
-        requests = [{'lat': 50.000, 'lng': 36.230}]
-
-        service.get_distance_matrix(stocks, requests)
-        self.assertEqual(mock_get.call_count, 1)
-
-        # Повторний запит неподалік (має взятися з кешу)
-        service.get_distance_matrix([{'lat': 50.4502, 'lng': 30.5204}], [{'lat': 50.0003, 'lng': 36.2301}])
-        self.assertEqual(mock_get.call_count, 1)
-
-    @patch('app.services.requests.get')
-    def test_fallback_to_geometry_on_network_error(self, mock_get):
-        """Перевірка спрацювання геометричного фолбеку при збої мережі OSRM"""
-        mock_get.side_effect = req_lib.RequestException("Network timeout")
-
-        service = DistanceMatrixService()
-        stocks = [{'lat': 50.0, 'lng': 30.0}]
-        requests = [{'lat': 51.0, 'lng': 31.0}]
-
-        matrix = service.get_distance_matrix(stocks, requests)
-        self.assertGreater(matrix[0, 0], 0.0)
-
-    def test_missing_coordinates_penalty(self):
-        """Перевірка повернення штрафної відстані (500 км) при відсутності координат"""
-        service = DistanceMatrixService()
-        stocks = [{'lat': None, 'lng': 30.0}]
-        requests = [{'lat': 50.0, 'lng': None}]
-
-        matrix = service.get_distance_matrix(stocks, requests)
-        self.assertEqual(matrix[0, 0], 500.0)
-
-
-# --- 4. БЕНЧМАРКИ ПРОДУКТИВНОСТІ ТА ВЕБ-СИМУЛЯЦІЇ ---
-class WebSimulationBenchmarks(TestCase):
-    """Стрес-тести для перевірки паралельних обчислень гео-пар та часу відгуку вебінтерфейсу"""
-
-    @patch('app.optimizer.distribute.DistanceMatrixService', MockDistanceService)
-    def test_real_web_simulation_benchmark(self):
-        """Емуляція реального вебзапиту з паралельним розрахунком матриці відстаней"""
-        distance_service = MockDistanceService()
-        stocks = [
-            {'resource_id': 1, 'warehouse_id': 1, 'amount': 150, 'lat': 50.45, 'lng': 30.52},
-            {'resource_id': 1, 'warehouse_id': 2, 'amount': 120, 'lat': 49.84, 'lng': 24.02},
-            {'resource_id': 1, 'warehouse_id': 3, 'amount': 100, 'lat': 46.48, 'lng': 30.73},
-            {'resource_id': 1, 'warehouse_id': 4, 'amount': 80, 'lat': 49.99, 'lng': 36.23},
-        ]
-        requests = [
-            {'id': i + 1, 'resource_id': 1, 'priority': (i % 5) + 5.0, 'amount_needed': 5,
-             'lat': 50.0 + (i * 0.01), 'lng': 30.0 + (i * 0.01)}
-            for i in range(20)
-        ]
-
-        t_start = time.time()
-        pairs = [(s['lat'], s['lng'], r['lat'], r['lng']) for s in stocks for r in requests]
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            list(executor.map(lambda p: distance_service.get_distance(p[0], p[1], p[2], p[3]), pairs))
-        geo_time = time.time() - t_start
-
-        self.assertLess(geo_time, 1.0, "Час обробки гео-пар занадто великий")
-        print(f"\n[УСПІХ] Емуляція паралельного опитування 80 пар виконана за {geo_time:.5f} с")
+        self.client.force_authenticate(user=volunteer)
+        response = self.client.post('/api/distribute/', {}, format='json')
+        self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])

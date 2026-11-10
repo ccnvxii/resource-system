@@ -208,6 +208,8 @@ class StockViewSet(viewsets.ModelViewSet):
 # --- API ДЛЯ АЛГОРИТМУ ОПТИМІЗАЦІЇ ---
 
 class DistributeResourcesView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+
     def post(self, request):
         try:
             with transaction.atomic():
@@ -239,7 +241,7 @@ class DistributeResourcesView(APIView):
                         requests_data.append({
                             'id': r.id,
                             'resource_id': r.resource_id,
-                            'is_strategic': r.resource.is_strategic,  # НОВЕ: Зчитуємо маркер з БД
+                            'is_strategic': r.resource.is_strategic,
                             'amount_needed': needed,
                             'priority': float(r.priority),
                             'lat': float(r.latitude) if r.latitude else None,
@@ -256,27 +258,21 @@ class DistributeResourcesView(APIView):
                         'lng': float(s.warehouse.longitude) if s.warehouse.longitude else None
                     })
 
-                # За замовчуванням тепер у нас гібридний режим
                 strategy = request.data.get('strategy', 'hybrid')
 
-                # --- ГІБРИДНИЙ РУШІЙ РОЗПОДІЛУ (Multi-Policy Engine) ---
                 if strategy == 'hybrid':
-                    # Розділяємо заявки на два потоки залежно від налаштувань ресурсу
                     triage_reqs = [r for r in requests_data if r.get('is_strategic')]
                     fairness_reqs = [r for r in requests_data if not r.get('is_strategic')]
 
                     plan_triage = calculate_strict_priority(triage_reqs, stocks_data) if triage_reqs else []
                     plan_fairness = calculate_distribution(fairness_reqs, stocks_data) if fairness_reqs else []
 
-                    # Зливаємо результати двох алгоритмів в один план
                     plan_items_data = plan_triage + plan_fairness
 
                 elif strategy == 'triage':
-                    # Примусово все через жорсткий пріоритет
                     plan_items_data = calculate_strict_priority(requests_data, stocks_data)
 
                 else:
-                    # Примусово все через справедливість
                     plan_items_data = calculate_distribution(requests_data, stocks_data)
 
                 if not plan_items_data:
