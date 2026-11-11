@@ -12,7 +12,7 @@ const StockMobileCard = ({ stock, resource, isEditing, editValue, setEditValue, 
                             {resource.name}
                         </span>
                         {resource.category_name && (
-                            <span className="text-[9px] font-black uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                            <span className="text-[9px] font-medium uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
                                 {resource.category_name}
                             </span>
                         )}
@@ -48,10 +48,10 @@ const StockMobileCard = ({ stock, resource, isEditing, editValue, setEditValue, 
                     ) : (
                         <div className="flex items-center gap-2.5">
                             <div className="flex flex-col items-end">
-                                <span className="font-mono font-black text-slate-800 text-sm leading-tight">
+                                <span className="font-mono font-bold text-slate-800 text-sm leading-tight">
                                     {Number(stock.amount).toFixed(0)}
                                 </span>
-                                <span className="text-[9px] text-slate-400 font-bold uppercase">
+                                <span className="text-[9px] text-slate-400 font-medium uppercase">
                                     {resource.unit_name || 'од.'}
                                 </span>
                             </div>

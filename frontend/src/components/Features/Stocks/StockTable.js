@@ -1,5 +1,5 @@
 import React, {useState, useMemo, useEffect} from 'react';
-import {PackageSearch, Filter, ChevronUp, ChevronDown, Download} from '../../UI/icons';
+import {PackageSearch, Filter, ChevronUp, ChevronDown, Download, RotateCcw} from '../../UI/icons';
 import {exportResourcesToExcel} from '../../../utils/excelExport';
 import api from '../../../services/api';
 import StockRow from './StockRow';
@@ -61,6 +61,30 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
         else setSortOrder('none');
     };
 
+    const hasActiveFilters = filterCategory !== 'all' || filterWarehouse !== 'all';
+    const resetFilters = () => {
+        setFilterCategory('all');
+        setFilterWarehouse('all');
+    };
+    const renderEmpty = (padding) => (
+        <div className={`flex flex-col items-center justify-center text-center ${padding} text-slate-400`}>
+            <PackageSearch size={40} className="text-slate-200 mb-2"/>
+            {hasActiveFilters ? (
+                <>
+                    <p className="text-xs font-medium uppercase tracking-widest">За вашими фільтрами запасів не знайдено</p>
+                    <button
+                        onClick={resetFilters}
+                        className="mt-3 flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl transition-colors active:scale-95"
+                    >
+                        <RotateCcw size={12}/> Скинути фільтри пошуку
+                    </button>
+                </>
+            ) : (
+                <p className="text-xs font-medium uppercase tracking-widest">Запасів не знайдено</p>
+            )}
+        </div>
+    );
+
     const handleSaveEdit = async (id) => {
         try {
             const roundedValue = Math.round(parseFloat(editValue));
@@ -85,7 +109,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                     <div className="flex items-center gap-2 shrink-0">
                     <button
                         onClick={() => exportResourcesToExcel(stocks, resourcesMap)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:text-blue-600 shadow-sm transition-colors active:scale-95"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-slate-200 text-slate-600 hover:text-blue-600 shadow-sm transition-colors active:scale-95"
                         title="Завантажити звіт по ресурсах (Excel)"
                     >
                         <Download size={14}/>
@@ -94,7 +118,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                     {/* Швидке сортування на мобільних телефонах */}
                     <button
                         onClick={toggleSort}
-                        className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:text-blue-600 shadow-sm transition-colors active:scale-95 shrink-0"
+                        className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-slate-200 text-slate-600 hover:text-blue-600 shadow-sm transition-colors active:scale-95 shrink-0"
                         aria-label="Сортувати за кількістю"
                     >
                         <span>К-сть</span>
@@ -107,7 +131,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60">
-                    <div className="hidden sm:flex items-center gap-1 text-[10px] font-black uppercase text-slate-400 mr-1">
+                    <div className="hidden sm:flex items-center gap-1 text-[10px] font-medium uppercase text-slate-400 mr-1">
                         <Filter size={12}/> Фільтри:
                     </div>
                     <FilterSelect
@@ -132,13 +156,18 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                             <option key={wh} value={wh}>{wh}</option>
                         ))}
                     </FilterSelect>
+                    {hasActiveFilters && (
+                        <button onClick={resetFilters}
+                                className="flex items-center gap-1 text-[10px] font-medium text-red-500 bg-red-50 px-2.5 py-1 rounded-xl h-8">
+                            <RotateCcw size={11}/> Скинути</button>
+                    )}
                 </div>
             </div>
 
             {/* 1. Десктопний вигляд: Таблиця (показується на екранах від md і ширше) */}
             <div className="hidden md:block overflow-y-auto flex-1 custom-scrollbar pr-1">
                 <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50 sticky top-0 uppercase text-[10px] font-bold text-slate-400">
+                    <thead className="bg-slate-50 sticky top-0 uppercase text-[10px] font-medium text-slate-400">
                     <tr>
                         <th className="px-6 py-4">Склад</th>
                         <th className="px-6 py-4">Ресурс</th>
@@ -180,6 +209,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                     ))}
                     </tbody>
                 </table>
+                {visibleStocks.length === 0 && renderEmpty('py-24')}
             </div>
 
             {/* 2. Спеціальний мобільний формат: акуратні картки без скрол-трепу */}
@@ -206,7 +236,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                             />
                         ))}
                         {totalMobilePages > 1 && (
-                            <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs font-bold text-slate-500 select-none">
+                            <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs font-medium text-slate-500 select-none">
                                 <button
                                     disabled={mobilePage <= 1}
                                     onClick={() => setMobilePage(p => Math.max(1, p - 1))}
@@ -228,9 +258,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                         )}
                     </>
                 ) : (
-                    <div className="text-center py-10 text-slate-400 text-xs font-bold uppercase tracking-wider">
-                        Запасів не знайдено
-                    </div>
+                    renderEmpty('py-10')
                 )}
             </div>
 
@@ -239,7 +267,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                 <div className="hidden md:block p-3 text-center border-t border-slate-100 bg-slate-50/50">
                     <button
                         onClick={() => setVisibleCount(prev => prev + 30)}
-                        className="text-xs font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors py-1.5 px-4 rounded-xl bg-blue-50 hover:bg-blue-100"
+                        className="text-xs font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors py-1.5 px-4 rounded-xl bg-blue-50 hover:bg-blue-100"
                     >
                         Показати ще (+30 з {sortedStocks.length})
                     </button>

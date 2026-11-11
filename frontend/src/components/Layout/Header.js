@@ -29,18 +29,18 @@ const Header = ({onOpenForm, onOpenStockIn, onAddResource, currentUser, onLogout
 
                     <div className="min-w-0 text-left">
                         <div className="flex items-center gap-1.5 sm:gap-2">
-                            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 tracking-tight leading-none">
+                            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight leading-none">
                                 <span className="text-blue-600">ResQ</span> System
                             </h1>
 
                             {/* ПЛАШКА СТАТУСУ */}
                             {isAdmin ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded-full text-[9px] font-black uppercase tracking-wider shrink-0">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded-full text-[9px] font-semibold uppercase tracking-wider shrink-0">
                                     <ShieldCheck size={10} className="fill-white/20"/>
                                     Admin
                                 </span>
                             ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[9px] font-black uppercase tracking-wider border border-slate-200 shrink-0">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[9px] font-semibold uppercase tracking-wider border border-slate-200 shrink-0">
                                     <User size={10}/>
                                     Волонтер
                                 </span>
@@ -48,7 +48,7 @@ const Header = ({onOpenForm, onOpenStockIn, onAddResource, currentUser, onLogout
                         </div>
 
                         <div className="flex items-center gap-1.5 text-slate-500 mt-1 font-medium text-xs leading-none">
-                            <span className="font-bold text-slate-700 truncate max-w-[140px] sm:max-w-[220px] md:max-w-none">
+                            <span className="font-semibold text-slate-700 truncate max-w-[140px] sm:max-w-[220px] md:max-w-none">
                                 {currentUser?.username || 'Користувач'}
                             </span>
                             <span className="text-slate-300">•</span>
@@ -78,7 +78,7 @@ const Header = ({onOpenForm, onOpenStockIn, onAddResource, currentUser, onLogout
                 {isAdmin && (
                     <button
                         onClick={onOpenStockIn}
-                        className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 active:scale-95 transition-all shadow-2xs"
+                        className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 active:scale-95 transition-all shadow-2xs"
                     >
                         <PlusCircle size={16}/>
                         <span>Поставка</span>
@@ -88,7 +88,7 @@ const Header = ({onOpenForm, onOpenStockIn, onAddResource, currentUser, onLogout
                 {/* Створення заявки */}
                 <button
                     onClick={onOpenForm}
-                    className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-blue-600 text-white hover:bg-slate-900 active:scale-95 transition-all shadow-md shadow-blue-100"
+                    className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-blue-600 text-white hover:bg-slate-900 active:scale-95 transition-all shadow-md shadow-blue-100"
                 >
                     <ClipboardList size={16}/>
                     <span>Створити заявку</span>

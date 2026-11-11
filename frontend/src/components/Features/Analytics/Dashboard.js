@@ -161,13 +161,13 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
           <p className="font-bold text-slate-200">{data.name}</p>
           <hr className="border-slate-800 my-1" />
           {data.isZero ? (
-            <p className="text-red-400 font-black flex items-center gap-1">
+            <p className="text-red-400 font-bold flex items-center gap-1">
               <span>● Кількість:</span>
               <span className="bg-red-500/20 px-1.5 py-0.5 rounded text-white font-mono">0 од. (НЕМАЄ)</span>
             </p>
           ) : (
             <p className="text-blue-400 font-bold">
-              Поточний запас: <span className="font-mono text-white font-black">{data.amount} од.</span>
+              Поточний запас: <span className="font-mono text-white font-bold">{data.amount} од.</span>
             </p>
           )}
         </div>
@@ -189,16 +189,16 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
             <BarChart3 size={20} />
           </div>
           <div>
-            <h3 className="font-black text-slate-800 uppercase text-xs tracking-widest leading-none">
+            <h3 className="font-bold text-slate-800 uppercase text-xs tracking-widest leading-none">
               Аналітичний дашборд
             </h3>
-            <p className="text-slate-400 text-[10px] font-bold uppercase mt-1">
+            <p className="text-slate-400 text-[10px] font-medium uppercase mt-1">
               Моніторинг запасів та дефіциту ресурсів
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-            <div className="hidden sm:block bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[9px] font-black uppercase">
+            <div className="hidden sm:block bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[9px] font-semibold uppercase">
                 {isVisible ? 'Сховати графіки' : 'Показати аналітику'}
             </div>
             <div className={`transition-transform duration-300 ${isVisible ? 'rotate-180' : ''}`}>
@@ -212,7 +212,7 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
         <div className="space-y-6 animate-in fade-in duration-300 mt-2">
           {stockData.length === 0 && deficitData.length === 0 ? (
             <div className="bg-white p-8 rounded-2xl sm:rounded-[2rem] border border-slate-200 shadow-sm text-center">
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-wider">Немає достатньо даних для побудови графіків</p>
+              <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Немає достатньо даних для побудови графіків</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -221,7 +221,7 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
               <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-slate-200 shadow-sm min-w-0">
                 <div className="flex items-center gap-2 mb-6">
                   <Package className="text-blue-600" size={20} />
-                  <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Запаси на складах</h3>
+                  <h3 className="font-bold text-slate-800 uppercase text-[10px] tracking-widest">Запаси на складах</h3>
                 </div>
                 {/* Збільшили висоту та відступ знизу, щоб дворядкові підписи ідеально поміщалися */}
                 <SizedChart className="h-64 sm:h-72 w-full min-w-0">
@@ -259,7 +259,7 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
               <div className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] border border-slate-200 shadow-sm min-w-0">
                 <div className="flex items-center gap-2 mb-6">
                   <TrendingDown className="text-red-500" size={20} />
-                  <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Критичний дефіцит</h3>
+                  <h3 className="font-bold text-slate-800 uppercase text-[10px] tracking-widest">Критичний дефіцит</h3>
                 </div>
                 <SizedChart className="h-64 sm:h-72 w-full min-w-0">
                   {({ width, height }) => (

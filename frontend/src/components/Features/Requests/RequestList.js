@@ -33,6 +33,30 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
         });
     }, [requests, requestTab, statusFilter, resourceFilter]);
 
+    const hasActiveFilters = requestTab === 'active' && (statusFilter !== 'all' || resourceFilter !== 'all');
+    const resetFilters = () => {
+        setStatusFilter('all');
+        setResourceFilter('all');
+    };
+    const renderEmpty = (iconSize, padding) => (
+        <div className={`flex flex-col items-center justify-center text-center ${padding} text-slate-400`}>
+            <Inbox size={iconSize} className="text-slate-200 mb-2"/>
+            {hasActiveFilters ? (
+                <>
+                    <p className="text-xs font-medium uppercase tracking-widest">За вашими фільтрами заявок не знайдено</p>
+                    <button
+                        onClick={resetFilters}
+                        className="mt-3 flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-xl transition-colors active:scale-95"
+                    >
+                        <RotateCcw size={12}/> Скинути фільтри пошуку
+                    </button>
+                </>
+            ) : (
+                <p className="text-xs font-medium uppercase tracking-widest">Немає заявок</p>
+            )}
+        </div>
+    );
+
     // Скидання мобільної сторінки при зміні фільтрів або вкладок
     useEffect(() => {
         setMobilePage(1);
@@ -90,7 +114,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                     {isAdmin && (
                         <button
                             onClick={() => exportRequestsToExcel(requests)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:text-blue-600 shadow-sm transition-colors active:scale-95"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-slate-200 text-slate-600 hover:text-blue-600 shadow-sm transition-colors active:scale-95"
                             title="Завантажити звіт по заявках (Excel)"
                         >
                             <Download size={14}/>
@@ -102,14 +126,14 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                             setRequestTab('active');
                             setStatusFilter('all');
                         }}
-                                className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${requestTab === 'active' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Активні
+                                className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${requestTab === 'active' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Активні
                         </button>
                         <button onClick={() => {
                             setRequestTab('history');
                             setStatusFilter('all');
                             setResourceFilter('all');
                         }}
-                                className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${requestTab === 'history' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Архів
+                                className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${requestTab === 'history' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Архів
                         </button>
                     </div>
                     </div>
@@ -117,19 +141,27 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
 
                 {requestTab === 'active' && (
                     <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60">
-                        <div className="hidden sm:flex items-center gap-1 text-[10px] font-black uppercase text-slate-400 mr-1">
+                        <div className="hidden sm:flex items-center gap-1 text-[10px] font-medium uppercase text-slate-400 mr-1">
                             <Filter size={12}/> Фільтри:
                         </div>
+                        <FilterSelect icon={Filter} value={statusFilter}
+                                      onChange={(e) => setStatusFilter(e.target.value)}
+                                      ariaLabel="Статус заявки"
+                                      className="sm:hidden flex-1 min-w-[120px]">
+                            <option value="all">Усі статуси</option>
+                            <option value="new">Нові</option>
+                            <option value="partial">Частково</option>
+                        </FilterSelect>
                         <div
-                            className="flex bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm h-8 items-center">
+                            className="hidden sm:flex bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm h-8 items-center">
                             <button onClick={() => setStatusFilter('all')}
-                                    className={`px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-bold uppercase ${statusFilter === 'all' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>Усі
+                                    className={`px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-medium uppercase ${statusFilter === 'all' ? 'bg-slate-900 text-white' : 'text-slate-600'}`}>Усі
                             </button>
                             <button onClick={() => setStatusFilter('new')}
-                                    className={`px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-bold uppercase ${statusFilter === 'new' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Нові
+                                    className={`px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-medium uppercase ${statusFilter === 'new' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Нові
                             </button>
                             <button onClick={() => setStatusFilter('partial')}
-                                    className={`px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-bold uppercase ${statusFilter === 'partial' ? 'bg-amber-600 text-white' : 'text-slate-600'}`}>Частково
+                                    className={`px-2.5 sm:px-3 py-1 rounded-lg text-[10px] font-medium uppercase ${statusFilter === 'partial' ? 'bg-amber-600 text-white' : 'text-slate-600'}`}>Частково
                             </button>
                         </div>
                         <FilterSelect icon={Package} value={resourceFilter}
@@ -144,7 +176,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                                 setStatusFilter('all');
                                 setResourceFilter('all');
                             }}
-                                    className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-50 px-2.5 py-1 rounded-xl h-8">
+                                    className="flex items-center gap-1 text-[10px] font-medium text-red-500 bg-red-50 px-2.5 py-1 rounded-xl h-8">
                                 <RotateCcw size={11}/> Скинути</button>
                         )}
                     </div>
@@ -160,7 +192,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                                          onOpenModal={handleOpenModal}/>
                         ))}
                         {totalMobilePages > 1 && (
-                            <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs font-bold text-slate-500 select-none">
+                            <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs font-medium text-slate-500 select-none">
                                 <button
                                     disabled={mobilePage <= 1}
                                     onClick={() => setMobilePage(p => Math.max(1, p - 1))}
@@ -182,10 +214,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                         )}
                     </>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-                        <Inbox size={40} className="text-slate-200 mb-2"/>
-                        <p className="text-xs font-bold uppercase tracking-widest">Немає заявок</p>
-                    </div>
+                    renderEmpty(40, 'py-10')
                 )}
             </div>
 
@@ -201,7 +230,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                             <div className="pt-2 text-center">
                                 <button
                                     onClick={() => setVisibleCount(prev => prev + 25)}
-                                    className="text-xs font-black uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors py-2 px-5 rounded-xl bg-blue-50 hover:bg-blue-100"
+                                    className="text-xs font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors py-2 px-5 rounded-xl bg-blue-50 hover:bg-blue-100"
                                 >
                                     Показати ще (+25 з {displayedRequests.length})
                                 </button>
@@ -209,10 +238,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                         )}
                     </>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-                        <Inbox size={48} className="text-slate-200 mb-2"/>
-                        <p className="text-xs font-bold uppercase tracking-widest">Немає заявок</p>
-                    </div>
+                    renderEmpty(48, 'py-24')
                 )}
             </div>
 
@@ -229,14 +255,14 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                     <div className="space-y-6 text-left">
                         <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
                             <label
-                                className="text-[10px] font-black uppercase text-slate-400 italic mb-2 block tracking-widest">Необхідна
+                                className="text-[10px] font-semibold uppercase text-slate-400 italic mb-2 block tracking-widest">Необхідна
                                 кількість (шт.)</label>
                             <input
                                 type="text"
                                 inputMode="numeric"
                                 value={editQuantity}
                                 onChange={(e) => setEditQuantity(e.target.value.replace(/[^0-9]/g, ''))}
-                                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-black text-lg text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-lg text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
                             />
                         </div>
 
@@ -244,7 +270,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                             <label className="flex items-center justify-between cursor-pointer select-none">
                                 <div className="flex flex-col text-left pr-4">
                                     <span
-                                        className="text-[11px] font-black text-amber-900 uppercase leading-none mb-1 flex items-center gap-1.5">
+                                        className="text-[11px] font-semibold text-amber-900 uppercase leading-none mb-1 flex items-center gap-1.5">
                                         <RefreshCw size={12}
                                                    className={editAutoExtend ? "animate-spin-slow text-amber-500" : ""}/>
                                         Режим автопродовження
@@ -264,10 +290,10 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
 
                         <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 justify-end pt-4 border-t border-slate-100">
                             <button onClick={() => setIsModalOpen(false)}
-                                    className="w-full sm:w-auto px-5 py-2.5 text-slate-400 font-bold hover:text-slate-600 transition-colors text-sm">Скасувати
+                                    className="w-full sm:w-auto px-5 py-2.5 text-slate-400 font-medium hover:text-slate-600 transition-colors text-sm">Скасувати
                             </button>
                             <button onClick={handleSaveChanges} disabled={isSaving}
-                                    className="w-full sm:w-auto px-8 py-2.5 bg-blue-600 text-white font-black rounded-xl hover:bg-slate-900 shadow-xl transition-all text-sm">
+                                    className="w-full sm:w-auto px-8 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-slate-900 shadow-xl transition-all text-sm">
                                 {isSaving ? "ЗБЕРЕЖЕННЯ..." : "ЗБЕРЕГТИ ЗМІНИ"}
                             </button>
                         </div>

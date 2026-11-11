@@ -167,7 +167,7 @@ function App() {
                 />
 
                 {/* Секція 1: Запаси та Заявки */}
-                <div id="section-stocks" className="pt-2">
+                <div id="section-stocks">
                     {/* Мобільний тач-перемикач тільки для телефонів (ховається на md+) */}
                     {currentUser?.is_admin && (
                         <div className="md:hidden flex bg-slate-200/80 p-1 rounded-2xl mb-3 shadow-inner">
@@ -216,7 +216,7 @@ function App() {
 
                 {/* Секція 2: Аналітика */}
                 {currentUser?.is_admin && (
-                    <div id="section-analytics" className="space-y-4 sm:space-y-6 pt-2 sm:pt-4">
+                    <div id="section-analytics" className="space-y-4 sm:space-y-6">
                         <Dashboard stocks={data.stocks} requests={data.requests} resourcesMap={data.resourcesMap} />
                         <AdminLogs logs={data.logs || []} />
                     </div>
@@ -224,7 +224,7 @@ function App() {
 
                 {/* Секція 3: Розподіл (Кнопка виклику модалки та результати) */}
                 {currentUser?.is_admin && (
-                    <div id="section-distribution" className="space-y-4 sm:space-y-6 pt-2 sm:pt-4 border-t border-slate-200">
+                    <div id="section-distribution" className="space-y-4 sm:space-y-6">
                         <div className="flex justify-center py-2 sm:py-3">
                             <button
                                 onClick={() => openModal('distribute')}

@@ -8,7 +8,7 @@ const FilterSelect = ({ icon: Icon, value, onChange, children, className = "", a
                 value={value}
                 onChange={onChange}
                 aria-label={ariaLabel}
-                className="bg-transparent text-[11px] font-bold text-slate-700 outline-none cursor-pointer w-full"
+                className="bg-transparent text-[11px] font-medium text-slate-700 outline-none cursor-pointer w-full"
             >
                 {children}
             </select>

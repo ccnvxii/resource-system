@@ -53,7 +53,7 @@ const SidebarNav = ({ onNavigate }) => {
                 className={getButtonStyle('section-stocks')}
             >
                 <Database size={20} />
-                <span className="absolute left-full ml-3 px-3 py-1.5 bg-slate-900 text-white text-[11px] font-bold rounded-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg pointer-events-none">
+                <span className="absolute left-full ml-3 px-3 py-1.5 bg-slate-900 text-white text-[11px] font-medium rounded-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg pointer-events-none">
                     Запаси на складах
                 </span>
             </button>
@@ -64,7 +64,7 @@ const SidebarNav = ({ onNavigate }) => {
                 className={getButtonStyle('section-analytics')}
             >
                 <BarChart3 size={20} />
-                <span className="absolute left-full ml-3 px-3 py-1.5 bg-slate-900 text-white text-[11px] font-bold rounded-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg pointer-events-none">
+                <span className="absolute left-full ml-3 px-3 py-1.5 bg-slate-900 text-white text-[11px] font-medium rounded-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg pointer-events-none">
                     Аналітика (Дашборди)
                 </span>
             </button>
@@ -75,7 +75,7 @@ const SidebarNav = ({ onNavigate }) => {
                 className={getButtonStyle('section-distribution')}
             >
                 <GitFork size={20} />
-                <span className="absolute left-full ml-3 px-3 py-1.5 bg-slate-900 text-white text-[11px] font-bold rounded-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg pointer-events-none">
+                <span className="absolute left-full ml-3 px-3 py-1.5 bg-slate-900 text-white text-[11px] font-medium rounded-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg pointer-events-none">
                     Розподіл
                 </span>
             </button>

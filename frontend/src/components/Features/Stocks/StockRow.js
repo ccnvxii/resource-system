@@ -7,7 +7,7 @@ const StockRow = ({ stock, resource, isEditing, editValue, setEditValue, onStart
             <td className="px-4 md:px-6 py-3.5 md:py-4 italic text-slate-500 text-xs md:text-sm">{stock.warehouse_name}</td>
             <td className="px-4 md:px-6 py-3.5 md:py-4">
                 <div className="font-bold text-slate-800 text-xs md:text-sm">{resource.name}</div>
-                <div className="text-[10px] text-blue-500 font-bold uppercase">{resource.category_name}</div>
+                <div className="text-[10px] text-blue-500 font-medium uppercase">{resource.category_name}</div>
             </td>
             <td className="px-4 md:px-6 py-3.5 md:py-4 text-right">
                 <div className="relative flex items-center justify-end h-10">
@@ -33,7 +33,7 @@ const StockRow = ({ stock, resource, isEditing, editValue, setEditValue, onStart
                                 <span className="font-mono font-bold text-slate-700">
                                   {Number(stock.amount).toFixed(0)}
                                 </span>
-                                <span className="text-[9px] text-slate-400 font-black uppercase">
+                                <span className="text-[9px] text-slate-400 font-medium uppercase">
                                   {resource.unit_name}
                                 </span>
                             </div>

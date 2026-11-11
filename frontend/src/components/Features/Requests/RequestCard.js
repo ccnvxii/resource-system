@@ -45,7 +45,7 @@ const RequestCard = ({ req, purposeMap, isAdmin, onOpenModal }) => {
 
             <div className="flex justify-between items-start">
                 <div className="space-y-1.5 flex-1">
-                    <span className={`flex w-fit items-center gap-1.5 text-xs font-bold uppercase px-2.5 py-0.5 rounded-lg ${purposeData.color}`}>
+                    <span className={`flex w-fit items-center gap-1.5 text-xs font-semibold uppercase px-2.5 py-0.5 rounded-lg ${purposeData.color}`}>
                         {purposeData.icon} {purposeData.label}
                     </span>
                     <h3 className={`font-bold text-lg text-slate-800 ${isHistory && 'line-through opacity-50'}`}>{req.resource_name}</h3>
@@ -56,7 +56,7 @@ const RequestCard = ({ req, purposeMap, isAdmin, onOpenModal }) => {
                             <span>{req.user_full_name || req.username}</span>
                         </div>
                         {req.due_date && (
-                            <div className="flex items-center gap-1 text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-100/60 text-xs font-bold">
+                            <div className="flex items-center gap-1 text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-100/60 text-xs font-medium">
                                 <Clock size={12} className="text-amber-500" />
                                 <span>до {formatDate(req.due_date)}</span>
                             </div>
@@ -64,7 +64,7 @@ const RequestCard = ({ req, purposeMap, isAdmin, onOpenModal }) => {
                     </div>
 
                     {req.city && (
-                        <div className="flex items-center gap-1 text-xs text-blue-700 font-bold bg-blue-50 w-fit px-2 py-0.5 rounded-md mt-1">
+                        <div className="flex items-center gap-1 text-xs text-blue-700 font-medium bg-blue-50 w-fit px-2 py-0.5 rounded-md mt-1">
                             <MapPin size={12} className="text-blue-500" />
                             <span>{req.city}</span>
                         </div>
@@ -73,8 +73,8 @@ const RequestCard = ({ req, purposeMap, isAdmin, onOpenModal }) => {
 
                 {isAdmin && (
                     <div className="text-right ml-2">
-                        <div className="text-[10px] text-slate-400 font-bold uppercase">Пріоритет</div>
-                        <div className={`text-xl font-black ${!isHistory && Number(req.priority) >= 8 ? 'text-red-500' : 'text-slate-700'}`}>
+                        <div className="text-[10px] text-slate-400 font-medium uppercase">Пріоритет</div>
+                        <div className={`text-xl font-bold ${!isHistory && Number(req.priority) >= 8 ? 'text-red-500' : 'text-slate-700'}`}>
                             {Number(req.priority).toFixed(1)}
                         </div>
                     </div>
@@ -85,7 +85,7 @@ const RequestCard = ({ req, purposeMap, isAdmin, onOpenModal }) => {
             <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-100">
                 <div className="flex items-center gap-2">
                     {statusDetails.icon}
-                    <span className="text-xs font-bold uppercase text-slate-600">{statusDetails.label}</span>
+                    <span className="text-xs font-semibold uppercase text-slate-600">{statusDetails.label}</span>
                 </div>
 
                 <button
