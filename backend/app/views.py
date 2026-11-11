@@ -238,12 +238,15 @@ class DistributeResourcesView(APIView):
                 for r in active_requests_qs:
                     needed = int(r.quantity_requested - r.quantity_allocated)
                     if needed > 0:
+                        raw_p = float(r.priority) if r.priority is not None else 0.5
+                        # Алгоритми оптимізації очікують 10-бальну шкалу [0.0 - 10.0]
+                        priority_10 = round(raw_p * 10.0, 2) if raw_p <= 1.0 else round(raw_p, 2)
                         requests_data.append({
                             'id': r.id,
                             'resource_id': r.resource_id,
                             'is_strategic': r.resource.is_strategic,
                             'amount_needed': needed,
-                            'priority': float(r.priority),
+                            'priority': priority_10,
                             'lat': float(r.latitude) if r.latitude else None,
                             'lng': float(r.longitude) if r.longitude else None
                         })

@@ -87,19 +87,19 @@ def calculate_time_multiplier(due_date):
 
 
 def calculate_request_priority(purpose_weight, category_criticality, latitude, longitude, due_date, extension_count):
-    # Якщо purpose_weight передається за 10-бальною шкалою (наприклад, 6.0, 9.0), нормалізуємо до [0; 1]
-    k_purp = float(purpose_weight) / 10.0 if float(purpose_weight) > 1.0 else float(purpose_weight)
-    k_crit = float(category_criticality) if category_criticality else 0.5
+    # Усі параметри (вага призначення, критичність) зберігаються одразу у нормалізованій шкалі [0.0; 1.0]
+    k_purp = float(purpose_weight) if purpose_weight is not None else 0.5
+    k_crit = float(category_criticality) if category_criticality is not None else 0.5
 
     k_geo = calculate_front_multiplier(latitude, longitude)
     k_time = calculate_time_multiplier(due_date)
 
-    # Штраф тепер адаптований під шкалу [0; 1] (наприклад, -0.01 за кожен цикл, максимум -0.05)
+    # Штраф за пролонгацію у нормалізованій шкалі [0; 1] (до -0.05)
     age_penalty = (extension_count * 0.01) if extension_count <= 5 else 0.05
     alpha, beta, gamma, delta = 0.35, 0.25, 0.25, 0.15
 
     weighted_sum = (alpha * k_purp) + (beta * k_time) + (gamma * k_geo) + (delta * k_crit)
     final_index = weighted_sum - age_penalty
 
-    # Зберігаємо в базі даних в діапазоні [0.0; 1.0] з округленням до 3 знаків
-    return round(max(0.0, min(1.0, final_index)), 3)
+    # Зберігаємо в базі даних строго в нормалізованому діапазоні [0.0; 1.0]
+    return round(max(0.025, min(1.0, final_index)), 3)

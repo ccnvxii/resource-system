@@ -58,10 +58,10 @@ def create_initial_data(sender, **kwargs):
     cat_hygiene, _ = Category.objects.update_or_create(slug='hygiene', defaults={'name': 'Санітарія та гігієна', 'criticality': 0.5})
 
     # --- 3. ТИПИ ПРИЗНАЧЕННЯ ---
-    p_refugees, _ = RequestPurpose.objects.update_or_create(code='refugees', defaults={'name': 'ВПО та евакуйовані', 'weight': 6.0})
-    p_disaster, _ = RequestPurpose.objects.update_or_create(code='disaster', defaults={'name': 'Зона гуманітарної катастрофи', 'weight': 8.0})
-    p_hospital, _ = RequestPurpose.objects.update_or_create(code='hospital', defaults={'name': 'Військові шпиталі / Клініки', 'weight': 9.0})
-    p_military, _ = RequestPurpose.objects.update_or_create(code='military', defaults={'name': 'Забезпечення військових частин', 'weight': 10.0})
+    p_refugees, _ = RequestPurpose.objects.update_or_create(code='refugees', defaults={'name': 'ВПО та евакуйовані', 'weight': 0.6})
+    p_disaster, _ = RequestPurpose.objects.update_or_create(code='disaster', defaults={'name': 'Зона гуманітарної катастрофи', 'weight': 0.8})
+    p_hospital, _ = RequestPurpose.objects.update_or_create(code='hospital', defaults={'name': 'Військові шпиталі / Клініки', 'weight': 0.9})
+    p_military, _ = RequestPurpose.objects.update_or_create(code='military', defaults={'name': 'Забезпечення військових частин', 'weight': 1.0})
 
     # --- 4. КОРИСТУВАЧІ ---
     admin_user, created = User.objects.get_or_create(

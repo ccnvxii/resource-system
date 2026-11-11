@@ -112,8 +112,9 @@ class UserRequestSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
     due_date = serializers.DateField(format="%Y-%m-%d", required=False)
 
-    current_priority = serializers.ReadOnlyField()
+    priority = serializers.SerializerMethodField()
     priority_score = serializers.SerializerMethodField()
+    current_priority = serializers.SerializerMethodField()
 
     class Meta:
         model = UserRequest
@@ -132,8 +133,18 @@ class UserRequestSerializer(serializers.ModelSerializer):
             return "Невідомий"
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
 
+    def get_priority(self, obj):
+        if obj.priority is None:
+            return 0.0
+        val = float(obj.priority)
+        # В БД зберігається [0.0 - 1.0], для фронтенду і відображення виводимо [0.0 - 10.0]
+        return round(val * 10.0, 1) if val <= 1.0 else round(val, 1)
+
     def get_priority_score(self, obj):
-        return round(float(obj.priority) * 10.0, 1)
+        return self.get_priority(obj)
+
+    def get_current_priority(self, obj):
+        return self.get_priority(obj)
 
     def validate_due_date(self, value):
         """Захист: граничний термін виконання (due_date) не може бути у минулому"""
@@ -147,7 +158,7 @@ class DistributionItemSerializer(serializers.ModelSerializer):
     unit_name = serializers.CharField(source='request.resource.unit.name', read_only=True)
     warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
     recipient_name = serializers.CharField(source='request.user.username', read_only=True)
-    priority = serializers.FloatField(source='request.priority', read_only=True)
+    priority = serializers.SerializerMethodField()
 
     city = serializers.CharField(source='request.city', default='Місто не вказано', read_only=True)
     warehouse_address = serializers.CharField(source='request.warehouse_address', default='', read_only=True)
@@ -169,6 +180,12 @@ class DistributionItemSerializer(serializers.ModelSerializer):
             'total_available_at_source',
             'is_strategic'
         ]
+
+    def get_priority(self, obj):
+        if not obj.request or obj.request.priority is None:
+            return 0.0
+        val = float(obj.request.priority)
+        return round(val * 10.0, 1) if val <= 1.0 else round(val, 1)
 
     def get_recipient_name(self, obj):
         user = obj.request.user
