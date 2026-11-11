@@ -263,7 +263,7 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
                 </div>
                 {/* Висота підлаштовується під кількість рядків, щоб не було порожніх «залисин» */}
                 <div className="flex items-center h-64 sm:h-72">
-                <SizedChart className="w-full min-w-0" style={{ height: Math.min(288, Math.max(150, deficitData.length * 62 + 40)) }}>
+                <SizedChart className="w-full min-w-0" style={{ height: Math.max(150, deficitData.length * 62 + 40), maxHeight: "100%" }}>
                   {({ width, height }) => (
                     <BarChart width={width} height={height} data={deficitData} layout="vertical" margin={{ top: 10, right: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />

@@ -9,6 +9,7 @@ const AdminLogs = ({ logs = [] }) => {
   // За замовчуванням всі плани ЗГОРНУТІ
   const [expandedPlans, setExpandedPlans] = useState({});
   const [selectedLog, setSelectedLog] = useState(null);
+  const [planPage, setPlanPage] = useState(1);
 
   const groupedLogs = logs.reduce((acc, log) => {
     const planId = log.plan_id || 'Невідомий';
@@ -18,6 +19,11 @@ const AdminLogs = ({ logs = [] }) => {
   }, {});
 
   const sortedPlanIds = Object.keys(groupedLogs).sort((a, b) => b - a);
+
+  const PLANS_PER_PAGE = 5;
+  const totalPages = Math.max(1, Math.ceil(sortedPlanIds.length / PLANS_PER_PAGE));
+  const safePage = Math.min(planPage, totalPages);
+  const pagePlanIds = sortedPlanIds.slice((safePage - 1) * PLANS_PER_PAGE, safePage * PLANS_PER_PAGE);
 
   const togglePlan = (planId, e) => {
     e.stopPropagation();
@@ -58,15 +64,15 @@ const AdminLogs = ({ logs = [] }) => {
       </div>
 
       {/* ВМІСТ ЖУРНАЛУ */}
-      <div className={`space-y-4 sm:space-y-6 overflow-hidden transition-all duration-500 ease-in-out ${isJournalVisible ? 'max-h-[5000px] opacity-100 mt-4 sm:mt-6' : 'max-h-0 opacity-0 pointer-events-none'}`}>
-
+      <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isJournalVisible ? 'max-h-[5000px] opacity-100 mt-4 sm:mt-6' : 'max-h-0 opacity-0 pointer-events-none'}`}>
+        <div className="max-h-[70vh] overflow-y-auto custom-scrollbar space-y-2.5 sm:space-y-3 pr-1">
         {sortedPlanIds.length === 0 ? (
             <div className="bg-white rounded-2xl sm:rounded-[2rem] border-2 border-dashed border-slate-200 p-8 sm:p-10 text-center">
                 <Layers className="mx-auto text-slate-200 mb-2" size={36} />
                 <p className="text-slate-400 font-black text-xs uppercase tracking-widest">Дані про розподіл відсутні</p>
             </div>
         ) : (
-            sortedPlanIds.map((planId) => {
+            pagePlanIds.map((planId) => {
                 const planItems = groupedLogs[planId];
                 const planDate = new Date(planItems[0].timestamp).toLocaleString('uk-UA');
                 // Тепер за замовчуванням false (згорнуто)
@@ -178,6 +184,29 @@ const AdminLogs = ({ logs = [] }) => {
                 </div>
                 );
             })
+        )}
+        </div>
+
+        {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100 text-xs font-medium text-slate-500 select-none">
+                <button
+                    disabled={safePage <= 1}
+                    onClick={() => setPlanPage(safePage - 1)}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 active:scale-95 transition-all shadow-xs"
+                >
+                    ← Новіші
+                </button>
+                <span className="text-slate-600 font-mono">
+                    {safePage} / {totalPages} <span className="text-slate-400 font-sans text-[11px]">({sortedPlanIds.length} планів)</span>
+                </span>
+                <button
+                    disabled={safePage >= totalPages}
+                    onClick={() => setPlanPage(safePage + 1)}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 active:scale-95 transition-all shadow-xs"
+                >
+                    Старіші →
+                </button>
+            </div>
         )}
       </div>
 

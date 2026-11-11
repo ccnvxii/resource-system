@@ -1,11 +1,12 @@
 import React, {useState, useMemo, useEffect} from 'react';
-import {PackageSearch, Filter, ChevronUp, ChevronDown, Download, RotateCcw} from '../../UI/icons';
+import {PackageSearch, Filter, ChevronUp, ChevronDown, Download, RotateCcw, Settings} from '../../UI/icons';
 import {exportResourcesToExcel} from '../../../utils/excelExport';
 import api from '../../../services/api';
 import { toast } from 'react-hot-toast';
 import StockRow from './StockRow';
 import StockMobileCard from './StockMobileCard';
 import FilterSelect from '../../UI/FilterSelect';
+import Modal from '../../UI/Modal';
 
 const INITIAL_ROWS_COUNT = 30;
 const MOBILE_STOCK_PAGE_SIZE = 6;
@@ -14,7 +15,8 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
     const [filterCategory, setFilterCategory] = useState('all');
     const [filterWarehouse, setFilterWarehouse] = useState('all');
     const [sortOrder, setSortOrder] = useState('none');
-    const [editingId, setEditingId] = useState(null);
+    const [editingStock, setEditingStock] = useState(null);
+    const [isSaving, setIsSaving] = useState(false);
     const [editValue, setEditValue] = useState("");
     const [visibleCount, setVisibleCount] = useState(INITIAL_ROWS_COUNT);
     const [mobilePage, setMobilePage] = useState(1);
@@ -99,25 +101,33 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
         }
     };
 
-    const handleSaveEdit = async (id) => {
+    const openEdit = (stock) => {
+        setEditingStock(stock);
+        setEditValue(Math.round(Number(stock.amount)).toString());
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingStock) return;
+        const roundedValue = Math.round(Number(editValue));
+        if (editValue === "" || isNaN(roundedValue) || roundedValue < 0) {
+            toast.error("Вкажіть коректну кількість");
+            return;
+        }
+        setIsSaving(true);
         try {
-            const roundedValue = Math.round(parseFloat(editValue));
-            if (isNaN(roundedValue) || roundedValue < 0) {
-                toast.error('Вкажіть коректну кількість');
-                setEditingId(null);
-                return;
-            }
             if (roundedValue === 0) {
                 // Нульовий залишок = позицію списано: видаляємо її зі складу
-                await api.delete(`/stocks/${id}/`);
-                toast.success('Залишок 0 — позицію списано зі складу');
+                await api.delete(`/stocks/${editingStock.id}/`);
+                toast.success("Залишок 0 — позицію списано зі складу");
             } else {
-                await api.patch(`/stocks/${id}/update_amount/`, {amount: roundedValue});
+                await api.patch(`/stocks/${editingStock.id}/update_amount/`, {amount: roundedValue});
             }
-            setEditingId(null);
+            setEditingStock(null);
             if (onRefresh) onRefresh();
         } catch (e) {
             console.error(e);
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -223,14 +233,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                                 category_name: '...',
                                 unit_name: '?'
                             }}
-                            isEditing={editingId === stock.id}
-                            editValue={editValue}
-                            setEditValue={setEditValue}
-                            onStartEdit={(id, val) => {
-                                setEditingId(id);
-                                setEditValue(val);
-                            }}
-                            onSaveEdit={handleSaveEdit}
+                            onStartEdit={openEdit}
                             onDelete={handleDelete}
                         />
                     ))}
@@ -252,14 +255,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                                     category_name: '...',
                                     unit_name: '?'
                                 }}
-                                isEditing={editingId === stock.id}
-                                editValue={editValue}
-                                setEditValue={setEditValue}
-                                onStartEdit={(id, val) => {
-                                    setEditingId(id);
-                                    setEditValue(val);
-                                }}
-                                onSaveEdit={handleSaveEdit}
+                            onStartEdit={openEdit}
                             onDelete={handleDelete}
                             />
                         ))}
@@ -301,6 +297,48 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                     </button>
                 </div>
             )}
+
+            {/* Модалка редагування — той самий формат, що й для заявок */}
+            <Modal
+                isOpen={!!editingStock}
+                onClose={() => setEditingStock(null)}
+                title={editingStock ? `Редагування: ${resourcesMap[editingStock.resource]?.name || editingStock.resource_name}` : "Редагування запасу"}
+                subtitle="Конфігурація обсягів на складі"
+                icon={Settings}
+                maxWidth="max-w-md"
+            >
+                {editingStock && (
+                    <div className="space-y-6 text-left">
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60">
+                            <label
+                                className="text-[10px] font-semibold uppercase text-slate-400 italic mb-2 block tracking-widest">Кількість
+                                на складі ({resourcesMap[editingStock.resource]?.unit_name || editingStock.unit_name || "шт."})</label>
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                autoFocus
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value.replace(/[^0-9]/g, ""))}
+                                onKeyDown={(e) => { if (e.key === "Enter") handleSaveEdit(); }}
+                                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-lg text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                            />
+                            <p className="text-[10px] font-medium text-slate-400 mt-2 leading-normal">
+                                Склад: {editingStock.warehouse_name}. Значення 0 спише позицію та видалить її зі складу.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 justify-end pt-4 border-t border-slate-100">
+                            <button onClick={() => setEditingStock(null)}
+                                    className="w-full sm:w-auto px-5 py-2.5 text-slate-400 font-medium hover:text-slate-600 transition-colors text-sm">Скасувати
+                            </button>
+                            <button onClick={handleSaveEdit} disabled={isSaving}
+                                    className="w-full sm:w-auto px-8 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-slate-900 shadow-xl transition-all text-sm">
+                                {isSaving ? "ЗБЕРЕЖЕННЯ..." : "ЗБЕРЕГТИ ЗМІНИ"}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
         </section>
     );
 };

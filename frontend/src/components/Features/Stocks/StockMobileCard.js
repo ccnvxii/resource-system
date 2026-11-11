@@ -1,7 +1,7 @@
 import React from 'react';
-import { Edit3, Check, Warehouse, Trash2 } from '../../UI/icons';
+import { Edit3, Warehouse, Trash2 } from '../../UI/icons';
 
-const StockMobileCard = ({ stock, resource, isEditing, editValue, setEditValue, onStartEdit, onSaveEdit, onDelete }) => {
+const StockMobileCard = ({ stock, resource, onStartEdit, onDelete }) => {
     return (
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm transition-all hover:border-blue-200">
             <div className="flex items-start justify-between gap-2.5">
@@ -26,27 +26,7 @@ const StockMobileCard = ({ stock, resource, isEditing, editValue, setEditValue, 
 
                 {/* Права колонка: Кількість та швидке редагування */}
                 <div className="shrink-0 flex items-center gap-2">
-                    {isEditing ? (
-                        <div className="flex items-center gap-1.5 animate-in fade-in zoom-in duration-200">
-                            <input
-                                type="number"
-                                step="1"
-                                value={editValue}
-                                onChange={(e) => setEditValue(e.target.value)}
-                                onBlur={() => onSaveEdit(stock.id)}
-                                autoFocus
-                                className="w-16 border-2 border-blue-500 rounded-xl p-1 text-right font-mono font-bold text-sm outline-none"
-                            />
-                            <button
-                                onClick={() => onSaveEdit(stock.id)}
-                                className="p-2 bg-green-500 text-white rounded-xl active:scale-95 shadow-sm"
-                                aria-label="Зберегти кількість"
-                            >
-                                <Check size={14} />
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2.5">
                             <div className="flex flex-col items-end">
                                 <span className="font-mono font-bold text-slate-800 text-sm leading-tight">
                                     {Number(stock.amount).toFixed(0)}
@@ -57,7 +37,7 @@ const StockMobileCard = ({ stock, resource, isEditing, editValue, setEditValue, 
                             </div>
 
                             <button
-                                onClick={() => onStartEdit(stock.id, stock.amount)}
+                                onClick={() => onStartEdit(stock)}
                                 className="p-2 bg-slate-50 hover:bg-blue-50 text-slate-500 hover:text-blue-600 rounded-xl transition-colors active:scale-95 border border-slate-100"
                                 aria-label="Редагувати кількість"
                             >
@@ -71,7 +51,6 @@ const StockMobileCard = ({ stock, resource, isEditing, editValue, setEditValue, 
                                 <Trash2 size={15} />
                             </button>
                         </div>
-                    )}
                 </div>
             </div>
         </div>
