@@ -48,3 +48,31 @@ export const exportPlanToExcel = async (plan, strategy = 'hybrid') => {
   XLSX.utils.book_append_sheet(wb, ws, "Результати розподілу");
   XLSX.writeFile(wb, `Distribution_Plan_${plan.id || 'new'}.xlsx`);
 };
+
+export const exportRequestsToExcel = async (requests = []) => {
+  if (!Array.isArray(requests) || !requests.length) return;
+  const XLSX = await import('xlsx');
+  const ws = XLSX.utils.json_to_sheet(requests);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Звіт");
+  XLSX.writeFile(wb, "ResQ_Report.xlsx");
+};
+
+export const exportResourcesToExcel = async (stocks = [], resourcesMap = {}) => {
+  if (!Array.isArray(stocks) || !stocks.length) return;
+  const XLSX = await import('xlsx');
+  const rows = stocks.map(s => {
+    const res = resourcesMap?.[s.resource];
+    return {
+      "Склад": s.warehouse_name || '',
+      "Ресурс": s.resource_name || res?.name || `Ресурс ID ${s.resource}`,
+      "Категорія": res?.category_name || '',
+      "Кількість": Number(s.amount) || 0,
+      "Одиниця": s.unit_name || res?.unit_name || 'од.',
+    };
+  }).sort((a, b) => a["Склад"].localeCompare(b["Склад"]) || a["Ресурс"].localeCompare(b["Ресурс"]));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Ресурси");
+  XLSX.writeFile(wb, "ResQ_Resources_Report.xlsx");
+};

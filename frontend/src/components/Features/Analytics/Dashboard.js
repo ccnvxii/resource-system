@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell
 } from 'recharts';
 import SizedChart from './SizedChart';
-import { TrendingDown, Package, Download, BarChart3, ChevronDown, AlertTriangle } from '../../UI/icons';
+import { TrendingDown, Package, BarChart3, ChevronDown, AlertTriangle } from '../../UI/icons';
 
 // Хук для визначення ширини вікна (для адаптивних графіків)
 const useWindowWidth = () => {
@@ -88,15 +88,6 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
       return [];
     }
   }, [requests, stocks, resourcesMap]);
-
-  const exportToExcel = async () => {
-    if (!Array.isArray(requests) || !requests.length) return;
-    const XLSX = await import('xlsx');
-    const ws = XLSX.utils.json_to_sheet(requests);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Звіт");
-    XLSX.writeFile(wb, "ResQ_Report.xlsx");
-  };
 
   // РОЗУМНИЙ БАГАТОРЯДКОВИЙ ПІДПИС ОСІ X (адаптивний для мобільних та десктопу)
   const CustomXAxisTick = ({ x, y, payload }) => {
@@ -187,16 +178,6 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
 
   return (
     <div className="space-y-4 animate-in fade-in duration-500 text-left">
-
-      {/* Кнопка експорту повного звіту */}
-      <div className="flex justify-end">
-        <button
-          onClick={exportToExcel}
-          className="flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 bg-white border border-slate-200 rounded-2xl font-black text-[10px] uppercase text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95 w-full sm:w-auto"
-        >
-          <Download size={14} /> Експорт повного звіту у Excel
-        </button>
-      </div>
 
       {/* ГОЛОВНА ШАПКА ДАШБОРДУ */}
       <div

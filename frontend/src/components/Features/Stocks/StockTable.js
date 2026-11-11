@@ -1,5 +1,6 @@
 import React, {useState, useMemo, useEffect} from 'react';
-import {PackageSearch, Filter, ChevronUp, ChevronDown} from '../../UI/icons';
+import {PackageSearch, Filter, ChevronUp, ChevronDown, Download} from '../../UI/icons';
+import {exportResourcesToExcel} from '../../../utils/excelExport';
 import api from '../../../services/api';
 import StockRow from './StockRow';
 import StockMobileCard from './StockMobileCard';
@@ -81,6 +82,15 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                         <h2 className="text-base sm:text-lg font-bold truncate">Запаси на складах</h2>
                     </div>
 
+                    <div className="flex items-center gap-2 shrink-0">
+                    <button
+                        onClick={() => exportResourcesToExcel(stocks, resourcesMap)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:text-blue-600 shadow-sm transition-colors active:scale-95"
+                        title="Завантажити звіт по ресурсах (Excel)"
+                    >
+                        <Download size={14}/>
+                        <span>Звіт</span>
+                    </button>
                     {/* Швидке сортування на мобільних телефонах */}
                     <button
                         onClick={toggleSort}
@@ -93,6 +103,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                             <ChevronDown size={10} className={`${sortOrder === 'desc' ? 'text-blue-600 stroke-[3]' : ''}`}/>
                         </span>
                     </button>
+                    </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/60">

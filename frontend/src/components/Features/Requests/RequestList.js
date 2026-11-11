@@ -1,5 +1,6 @@
 import React, {useState, useMemo, useEffect} from 'react';
-import {ListChecks, Filter, Package, Inbox, RotateCcw, Settings, RefreshCw} from '../../UI/icons';
+import {ListChecks, Filter, Package, Inbox, RotateCcw, Settings, RefreshCw, Download} from '../../UI/icons';
+import {exportRequestsToExcel} from '../../../utils/excelExport';
 import api from '../../../services/api';
 import Modal from '../../UI/Modal';
 import RequestCard from './RequestCard';
@@ -85,6 +86,17 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                         <ListChecks size={22} className="text-blue-600"/>
                         <h2 className="text-base sm:text-lg font-bold">Черга заявок</h2>
                     </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                    {isAdmin && (
+                        <button
+                            onClick={() => exportRequestsToExcel(requests)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:text-blue-600 shadow-sm transition-colors active:scale-95"
+                            title="Завантажити звіт по заявках (Excel)"
+                        >
+                            <Download size={14}/>
+                            <span>Звіт</span>
+                        </button>
+                    )}
                     <div className="flex bg-slate-200/50 p-1 rounded-xl">
                         <button onClick={() => {
                             setRequestTab('active');
@@ -99,6 +111,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                         }}
                                 className={`px-3 sm:px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${requestTab === 'history' ? 'bg-white text-green-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Архів
                         </button>
+                    </div>
                     </div>
                 </div>
 
