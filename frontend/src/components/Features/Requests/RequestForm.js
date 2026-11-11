@@ -262,11 +262,8 @@ const RequestForm = ({
             toast.dismiss();
             return toast.error("Оберіть заявника зі списку (для кого створюється заявка)", { id: 'req-form-toast' });
         }
-        const targetUserId = selectedUserId || currentUser?.id;
-        if (!targetUserId) {
-            toast.dismiss();
-            return toast.error("Не вдалося визначити заявника. Оберіть користувача зі списку", { id: 'req-form-toast' });
-        }
+        // Звичайний користувач: заявник визначається на сервері за токеном авторизації (поле user не передаємо)
+        const targetUserId = currentUser?.is_admin ? selectedUserId : undefined;
 
         // 2. Перевірка терміну виконання
         if (!dueDate) {
@@ -401,7 +398,7 @@ const RequestForm = ({
                                 value={selectedUserId || ''}
                                 onChange={setSelectedUserId}
                                 placeholder="Виберіть користувача зі списку..."
-                                options={usersList.map(u => ({value: u.id, label: u.full_name || u.username}))}
+                                options={usersList.filter(u => u.is_admin || u.is_approved).map(u => ({value: u.id, label: u.full_name || u.username}))}
                                 className="w-full px-4 py-2.5 bg-white border border-blue-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
                             />
                         </div>

@@ -44,11 +44,11 @@ class CategoryAdmin(admin.ModelAdmin):
 @admin.register(Resource)
 class ResourceAdmin(admin.ModelAdmin):
     # Додали is_strategic в колонки
-    list_display = ('name', 'category', 'unit', 'is_strategic', 'get_total_stock')
+    list_display = ('name', 'category', 'unit', 'is_strategic', 'max_per_request', 'get_total_stock')
     list_filter = ('category', 'unit', 'is_strategic')
     search_fields = ('name',)
 
-    list_editable = ('is_strategic',)
+    list_editable = ('is_strategic', 'max_per_request')
 
     def get_total_stock(self, obj):
         from django.db.models import Sum

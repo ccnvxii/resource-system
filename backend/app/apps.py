@@ -82,6 +82,13 @@ def create_initial_data(sender, **kwargs):
         volunteer_user.save()
         UserProfile.objects.get_or_create(user=volunteer_user, organization='Опорний логістичний центр ХПІ')
 
+    # Демо-акаунти завжди підтверджені (інакше адмін не зможе створювати заявки від їхнього імені)
+    for demo_user in (admin_user, volunteer_user):
+        profile, _ = UserProfile.objects.get_or_create(user=demo_user, defaults={'organization': 'RESQ'})
+        if not profile.is_approved:
+            profile.is_approved = True
+            profile.save(update_fields=['is_approved'])
+
     # --- 5. РЕСУРСИ ---
     # Звичайні ресурси (розподіляються через LP - Справедливість)
     res_tourniquet, _ = Resource.objects.update_or_create(
@@ -231,5 +238,41 @@ def create_initial_data(sender, **kwargs):
         warehouse_address="вул. Дарвіна, буд. 12", warehouse_ref="ADDRESS_DELIVERY",
         due_date=today_date + timedelta(days=5), status='new'
     )
+
+    # --- 9. ДОДАТКОВІ ДОВІДНИКИ, РЕСУРСИ (У Т.Ч. СТРАТЕГІЧНІ МЕДИЧНІ), СКЛАДИ ТА ЗАЛИШКИ ---
+    from .seed_extra import seed_extra_catalog
+    seed_extra_catalog(force_stock=True)
+
+    def _res(name):
+        return Resource.objects.get(name=name)
+
+    def _purpose(code):
+        return RequestPurpose.objects.get(code=code)
+
+    # Додаткові тестові заявки (усі статуси «нова»), у тому числі на стратегічні медичні ресурси
+    extra_requests = [
+        # --- Стратегічні медичні (Тріаж) ---
+        (volunteer_user, 'Антибіотики широкого спектра', 12, 'hospital', "м. Краматорськ, Донецька обл.", 48.7390, 37.5834, "Медична ВЧ 412", "ADDRESS_DELIVERY", 2),
+        (volunteer_user, 'Антибіотики широкого спектра', 8, 'military', "м. Запоріжжя, Запорізька обл.", 47.8388, 35.1396, "Відділення №3", "NP_ZP_3", 4),
+        (volunteer_user, 'Інсулін (набір пенів)', 6, 'elderly', "м. Суми, Сумська обл.", 50.9077, 34.7981, "Відділення №2", "NP_SUM_2", 3),
+        (admin_user, 'Інфузійні розчини (Рінгер)', 10, 'hospital', "м. Харків, Харківська обл.", 50.0038, 36.2336, "Обласна лікарня", "ADDRESS_DELIVERY", 2),
+        (volunteer_user, 'Портативний апарат ШВЛ', 3, 'rescue', "м. Миколаїв, Миколаївська обл.", 46.9750, 31.9946, "Відділення №7", "NP_MYK_7", 3),
+        (volunteer_user, 'Кисневий концентратор', 4, 'hospital', "м. Дніпро, Дніпропетровська обл.", 48.4647, 35.0462, "Міська лікарня №9", "ADDRESS_DELIVERY", 5),
+        # --- Звичайні ресурси (Справедливість) ---
+        (volunteer_user, 'Аптечка IFAK', 30, 'military', "м. Куп'янськ, Харківська обл.", 49.7082, 37.6148, "Штаб ТрО", "ADDRESS_DELIVERY", 4),
+        (volunteer_user, 'Бинти гемостатичні', 25, 'rescue', "м. Покровськ, Донецька обл.", 48.2810, 37.1739, "Відділення №1", "NP_PKR_1", 3),
+        (admin_user, 'Суха молочна суміш', 18, 'children', "м. Одеса, Одеська обл.", 46.4825, 30.7233, "Відділення №15", "NP_ODS_15", 6),
+        (volunteer_user, 'Підгузки дитячі', 12, 'children', "м. Миколаїв, Миколаївська обл.", 46.9750, 31.9946, "Відділення №5", "NP_MYK_5", 7),
+        (volunteer_user, 'Спальні мішки', 40, 'shelters', "м. Запоріжжя, Запорізька обл.", 47.8388, 35.1396, "Пункт незламності №4", "ADDRESS_DELIVERY", 5),
+        (volunteer_user, 'Намети 6-місні', 6, 'refugees', "м. Дніпро, Дніпропетровська обл.", 48.4647, 35.0462, "Відділення №21", "NP_DNP_21", 8),
+        (volunteer_user, 'Дизельне паливо', 400, 'rescue', "м. Харків, Харківська обл.", 50.0038, 36.2336, "База ДСНС", "ADDRESS_DELIVERY", 3),
+        (admin_user, 'Портативна електростанція', 5, 'shelters', "м. Суми, Сумська обл.", 50.9077, 34.7981, "Пункт незламності №2", "ADDRESS_DELIVERY", 4),
+    ]
+    for owner, res_name, qty, purpose_code, city, lat, lon, address, ref, days in extra_requests:
+        UserRequest.objects.create(
+            user=owner, resource=_res(res_name), quantity_requested=qty, purpose=_purpose(purpose_code),
+            city=city, latitude=lat, longitude=lon, warehouse_address=address, warehouse_ref=ref,
+            due_date=today_date + timedelta(days=days), status='new'
+        )
 
     print("--- [Success] База даних успішно наповнена дефіцитними логістичними сценаріями! ---")

@@ -4,7 +4,7 @@ from .views import (
     ResourceViewSet, WarehouseViewSet, StockViewSet,
     UserRequestViewSet, DistributeResourcesView, CategoryViewSet, UserViewSet, RegisterView, UnitViewSet,
     RequestPurposeViewSet, AuditLogViewSet, NovaPoshtaProxyView,
-    CustomTokenObtainPairView
+    CustomTokenObtainPairView, PasswordResetRequestView, PasswordResetConfirmView, PasswordResetVerifyView, PublicStatsView
 )
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
@@ -27,6 +27,10 @@ urlpatterns = [
     path('distribute/', DistributeResourcesView.as_view(), name='distribute'),
 
     path('register/', RegisterView.as_view(), name='register'),
+    path('public-stats/', PublicStatsView.as_view(), name='public-stats'),
+    path('password-reset/', PasswordResetRequestView.as_view(), name='password-reset'),
+    path('password-reset/verify/', PasswordResetVerifyView.as_view(), name='password-reset-verify'),
+    path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
 
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

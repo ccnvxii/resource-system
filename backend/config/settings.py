@@ -123,3 +123,41 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'API для автоматизованого розподілу дефіцитних ресурсів',
     'VERSION': '1.0.0',
 }
+
+# --- EMAIL (відновлення пароля) ---
+# Якщо EMAIL_HOST не задано — листи друкуються в консоль/логи сервера (зручно для розробки).
+EMAIL_HOST = config('EMAIL_HOST', default='')
+if EMAIL_HOST:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+    EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+    EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+    EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+def _clean_from_email(value, fallback):
+    """Повертає коректний рядок "Ім'я <email>", інакше — запасний адрес (логін SMTP)."""
+    from email.utils import parseaddr
+    from django.core.validators import validate_email
+    from django.core.exceptions import ValidationError
+    name, addr = parseaddr(value or '')
+    try:
+        validate_email(addr)
+        return value
+    except ValidationError:
+        return fallback or 'ResQ System <no-reply@resq.ua>'
+
+
+# Пароль додатка Google часто копіюють з пробілами ("abcd efgh ...") — прибираємо їх
+if EMAIL_HOST:
+    EMAIL_HOST_PASSWORD = EMAIL_HOST_PASSWORD.replace(' ', '')
+
+DEFAULT_FROM_EMAIL = _clean_from_email(
+    config('DEFAULT_FROM_EMAIL', default='') or None,
+    EMAIL_HOST_USER if EMAIL_HOST else None,
+)
+
+
+# --- ЛІМІТИ ЗАЯВОК ---
+# Максимум одиниць ресурсу в заявках одного (не адміністратора) заявника, якщо у ресурсу не задано власний ліміт.
+DEFAULT_MAX_PER_REQUEST = config('DEFAULT_MAX_PER_REQUEST', default=1000, cast=int)

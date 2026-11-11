@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from datetime import date
+from django.conf import settings
+from django.db.models import Sum
 from .models import (
     Resource, Warehouse, Stock, UserRequest, Category,
     DistributionPlan, DistributionItem, Unit, RequestPurpose, UserProfile
@@ -52,6 +54,13 @@ class RegisterSerializer(serializers.ModelSerializer):
             'email': {'required': True}
         }
 
+    def validate_email(self, value):
+        # Формат уже перевірено EmailField; тут — унікальність без урахування регістру
+        value = (value or '').strip().lower()
+        if User.objects.filter(email__iexact=value).exists() or User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("Користувач з таким Email вже зареєстрований.")
+        return value
+
     def create(self, validated_data):
         org = validated_data.pop('organization', '')
         ph = validated_data.pop('phone', '')
@@ -83,7 +92,7 @@ class ResourceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Resource
-        fields = ['id', 'name', 'unit', 'unit_name', 'category', 'category_name', 'is_strategic']
+        fields = ['id', 'name', 'unit', 'unit_name', 'category', 'category_name', 'is_strategic', 'max_per_request']
 
 
 class WarehouseSerializer(serializers.ModelSerializer):
@@ -145,6 +154,47 @@ class UserRequestSerializer(serializers.ModelSerializer):
 
     def get_current_priority(self, obj):
         return self.get_priority(obj)
+
+    def validate(self, attrs):
+        """Захист від зловживань для звичайних користувачів (адміністратор обмежень не має)."""
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        is_staff = bool(user and user.is_staff)
+        instance = self.instance
+
+        if not is_staff:
+            # 1) Ліміт кількості: за один ресурс — сумарно по всіх активних заявках заявника
+            resource = attrs.get('resource') or (instance.resource if instance else None)
+            qty = attrs.get('quantity_requested', instance.quantity_requested if instance else None)
+            if resource is not None and qty is not None:
+                owner = instance.user if instance else user
+                limit = resource.max_per_request or settings.DEFAULT_MAX_PER_REQUEST
+                if qty > limit:
+                    raise serializers.ValidationError({
+                        'quantity_requested': f'Максимум {limit} {resource.unit.name} «{resource.name}» в одній заявці.'
+                    })
+                others = UserRequest.objects.filter(
+                    user=owner, resource=resource, status__in=['new', 'partial']
+                )
+                if instance:
+                    others = others.exclude(pk=instance.pk)
+                already = others.aggregate(total=Sum('quantity_requested'))['total'] or 0
+                if already + qty > limit:
+                    left = max(0, limit - already)
+                    raise serializers.ValidationError({
+                        'quantity_requested': (
+                            f'Перевищено ліміт на «{resource.name}»: ви вже запросили {already} з {limit}. '
+                            f'Можна ще не більше {left}.'
+                        )
+                    })
+
+            # 2) Граничний термін існуючої заявки можна лише продовжувати, а не скорочувати
+            if instance and 'due_date' in attrs and attrs['due_date'] < instance.due_date:
+                raise serializers.ValidationError({
+                    'due_date': 'Скоротити граничний термін не можна — лише продовжити.'
+                })
+
+        return attrs
 
     def validate_due_date(self, value):
         """Захист: граничний термін виконання (due_date) не може бути у минулому"""

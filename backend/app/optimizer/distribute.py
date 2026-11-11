@@ -271,11 +271,16 @@ def calculate_distribution(requests, stocks, routing_service=None):
             base_b.append(r_sub[j]['amount_needed'])
             base_sense.append('<=')
 
+        # Для вагової частки потреба не може перевищувати загальний наявний запас:
+        # завищена заявка не отримує більшої частки лише за рахунок «роздутої» кількості.
+        total_supply = sum(s['amount'] for s in s_sub)
+
         for j in range(n_req):
             row = np.zeros(n_vars)
             for i in range(n_stk):
                 row[i * n_req + j] = 1
-            weight = (r_sub[j]['amount_needed'] * r_sub[j]['priority']) / 10.0
+            effective_need = min(r_sub[j]['amount_needed'], total_supply)
+            weight = (effective_need * r_sub[j]['priority']) / 10.0
             row[-1] = -weight
             base_A.append(row)
             base_b.append(0)

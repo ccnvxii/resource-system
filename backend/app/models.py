@@ -39,6 +39,12 @@ class Resource(models.Model):
         verbose_name="Стратегічний (Тріаж)",
         help_text="Якщо позначено, ресурс розподілятиметься алгоритмом жорсткого пріоритету"
     )
+    max_per_request = models.PositiveIntegerField(
+        null=True, blank=True,
+        verbose_name="Макс. кількість в одній заявці",
+        help_text="Ліміт для одного заявника (сумарно по його активних заявках на цей ресурс). "
+                  "Порожньо — діє загальний ліміт за замовчуванням."
+    )
 
     def __str__(self):
         return f"{self.name} ({self.unit.name})"

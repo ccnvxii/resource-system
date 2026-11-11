@@ -100,6 +100,7 @@ const SearchableSelect = ({
                 autoComplete="off"
                 role="combobox"
                 aria-expanded={open}
+                aria-controls="searchable-select-list"
                 className={`${className} pr-9 truncate disabled:cursor-not-allowed`}
             />
             <ChevronDown
@@ -119,6 +120,7 @@ const SearchableSelect = ({
             {open && !disabled && (
                 <ul
                     ref={listRef}
+                    id="searchable-select-list"
                     className="absolute left-0 right-0 z-[9999] mt-1 max-h-56 overflow-y-auto bg-white border-2 border-blue-100 rounded-xl shadow-xl py-1 text-left"
                 >
                     {filtered.length === 0 ? (

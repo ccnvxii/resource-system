@@ -42,6 +42,15 @@ function App() {
 
     const { data, fetchData } = useFetchData(currentUser);
 
+    // Публічна статистика для лендингу — доступна й без авторизації
+    const [publicStats, setPublicStats] = useState({ stocks: 0, requests: 0, warehouses: 0 });
+    useEffect(() => {
+        if (!isLandingMode) return;
+        api.get('/public-stats/', { _suppressToast: true })
+            .then(res => setPublicStats(res.data))
+            .catch(() => {});
+    }, [isLandingMode]);
+
     useEffect(() => {
         localStorage.setItem('isLandingMode', isLandingMode);
         if (!isLandingMode && currentUser) {
@@ -125,11 +134,7 @@ function App() {
                 <>
                     <Landing
                         onEnter={() => currentUser ? setIsLandingMode(false) : openModal('auth')}
-                        stats={{
-                            stocks: data.stocks.length,
-                            requests: data.requests.length,
-                            warehouses: data.warehouses.length
-                        }}
+                        stats={publicStats}
                     />
                     {modals.auth && (
                         <Suspense fallback={null}>

@@ -1,7 +1,8 @@
 import React, {useState, useMemo, useEffect} from 'react';
 import {ListChecks, Filter, Package, Inbox, RotateCcw, Settings, RefreshCw, Download} from '../../UI/icons';
 import {exportRequestsToExcel} from '../../../utils/excelExport';
-import api from '../../../services/api';
+import api, {extractErrorMessage} from '../../../services/api';
+import {toast} from 'react-hot-toast';
 import Modal from '../../UI/Modal';
 import RequestCard from './RequestCard';
 import FilterSelect from '../../UI/FilterSelect';
@@ -103,6 +104,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
             if (onRefresh) onRefresh();
         } catch (e) {
             console.error(e);
+            toast.error(extractErrorMessage(e, "Не вдалося зберегти зміни"), {id: "req-edit-toast"});
         } finally {
             setIsSaving(false);
         }

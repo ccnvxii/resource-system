@@ -16,7 +16,6 @@ const Modal = ({ isOpen, onClose, title, subtitle, icon: Icon, children, maxWidt
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center p-2.5 sm:p-4 md:p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
-      onClick={onClose}
     >
       <div
         className={`bg-white rounded-3xl sm:rounded-2xl shadow-2xl w-full ${maxWidth} relative animate-in zoom-in duration-300 my-auto border border-slate-100 max-h-[94vh] flex flex-col overflow-hidden`}

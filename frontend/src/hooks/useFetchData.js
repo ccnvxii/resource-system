@@ -51,16 +51,8 @@ export const useFetchData = (currentUser) => {
                 results[key] = responses[index].data;
             });
 
-            // Фільтрація заявок (динамічне поле)
-            const rawRequests = results.requests || [];
-            const filteredRequests = rawRequests.filter(r => {
-                if (currentUser?.is_admin) return true;
-                return (
-                    Number(r.user) === Number(currentUser?.id) ||
-                    r.username === currentUser?.email ||
-                    r.user_email === currentUser?.email
-                );
-            });
+            // Сервер уже віддає лише власні заявки користувача (адміністратору — усі)
+            const filteredRequests = results.requests || [];
 
             // Оновлюємо стан React
             setData(prev => {
