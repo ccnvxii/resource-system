@@ -106,7 +106,7 @@ const DistributionChart = ({ items = [] }) => {
       </div>
 
       <div className="w-full h-72">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 400, height: 288 }}>
           <ComposedChart data={chartData} barGap={4} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
 

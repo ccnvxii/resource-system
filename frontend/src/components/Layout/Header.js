@@ -1,14 +1,13 @@
 import React from 'react';
 import {
     PlusCircle,
-    RefreshCw,
     ClipboardList,
     ShieldCheck,
     User,
     LogOut
 } from '../UI/icons';
 
-const Header = ({onOpenForm, onOpenStockIn, onRefresh, onAddResource, currentUser, onLogout}) => {
+const Header = ({onOpenForm, onOpenStockIn, onAddResource, currentUser, onLogout}) => {
     // Визначаємо, чи є користувач адміном
     const isAdmin = currentUser?.is_admin || currentUser?.username === 'admin';
 
@@ -63,14 +62,6 @@ const Header = ({onOpenForm, onOpenStockIn, onRefresh, onAddResource, currentUse
                 {/* Швидкі кнопки оновлення та виходу для мобільних екранів (< md) */}
                 <div className="flex md:hidden items-center gap-1.5 shrink-0">
                     <button
-                        onClick={onRefresh}
-                        className="p-2 bg-slate-50 text-slate-600 rounded-xl border border-slate-200 hover:bg-slate-100 active:scale-95 transition-all shadow-2xs"
-                        title="Оновити дані"
-                        aria-label="Оновити дані"
-                    >
-                        <RefreshCw size={16}/>
-                    </button>
-                    <button
                         onClick={onLogout}
                         className="p-2 bg-red-50 text-red-600 rounded-xl border border-red-100 hover:bg-red-100 active:scale-95 transition-all shadow-2xs"
                         title="Вийти з акаунту"
@@ -105,14 +96,6 @@ const Header = ({onOpenForm, onOpenStockIn, onRefresh, onAddResource, currentUse
 
                 {/* Десктопні кнопки оновлення та виходу (тільки >= md) */}
                 <div className="hidden md:flex items-center gap-2 ml-2 pl-3 border-l border-slate-200">
-                    <button
-                        onClick={onRefresh}
-                        className="p-2.5 bg-slate-50 text-slate-500 rounded-xl border border-slate-200 hover:bg-slate-100 transition-all active:scale-95 shadow-2xs"
-                        title="Оновити дані"
-                    >
-                        <RefreshCw size={18}/>
-                    </button>
-
                     <button
                         onClick={onLogout}
                         className="p-2.5 bg-red-50 text-red-500 rounded-xl border border-red-100 hover:bg-red-100 transition-all active:scale-95 shadow-2xs"

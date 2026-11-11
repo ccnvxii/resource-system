@@ -59,7 +59,7 @@ services:
       - ./frontend/public:/app/public
     environment:
       - NODE_OPTIONS=--max-old-space-size=512
-      # - WATCHPACK_POLLING=true
+      - WATCHPACK_POLLING=true
     deploy:
       resources:
         limits:

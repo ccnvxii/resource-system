@@ -332,12 +332,12 @@ const RequestForm = ({
         <div className="space-y-6 text-left relative">
 
             {/* 1. СТРУКТУРНИЙ БЛОК: АДМІНІСТРУВАННЯ ТА ТЕРМІНОВІСТЬ */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4">
                 {/* ЗАЯВНИК — Тільки для admin */}
                 {currentUser?.is_admin && (
-                    <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100 shadow-sm md:col-span-2">
+                    <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100 shadow-sm flex flex-col justify-between gap-3">
                         <label
-                            className="text-[10px] font-black uppercase text-blue-500 italic mb-2 block tracking-widest">1.
+                            className="text-[10px] font-black uppercase text-blue-500 italic block tracking-widest">1.
                             Оберіть заявника (Admin)</label>
                         <div className="flex items-center gap-3">
                             <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100"><User
@@ -357,7 +357,7 @@ const RequestForm = ({
 
                 {/* ГРАНИЧНИЙ ТЕРМІН ВИКОНАННЯ ТА АВТОПРОДОВЖЕННЯ */}
                 <div
-                    className={`bg-amber-50/40 p-5 rounded-2xl border border-amber-100 shadow-sm flex flex-col justify-between gap-3 ${!currentUser?.is_admin ? 'md:col-span-3' : ''}`}>
+                    className={`bg-amber-50/40 p-5 rounded-2xl border border-amber-100 shadow-sm flex flex-col justify-between gap-3 `}>
                     <div>
                         <label
                             className="text-[10px] font-black uppercase text-amber-600 italic mb-2 block tracking-widest">

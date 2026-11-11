@@ -162,7 +162,6 @@ function App() {
                     onOpenForm={() => openModal('request')}
                     onOpenStockIn={currentUser?.is_admin ? () => openModal('stockIn') : null}
                     onAddResource={currentUser?.is_admin ? () => openModal('resource') : null}
-                    onRefresh={fetchData}
                     onLogout={handleLogout}
                     currentUser={currentUser}
                 />
@@ -248,9 +247,10 @@ function App() {
             {/* Кнопка повернення на головну */}
             <button
                 onClick={() => setIsLandingMode(true)}
-                className="fixed bottom-4 left-4 sm:bottom-8 sm:left-8 flex items-center gap-2 px-3.5 sm:px-6 py-2.5 sm:py-4 bg-white shadow-2xl rounded-2xl border border-slate-100 text-slate-500 hover:text-blue-600 transition-all hover:-translate-y-1 active:scale-95 z-40"
+                aria-label="На головну"
+                className="fixed bottom-6 left-6 w-12 h-12 sm:w-auto sm:h-auto sm:bottom-8 sm:left-8 flex items-center justify-center gap-2 sm:px-6 sm:py-4 bg-blue-600 shadow-xl shadow-blue-600/40 rounded-2xl border-2 border-blue-500 text-white hover:bg-blue-700 transition-all hover:-translate-y-1 active:scale-95 z-40"
             >
-                <Home size={18} />
+                <Home size={20} />
                 <span className="text-xs font-black uppercase tracking-widest hidden sm:inline">Головна</span>
             </button>
 

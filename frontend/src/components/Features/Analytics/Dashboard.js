@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell
 } from 'recharts';
+import SizedChart from './SizedChart';
 import { TrendingDown, Package, Download, BarChart3, ChevronDown, AlertTriangle } from '../../UI/icons';
 
 // Хук для визначення ширини вікна (для адаптивних графіків)
@@ -242,9 +243,9 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
                   <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Запаси на складах</h3>
                 </div>
                 {/* Збільшили висоту та відступ знизу, щоб дворядкові підписи ідеально поміщалися */}
-                <div className="h-64 sm:h-72 w-full min-w-0">
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
-                    <BarChart data={stockData} margin={{ bottom: 42, top: 10, right: 8, left: isMobile ? -20 : -15 }}>
+                <SizedChart className="h-64 sm:h-72 w-full min-w-0">
+                  {({ width, height }) => (
+                    <BarChart width={width} height={height} data={stockData} margin={{ bottom: 42, top: 10, right: 8, left: isMobile ? -20 : -15 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
 
                       <XAxis
@@ -269,8 +270,8 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
                         ))}
                       </Bar>
                     </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                  )}
+                </SizedChart>
               </div>
 
               {/* Графік дефіциту */}
@@ -279,9 +280,9 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
                   <TrendingDown className="text-red-500" size={20} />
                   <h3 className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Критичний дефіцит</h3>
                 </div>
-                <div className="h-64 sm:h-72 w-full min-w-0">
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
-                    <BarChart data={deficitData} layout="vertical" margin={{ top: 10, right: 10 }}>
+                <SizedChart className="h-64 sm:h-72 w-full min-w-0">
+                  {({ width, height }) => (
+                    <BarChart width={width} height={height} data={deficitData} layout="vertical" margin={{ top: 10, right: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                       <XAxis type="number" hide />
                       {/* На мобільних зменшуємо ширину підпису YAxis та обрізаємо довгі назви */}
@@ -309,8 +310,8 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
                         ))}
                       </Bar>
                     </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                  )}
+                </SizedChart>
               </div>
 
             </div>
