@@ -1,6 +1,9 @@
 from rest_framework.test import APITestCase
 from rest_framework import status
+import unittest
 from datetime import date, timedelta
+from unittest.mock import patch
+from app.tests.mock_services import MockDistanceService
 
 from app.models import (
     Unit, Category, Resource, Warehouse, Stock,
@@ -60,6 +63,9 @@ class FunctionalAndIntegrationTests(APITestCase):
         )
 
         self.requests_url = '/api/requests/'
+        self.geo_patcher = patch('app.services.GeoFrontService.get_front_line_points', return_value=[(49.95, 36.85), (48.45, 37.95)])
+        self.geo_patcher.start()
+        self.addCleanup(self.geo_patcher.stop)
 
     # --- МОДУЛЬ 1: АВТЕНТИФІКАЦІЯ ТА JWT ТОКЕНИ (ТЕСТИ 1–2) ---
 
@@ -313,11 +319,12 @@ class FunctionalAndIntegrationTests(APITestCase):
         response = self.client.get(f"{self.requests_url}?status=new", format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    @unittest.skip("Ендпоінт /api/export-excel/ заплановано, але ще не реалізовано в API")
     def test_18_excel_export_endpoint(self):
         """Функціональний тест 18: Перевірка експорту звітів розподілу у формат Excel (.xlsx)"""
         export_url = '/api/export-excel/'
         response = self.client.get(export_url)
-        self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND, status.HTTP_302_FOUND])
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_19_stock_rollback_on_request_cancellation(self):
         """Функціональний тест 19: Перевірка повернення ресурсів на склад при видаленні/скасуванні заявки"""
@@ -347,6 +354,7 @@ class FunctionalAndIntegrationTests(APITestCase):
 
     # --- МОДУЛЬ 5: ІНТЕГРАЦІЯ ТА КОНТРОЛЬ ДОСТУПУ (ТЕСТИ 20–21) ---
 
+    @patch('app.optimizer.distribute.DistanceMatrixService', MockDistanceService)
     def test_20_distribution_trigger_endpoint(self):
         """Інтеграційний тест 20: Перевірка успішного запуску процесу розподілу через API"""
         response = self.client.post('/api/distribute/', {}, format='json')
@@ -357,6 +365,7 @@ class FunctionalAndIntegrationTests(APITestCase):
             status.HTTP_404_NOT_FOUND
         ])
 
+    @patch('app.optimizer.distribute.DistanceMatrixService', MockDistanceService)
     def test_21_volunteer_role_restrictions(self):
         """Функціональний тест 21: Перевірка обмеження прав ролі волонтера (Access Control)"""
         volunteer = User.objects.create_user(username='ordinary_volunteer', password='Password123!')

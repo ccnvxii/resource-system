@@ -1,10 +1,11 @@
 import time
 from unittest.mock import patch
-from django.test import TestCase
+import unittest
 import numpy as np
 
 from app.optimizer.distribute import calculate_distribution
 from app.optimizer.scipy_solver import calculate_scipy_distribution
+from app.tests.mock_services import MockDistanceService
 
 BENCHMARK_METHODS = [
     ('Власний NumPy М-метод (Ваш)', calculate_distribution),
@@ -12,17 +13,7 @@ BENCHMARK_METHODS = [
 ]
 
 
-class MockDistanceService:
-    """Мок-сервіс для стабільних логістичних відстаней у бенчмарках"""
-
-    def get_distance(self, lat1, lng1, lat2, lng2):
-        return 15.0
-
-    def get_distance_matrix(self, sources, destinations):
-        return np.full((len(sources), len(destinations)), 15.0)
-
-
-class FairModelComparisonBenchmark(TestCase):
+class FairModelComparisonBenchmark(unittest.TestCase):
     """
     Порівняльний бенчмарк власної реалізації моделі справедливого розподілу (Equity LP)
     з еталоном (SciPy HiGHS) для аналізу в дипломній роботі.

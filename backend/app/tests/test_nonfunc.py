@@ -5,7 +5,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.db import connection, transaction
 from django.db.utils import OperationalError
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APITransactionTestCase, APIClient
 from rest_framework import status
 
 from app.models import (
@@ -154,7 +154,7 @@ class NonFunctionalSecurityAndValidationTests(APITestCase):
 
 
 # --- МОДУЛЬ НАВАНТАЖУВАЛЬНОГО ТЕСТУВАННЯ ТА ПРОДУКТИВНОСТІ ---
-class NonFunctionalLoadTests(APITestCase):
+class NonFunctionalLoadTests(APITransactionTestCase):
     """Нефункціональні тести продуктивності, навантаження та паралельного доступу"""
 
     def setUp(self):
@@ -204,11 +204,10 @@ class NonFunctionalLoadTests(APITestCase):
         url = '/api/resources/'
 
         def make_request():
-            try:
-                response = self.client.get(url)
-                return response.status_code
-            finally:
-                connection.close()
+            client = APIClient()
+            client.force_authenticate(user=self.user)
+            response = client.get(url)
+            return response.status_code
 
         t_start = time.time()
         with ThreadPoolExecutor(max_workers=5) as executor:

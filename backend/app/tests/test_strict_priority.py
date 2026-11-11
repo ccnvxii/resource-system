@@ -167,29 +167,27 @@ class TestCalculateStrictPriority(unittest.TestCase):
             actual=f"Ресурс виділено заявці №{plan[0]['request_id']}"
         )
 
-    def test_priority_fall_down_to_lower_levels(self):
-        """Перевірка переходу циклу до нижчих пріоритетів, коли вищий пріоритет вичерпав весь запас."""
+    def test_priority_fall_down_when_high_priority_rejected_by_quantum(self):
+        """Перевірка переходу циклу до нижчих пріоритетів, коли вищий пріоритет відсіяно через min_quantum."""
         stocks = [
-            {'warehouse_id': 'wh_1', 'resource_id': 'res_1', 'amount': 5, 'lat': 0.0, 'lng': 0.0}
+            {'warehouse_id': 'wh_1', 'resource_id': 'res_1', 'amount': 3, 'lat': 0.0, 'lng': 0.0}
         ]
         requests = [
-            # Пріоритет 7 (нижчий), запитує 5
-            {'id': 701, 'resource_id': 'res_1', 'priority': 7, 'amount_needed': 5, 'lat': 1.0, 'lng': 1.0},
-            # Пріоритет 10 (вищий), але на нього не вистачило запасу через мінімальний квант або завелику потребу (наприклад, вимагає 10, а запас 5)
-            # Або якщо заявка з пріоритетом 10 задоволена, цикл йде далі. Або якщо пріоритет 10 відкинуто через мін. квант, чи опуститься до 7?
-            # Давайте зробимо так: заявка з пріоритетом 10 має потребу 10 (а запас всього 5 -> відсіюється через min_quantum),
-            # тоді цикл має опуститися до пріоритету 7 з потребою 5.
-            {'id': 702, 'resource_id': 'res_1', 'priority': 10, 'amount_needed': 10, 'lat': 1.0, 'lng': 1.0},
+            # Пріоритет 7 (нижчий), потреба 3 (min_quantum = 1)
+            {'id': 701, 'resource_id': 'res_1', 'priority': 7, 'amount_needed': 3, 'lat': 1.0, 'lng': 1.0},
+            # Пріоритет 10 (вищий), але потреба 20 (min_quantum = 5 > запасу 3 -> відсів)
+            {'id': 702, 'resource_id': 'res_1', 'priority': 10, 'amount_needed': 20, 'lat': 1.0, 'lng': 1.0},
         ]
 
         plan = calculate_strict_priority(requests, stocks, self.routing_service)
 
         self.assertEqual(len(plan), 1)
-        self.assertEqual(plan[0]['request_id'], 701)  # Заявка 10 відсіяна через мін квант, ресурс пішов на пріор. 7
+        self.assertEqual(plan[0]['request_id'], 701)
+        self.assertEqual(plan[0]['amount'], 3.0)
         self.log_results(
-            inputs="Пріор. 10 (потреба 10, запас 5 -> відсів), Пріор. 7 (потреба 5, запас 5)",
-            expected="Алгоритм опускається до пріоритету 7 і задовольняє заявку №701",
-            actual=f"Ресурс виділено заявці №{plan[0]['request_id']}"
+            inputs="Запас: 3. Пріор. 10 (потреба 20, квант 5 -> відсів), Пріор. 7 (потреба 3, квант 1)",
+            expected="Заявка №702 відсіяна через min_quantum, ресурс перейшов до заявки №701",
+            actual=f"Ресурс виділено заявці №{plan[0]['request_id']} обсягом {plan[0]['amount']}"
         )
 
     def test_large_demand_quantum_scaling(self):
