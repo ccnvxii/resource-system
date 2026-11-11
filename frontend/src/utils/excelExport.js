@@ -76,3 +76,27 @@ export const exportResourcesToExcel = async (stocks = [], resourcesMap = {}) => 
   XLSX.utils.book_append_sheet(wb, ws, "Ресурси");
   XLSX.writeFile(wb, "ResQ_Resources_Report.xlsx");
 };
+
+// Звіт розподілу для одного плану з журналу
+export const exportLogPlanToExcel = async (planId, items = []) => {
+  if (!Array.isArray(items) || !items.length) return;
+  const XLSX = await import('xlsx');
+  const rows = items.map(log => ({
+    "Операція №": log.id,
+    "Ресурс": log.resource_name,
+    "Виділено": Math.round(Number(log.amount)),
+    "Запитувано": log.quantity_requested ?? '',
+    "Одиниця": log.unit || 'од.',
+    "Склад-джерело": log.warehouse_name,
+    "Локація складу": log.warehouse_location || '',
+    "Отримувач": log.user_full_name,
+    "Місто": log.city || '',
+    "Адреса доставки": log.warehouse_address || '',
+    "Призначення": log.purpose_name || '',
+    "Граничний термін": log.due_date || '',
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `План ${planId}`);
+  XLSX.writeFile(wb, `Distribution_Report_Plan_${planId}.xlsx`);
+};

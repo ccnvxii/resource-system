@@ -1,7 +1,7 @@
 import React, { useRef, useState, useLayoutEffect } from 'react';
 
 // Рендерить графік лише коли контейнер має ненульові розміри (без попереджень Recharts)
-const SizedChart = ({ className = '', children }) => {
+const SizedChart = ({ className = '', style, children }) => {
     const ref = useRef(null);
     const [size, setSize] = useState({ width: 0, height: 0 });
 
@@ -19,7 +19,7 @@ const SizedChart = ({ className = '', children }) => {
     }, []);
 
     return (
-        <div ref={ref} className={className}>
+        <div ref={ref} className={className} style={style}>
             {size.width > 0 && size.height > 0 && children(size)}
         </div>
     );

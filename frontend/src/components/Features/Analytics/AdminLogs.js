@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { History, Package, Clock, Box, ChevronDown, ChevronUp, Layers } from '../../UI/icons';
+import { History, Package, Clock, Box, ChevronDown, ChevronUp, Layers, Download, MapPin, Home, ArrowRight } from '../../UI/icons';
+import Modal from '../../UI/Modal';
+import { exportLogPlanToExcel } from '../../../utils/excelExport';
 
 const AdminLogs = ({ logs = [] }) => {
   // За замовчуванням журнал ПОВНІСТЮ ЗГОРНУТИЙ
   const [isJournalVisible, setIsJournalVisible] = useState(false);
   // За замовчуванням всі плани ЗГОРНУТІ
   const [expandedPlans, setExpandedPlans] = useState({});
+  const [selectedLog, setSelectedLog] = useState(null);
 
   const groupedLogs = logs.reduce((acc, log) => {
     const planId = log.plan_id || 'Невідомий';
@@ -97,6 +100,15 @@ const AdminLogs = ({ logs = [] }) => {
                                 </div>
                                 <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{planItems.length} операцій</div>
                             </div>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); exportLogPlanToExcel(planId, planItems); }}
+                                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-medium bg-white border border-slate-200 text-slate-600 hover:text-blue-600 shadow-sm transition-colors active:scale-95"
+                                title="Завантажити звіт розподілу (Excel)"
+                                aria-label="Завантажити звіт розподілу"
+                            >
+                                <Download size={14} />
+                                <span className="hidden sm:inline">Звіт</span>
+                            </button>
                             <div className="bg-white p-1.5 sm:p-2 rounded-full border border-slate-200 text-slate-400">
                                 {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                             </div>
@@ -107,7 +119,7 @@ const AdminLogs = ({ logs = [] }) => {
                         {/* 1. Мобільний вигляд (акуратні картки для < md) */}
                         <div className="block md:hidden p-3 space-y-2 bg-slate-50/30">
                             {planItems.map((log) => (
-                                <div key={log.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs text-left space-y-1.5">
+                                <div key={log.id} onClick={() => setSelectedLog(log)} className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs text-left space-y-1.5 cursor-pointer active:bg-slate-50">
                                     <div className="flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-1.5 min-w-0">
                                             <Package size={14} className="text-blue-500 shrink-0" />
@@ -138,7 +150,7 @@ const AdminLogs = ({ logs = [] }) => {
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
                                     {planItems.map((log) => (
-                                        <tr key={log.id} className="hover:bg-blue-50/20 transition-colors group">
+                                        <tr key={log.id} onClick={() => setSelectedLog(log)} className="hover:bg-blue-50/20 transition-colors group cursor-pointer">
                                             <td className="px-6 py-4">
                                                 <span className="text-sm font-bold text-slate-700 group-hover:text-blue-700">{log.user_full_name}</span>
                                             </td>
@@ -168,6 +180,65 @@ const AdminLogs = ({ logs = [] }) => {
             })
         )}
       </div>
+
+      <Modal
+        isOpen={!!selectedLog}
+        onClose={() => setSelectedLog(null)}
+        title={selectedLog ? selectedLog.resource_name : ''}
+        subtitle={selectedLog ? `План #${selectedLog.plan_id} • Операція #${selectedLog.id}` : ''}
+        icon={Package}
+        maxWidth="max-w-lg"
+      >
+        {selectedLog && (
+          <div className="space-y-4 text-left">
+            <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-2xl p-4">
+              <span className="text-xs font-medium text-blue-600 uppercase">Виділено</span>
+              <span className="text-xl font-bold text-blue-700">
+                {Math.round(selectedLog.amount)} {selectedLog.unit || 'од.'}
+                {selectedLog.quantity_requested ? (
+                  <span className="text-xs font-medium text-slate-400"> з {selectedLog.quantity_requested}</span>
+                ) : null}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-stretch gap-3">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-1">
+                <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase text-slate-400">
+                  <Home size={12} /> Звідки (склад)
+                </div>
+                <p className="font-bold text-slate-800 text-sm">{selectedLog.warehouse_name}</p>
+                {selectedLog.warehouse_location && (
+                  <p className="text-xs text-slate-500">{selectedLog.warehouse_location}</p>
+                )}
+              </div>
+              <div className="hidden sm:flex items-center text-slate-300"><ArrowRight size={20} /></div>
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-1">
+                <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase text-slate-400">
+                  <MapPin size={12} /> Куди (отримувач)
+                </div>
+                <p className="font-bold text-slate-800 text-sm">{selectedLog.user_full_name}</p>
+                <p className="text-xs text-slate-500">
+                  {[selectedLog.city, selectedLog.warehouse_address].filter(Boolean).join(', ') || 'Адресна доставка'}
+                </p>
+              </div>
+            </div>
+
+            <dl className="text-sm divide-y divide-slate-100 border border-slate-200 rounded-2xl px-4">
+              {[
+                ['Призначення', selectedLog.purpose_name],
+                ['Граничний термін', selectedLog.due_date],
+                ['Дата плану', selectedLog.timestamp ? new Date(selectedLog.timestamp).toLocaleString('uk-UA') : null],
+                ['Користувач', selectedLog.username],
+              ].filter(([, v]) => v).map(([k, v]) => (
+                <div key={k} className="flex justify-between gap-3 py-2.5">
+                  <dt className="text-slate-400 font-medium">{k}</dt>
+                  <dd className="text-slate-700 font-semibold text-right">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

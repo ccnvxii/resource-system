@@ -143,6 +143,7 @@ function App() {
                     <div className="min-h-screen bg-slate-50 p-3 sm:p-6 md:p-10 relative">
                     {/* Всі модалки сайту (завантажуються ТІЛЬКИ коли модалка відкрита) */}
             {hasOpenModal && (
+                <Suspense fallback={null}>
                 <AppModals
                     modals={modals}
                     closeModal={closeModal}
@@ -154,6 +155,7 @@ function App() {
                     onDistribute={handleDistribute}
                     loading={loading}
                 />
+                </Suspense>
             )}
 
             {/* Семантичний тег main для покращення Accessibility (виправлення зауваження Lighthouse) */}
@@ -199,7 +201,7 @@ function App() {
                     <div className={`grid gap-4 sm:gap-6 md:gap-8 ${currentUser?.is_admin ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
                         {currentUser?.is_admin && (
                             <div className={`w-full ${activeAdminTab === 'stocks' ? 'block' : 'hidden md:block'}`}>
-                                <StockTable stocks={data.stocks} resourcesMap={data.resourcesMap} onRefresh={fetchData} />
+                                <Suspense fallback={null}><StockTable stocks={data.stocks} resourcesMap={data.resourcesMap} onRefresh={fetchData} /></Suspense>
                             </div>
                         )}
                         <div className={`w-full ${currentUser?.is_admin && activeAdminTab !== 'requests' ? 'hidden md:block' : 'block'}`}>
@@ -217,8 +219,8 @@ function App() {
                 {/* Секція 2: Аналітика */}
                 {currentUser?.is_admin && (
                     <div id="section-analytics" className="space-y-4 sm:space-y-6">
-                        <Dashboard stocks={data.stocks} requests={data.requests} resourcesMap={data.resourcesMap} />
-                        <AdminLogs logs={data.logs || []} />
+                        <Suspense fallback={null}><Dashboard stocks={data.stocks} requests={data.requests} resourcesMap={data.resourcesMap} /></Suspense>
+                        <Suspense fallback={null}><AdminLogs logs={data.logs || []} /></Suspense>
                     </div>
                 )}
 
@@ -235,7 +237,7 @@ function App() {
                         </div>
 
                         {plan && (
-                            <DistributionPlan plan={plan} purposeMap={data.purposeMap} strategy={distributionStrategy} />
+                            <Suspense fallback={null}><DistributionPlan plan={plan} purposeMap={data.purposeMap} strategy={distributionStrategy} /></Suspense>
                         )}
                     </div>
                 )}

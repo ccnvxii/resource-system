@@ -242,7 +242,7 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
 
                       <Tooltip content={<CustomStockTooltip />} cursor={{fill: '#f8fafc'}} />
 
-                      <Bar dataKey="displayAmount" radius={[4, 4, 0, 0]} barSize={isMobile ? 16 : 24}>
+                      <Bar dataKey="displayAmount" radius={[4, 4, 0, 0]} barSize={isMobile ? (stockData.length <= 3 ? 28 : 16) : (stockData.length <= 3 ? 44 : 24)}>
                         {stockData.map((entry, index) => (
                           <Cell
                             key={`cell-${index}`}
@@ -261,7 +261,9 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
                   <TrendingDown className="text-red-500" size={20} />
                   <h3 className="font-bold text-slate-800 uppercase text-[10px] tracking-widest">Критичний дефіцит</h3>
                 </div>
-                <SizedChart className="h-64 sm:h-72 w-full min-w-0">
+                {/* Висота підлаштовується під кількість рядків, щоб не було порожніх «залисин» */}
+                <div className="flex items-center h-64 sm:h-72">
+                <SizedChart className="w-full min-w-0" style={{ height: Math.min(288, Math.max(150, deficitData.length * 62 + 40)) }}>
                   {({ width, height }) => (
                     <BarChart width={width} height={height} data={deficitData} layout="vertical" margin={{ top: 10, right: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
@@ -285,7 +287,7 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
                         formatter={(value) => [`${value} од.`, 'Нестача (Дефіцит)']}
                       />
 
-                      <Bar dataKey="deficit" radius={[0, 4, 4, 0]} barSize={14}>
+                      <Bar dataKey="deficit" radius={[0, 4, 4, 0]} barSize={deficitData.length <= 3 ? 24 : 14}>
                         {deficitData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={index === 0 ? '#ef4444' : '#f87171'} />
                         ))}
@@ -293,6 +295,7 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
                     </BarChart>
                   )}
                 </SizedChart>
+                </div>
               </div>
 
             </div>

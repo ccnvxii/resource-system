@@ -222,11 +222,19 @@ class AuditLogSerializer(serializers.ModelSerializer):
 
     due_date = serializers.DateField(source='request.due_date', read_only=True, format="%Y-%m-%d")
 
+    city = serializers.CharField(source='request.city', default='', allow_null=True, read_only=True)
+    warehouse_address = serializers.CharField(source='request.warehouse_address', default='', allow_null=True, read_only=True)
+    quantity_requested = serializers.IntegerField(source='request.quantity_requested', read_only=True)
+    purpose_name = serializers.CharField(source='request.purpose.name', read_only=True)
+    warehouse_location = serializers.CharField(source='warehouse.location', read_only=True)
+
     class Meta:
         model = DistributionItem
         fields = [
             'id', 'plan_id', 'timestamp', 'username', 'user_full_name',
-            'resource_name', 'unit', 'warehouse_name', 'amount', 'due_date'
+            'resource_name', 'unit', 'warehouse_name', 'amount', 'due_date',
+            'city', 'warehouse_address', 'quantity_requested', 'purpose_name',
+            'warehouse_location'
         ]
 
     def get_user_full_name(self, obj):
