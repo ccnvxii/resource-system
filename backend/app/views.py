@@ -13,7 +13,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -124,6 +124,11 @@ class UserRequestViewSet(viewsets.ModelViewSet):
     serializer_class = UserRequestSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def perform_destroy(self, instance):
+        if not (self.request.user.is_staff or instance.user_id == self.request.user.id):
+            raise PermissionDenied("Недостатньо прав для видалення заявки")
+        instance.delete()
+
     def perform_create(self, serializer):
         warehouse_ref = self.request.data.get('warehouse_ref')
         auto_extend_val = self.request.data.get('auto_extend', True)
@@ -162,7 +167,12 @@ class StockViewSet(viewsets.ModelViewSet):
     serializer_class = StockSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
-    @action(detail=True, methods=['patch'])
+    def get_permissions(self):
+        if self.action == "destroy":
+            return [permissions.IsAdminUser()]
+        return super().get_permissions()
+
+    @action(detail=True, methods=["patch"])
     def update_amount(self, request, pk=None):
         if not request.user.is_staff:
             return Response({"error": "Доступ заборонено"}, status=status.HTTP_403_FORBIDDEN)

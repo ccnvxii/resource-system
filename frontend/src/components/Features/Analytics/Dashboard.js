@@ -189,10 +189,10 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
             <BarChart3 size={20} />
           </div>
           <div>
-            <h3 className="font-bold text-slate-800 uppercase text-xs tracking-widest leading-none">
+            <h3 className="font-extrabold text-slate-800 uppercase text-xs tracking-widest leading-none">
               Аналітичний дашборд
             </h3>
-            <p className="text-slate-400 text-[10px] font-medium uppercase mt-1">
+            <p className="text-slate-400 text-[10px] font-normal uppercase mt-1">
               Моніторинг запасів та дефіциту ресурсів
             </p>
           </div>

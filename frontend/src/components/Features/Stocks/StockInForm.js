@@ -1,3 +1,4 @@
+import SearchableSelect from '../../UI/SearchableSelect';
 import React, {useState} from 'react';
 import {Warehouse, PackagePlus, Hash, Plus, Trash2, Save} from '../../UI/icons';
 import {toast} from 'react-hot-toast';
@@ -59,17 +60,14 @@ const StockInForm = ({warehouses, resources, onSubmit, loading, onClose}) => {
                     className="flex items-center gap-2 text-[10px] font-black text-emerald-700 mb-1.5 uppercase ml-1 tracking-wider text-left">
                     <Warehouse size={12}/> Цільовий Склад
                 </label>
-                <select
+                <SearchableSelect
                     required
                     value={warehouse}
-                    onChange={(e) => setWarehouse(e.target.value)}
+                    onChange={setWarehouse}
+                    placeholder="-- Оберіть склад зі списку --"
+                    options={warehouses.map(w => ({value: w.id, label: w.name}))}
                     className="w-full p-3.5 rounded-xl border border-emerald-200 outline-none focus:ring-2 focus:ring-emerald-500/20 font-bold text-slate-700 bg-white cursor-pointer transition-all"
-                >
-                    <option value="">-- Оберіть склад зі списку --</option>
-                    {warehouses.map(w => (
-                        <option key={w.id} value={w.id}>{w.name}</option>
-                    ))}
-                </select>
+                />
             </div>
 
             {/* Список ресурсів */}
@@ -82,22 +80,18 @@ const StockInForm = ({warehouses, resources, onSubmit, loading, onClose}) => {
                                 className="flex items-center gap-1.5 text-[9px] font-bold text-slate-400 mb-1 uppercase ml-1">
                                 <PackagePlus size={10}/> Ресурс
                             </label>
-                            <select
+                            <SearchableSelect
                                 required
                                 value={row.resource}
-                                onChange={(e) => {
+                                onChange={(val) => {
                                     const newRows = [...rows];
-                                    newRows[index].resource = e.target.value;
+                                    newRows[index].resource = val;
                                     setRows(newRows);
                                 }}
+                                placeholder="-- Оберіть тип --"
+                                options={resources.map(r => ({value: r.id, label: r.name}))}
                                 className="w-full p-2.5 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-emerald-500/20 text-sm font-bold cursor-pointer"
-                            >
-                                <option value="">-- Оберіть тип --</option>
-                                {resources.map(r => (
-                                    // Відображаємо тільки назву ресурсу без ID або одиниць виміру в дужках
-                                    <option key={r.id} value={r.id}>{r.name}</option>
-                                ))}
-                            </select>
+                            />
                         </div>
 
                         <div className="w-full md:w-40 text-left">

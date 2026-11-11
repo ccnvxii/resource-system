@@ -2,6 +2,7 @@ import React, {useState, useMemo, useEffect} from 'react';
 import {PackageSearch, Filter, ChevronUp, ChevronDown, Download, RotateCcw} from '../../UI/icons';
 import {exportResourcesToExcel} from '../../../utils/excelExport';
 import api from '../../../services/api';
+import { toast } from 'react-hot-toast';
 import StockRow from './StockRow';
 import StockMobileCard from './StockMobileCard';
 import FilterSelect from '../../UI/FilterSelect';
@@ -85,10 +86,34 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
         </div>
     );
 
+    const handleDelete = async (stock) => {
+        const name = resourcesMap[stock.resource]?.name || stock.resource_name || 'ресурс';
+        const ok = window.confirm(`Списати та видалити «${name}» (${stock.warehouse_name}) зі складу?\nКількість ${Math.round(Number(stock.amount))} буде втрачена. Дію не можна скасувати.`);
+        if (!ok) return;
+        try {
+            await api.delete(`/stocks/${stock.id}/`);
+            toast.success('Позицію видалено зі складу');
+            if (onRefresh) onRefresh();
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
     const handleSaveEdit = async (id) => {
         try {
             const roundedValue = Math.round(parseFloat(editValue));
-            await api.patch(`/stocks/${id}/update_amount/`, {amount: roundedValue});
+            if (isNaN(roundedValue) || roundedValue < 0) {
+                toast.error('Вкажіть коректну кількість');
+                setEditingId(null);
+                return;
+            }
+            if (roundedValue === 0) {
+                // Нульовий залишок = позицію списано: видаляємо її зі складу
+                await api.delete(`/stocks/${id}/`);
+                toast.success('Залишок 0 — позицію списано зі складу');
+            } else {
+                await api.patch(`/stocks/${id}/update_amount/`, {amount: roundedValue});
+            }
             setEditingId(null);
             if (onRefresh) onRefresh();
         } catch (e) {
@@ -185,6 +210,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                                 </span>
                             </button>
                         </th>
+                        <th className="w-10"></th>
                     </tr>
                     </thead>
                     <tbody>
@@ -205,6 +231,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                                 setEditValue(val);
                             }}
                             onSaveEdit={handleSaveEdit}
+                            onDelete={handleDelete}
                         />
                     ))}
                     </tbody>
@@ -233,6 +260,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                                     setEditValue(val);
                                 }}
                                 onSaveEdit={handleSaveEdit}
+                            onDelete={handleDelete}
                             />
                         ))}
                         {totalMobilePages > 1 && (

@@ -57,7 +57,7 @@ const DistributionPlan = ({ plan, purposeMap, strategy = 'fairness' }) => {
           </div>
           <div>
             <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">Результати оптимізації розподілу</h3>
-            <p className={`text-xs font-bold uppercase tracking-widest ${isTriage ? 'text-red-500' : 'text-slate-500'}`}>
+            <p className={`text-xs font-normal uppercase tracking-widest ${isTriage ? 'text-red-500' : 'text-slate-500'}`}>
                 {algorithmName}
             </p>
           </div>

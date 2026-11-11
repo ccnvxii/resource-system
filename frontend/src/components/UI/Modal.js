@@ -44,7 +44,7 @@ const Modal = ({ isOpen, onClose, title, subtitle, icon: Icon, children, maxWidt
               <div className="min-w-0">
                 <h2 className="text-lg sm:text-2xl font-bold text-slate-800 tracking-tight truncate">{title}</h2>
                 {subtitle && (
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5 truncate">
+                  <p className="text-[10px] text-slate-400 font-normal uppercase tracking-widest mt-0.5 truncate">
                     {subtitle}
                   </p>
                 )}

@@ -1,3 +1,4 @@
+import SearchableSelect from '../../UI/SearchableSelect';
 import React, {useState, useEffect, useMemo} from 'react';
 import {
     User, Package, Hash, Target, Plus, Trash2, Save,
@@ -11,6 +12,27 @@ const getFutureDate = (daysAhead = 5) => {
     const date = new Date();
     date.setDate(date.getDate() + daysAhead);
     return date.toISOString().split('T')[0];
+};
+
+// --- ОСТАННІ АДРЕСИ (зберігаються локально в браузері) ---
+const RECENT_ADDRESSES_KEY = 'resq_recent_addresses';
+
+const loadRecentAddresses = () => {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(RECENT_ADDRESSES_KEY) || '[]');
+        return Array.isArray(parsed) ? parsed.slice(0, 3) : [];
+    } catch (e) {
+        return [];
+    }
+};
+
+const saveRecentAddress = (entry) => {
+    try {
+        const rest = loadRecentAddresses().filter(a => a.key !== entry.key);
+        localStorage.setItem(RECENT_ADDRESSES_KEY, JSON.stringify([entry, ...rest].slice(0, 3)));
+    } catch (e) {
+        // localStorage недоступний — просто не зберігаємо
+    }
 };
 
 const RequestForm = ({
@@ -58,6 +80,28 @@ const RequestForm = ({
 
     // Значення поточної дати для обмеження вибору "минулих" дат у календарі
     const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+    // --- ШВИДКИЙ ВИБІР ОСТАННІХ АДРЕС ---
+    const [recentAddresses, setRecentAddresses] = useState(loadRecentAddresses);
+
+    const applyRecentAddress = (a) => {
+        setLangError(false);
+        setShowCityDropdown(false);
+        setCitySearch(a.citySearch);
+        setSelectedCity(a.city);
+        setDeliveryType(a.deliveryType);
+        if (a.deliveryType === 'address') {
+            setStreetSearch(a.street || '');
+            setSelectedStreet({Presentation: a.street || ''});
+            setHouseNumber(a.house || '');
+            setSelectedWarehouse(null);
+        } else {
+            setSelectedWarehouse(a.warehouse || null);
+            setStreetSearch('');
+            setSelectedStreet(null);
+            setHouseNumber('');
+        }
+    };
 
     // Перевірка чи доступна доставка в місто (чи є там відділення)
     const isDeliveryAvailable = useMemo(() => {
@@ -315,6 +359,17 @@ const RequestForm = ({
                 auto_extend: Boolean(autoExtend)
             }, { _suppressToast: true })));
 
+            saveRecentAddress({
+                key: `${selectedCity.Ref || selectedCity.SettlementRef || selectedCity.Present}|${isAddressMode ? finalAddress : selectedWarehouse?.Ref}`,
+                label: `${selectedCity.Present || selectedCity.Description}, ${finalAddress}`,
+                city: selectedCity,
+                citySearch: selectedCity.Present || selectedCity.Description,
+                deliveryType: isAddressMode ? 'address' : 'warehouse',
+                street: isAddressMode ? streetSearch.trim() : '',
+                house: isAddressMode ? houseNumber.trim() : '',
+                warehouse: isAddressMode ? null : selectedWarehouse,
+            });
+            setRecentAddresses(loadRecentAddresses());
             toast.dismiss();
             toast.success("Заявку успішно створено!", { id: 'req-form-toast' });
             if (typeof fetchData === 'function') fetchData();
@@ -342,15 +397,13 @@ const RequestForm = ({
                         <div className="flex items-center gap-3">
                             <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100"><User
                                 size={20}/></div>
-                            <select
+                            <SearchableSelect
                                 value={selectedUserId || ''}
-                                onChange={(e) => setSelectedUserId(e.target.value)}
+                                onChange={setSelectedUserId}
+                                placeholder="Виберіть користувача зі списку..."
+                                options={usersList.map(u => ({value: u.id, label: u.full_name || u.username}))}
                                 className="w-full px-4 py-2.5 bg-white border border-blue-100 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500/20"
-                            >
-                                <option value="">Виберіть користувача зі списку...</option>
-                                {usersList.map(u => <option key={u.id}
-                                                            value={u.id}>{u.full_name || u.username}</option>)}
-                            </select>
+                            />
                         </div>
                     </div>
                 )}
@@ -401,6 +454,28 @@ const RequestForm = ({
                 <label className="text-[10px] font-black uppercase text-slate-400 italic block tracking-widest">
                     {currentUser?.is_admin ? '2.' : '2.'} Локація та доставка
                 </label>
+
+                {recentAddresses.length > 0 && (
+                    <div className="space-y-1.5">
+                        <p className="text-[9px] font-medium uppercase text-slate-500 ml-1">Останні адреси — швидкий вибір</p>
+                        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
+                            {recentAddresses.map(a => (
+                                <button
+                                    key={a.key}
+                                    type="button"
+                                    onClick={() => applyRecentAddress(a)}
+                                    className="flex items-center gap-2 text-left px-3 py-2 bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 rounded-xl text-xs font-medium text-slate-700 transition-all active:scale-95 max-w-full sm:max-w-[48%]"
+                                    title={a.label}
+                                >
+                                    {a.deliveryType === 'address'
+                                        ? <Home size={14} className="text-blue-500 shrink-0"/>
+                                        : <Truck size={14} className="text-blue-500 shrink-0"/>}
+                                    <span className="truncate">{a.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="relative">
                         <label className="text-[9px] font-bold uppercase text-slate-500 mb-1 ml-1 block">Місто</label>
@@ -465,18 +540,14 @@ const RequestForm = ({
                             <div className="space-y-2">
                                 <label className="text-[9px] font-bold text-slate-500 uppercase">Оберіть
                                     відділення</label>
-                                <select
+                                <SearchableSelect
                                     disabled={!selectedCity || isWarehousesLoading}
                                     value={selectedWarehouse?.Ref || ''}
-                                    onChange={(e) => setSelectedWarehouse(warehouses.find(w => w.Ref === e.target.value))}
+                                    onChange={(val) => setSelectedWarehouse(warehouses.find(w => w.Ref === val))}
+                                    placeholder={isWarehousesLoading ? "Завантаження списку..." : (selectedCity ? "Введіть номер або вулицю відділення..." : "Спочатку вкажіть місто")}
+                                    options={warehouses.map(w => ({value: w.Ref, label: w.Description}))}
                                     className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none disabled:bg-slate-50"
-                                >
-                                    <option value="">
-                                        {isWarehousesLoading ? "Завантаження списку..." : (selectedCity ? "Оберіть зі списку..." : "Спочатку вкажіть місто")}
-                                    </option>
-                                    {warehouses.map((w, idx) => <option key={idx}
-                                                                        value={w.Ref}>{w.Description}</option>)}
-                                </select>
+                                />
                             </div>
                         ) : (
                             /* АДРЕСНА ДОСТАВКА З ВИПАДАЮЧИМ МЕНЮ ВУЛИЦЬ */
@@ -567,19 +638,14 @@ const RequestForm = ({
                                     <label
                                         className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Package
                                         size={12} className="inline mr-1"/>Ресурс</label>
-                                    <select value={row.resource || ''}
-                                            onChange={(e) => handleFormChange(index, 'resource', e.target.value)}
-                                            className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold outline-none">
-                                        <option value="">Оберіть ресурс...</option>
-                                        {resourcesList.map(r => {
-                                            const rUnit = r.unit_name || r.unit;
-                                            return (
-                                                <option key={r.id} value={r.id}>
-                                                    {r.name} {rUnit ? `(${rUnit})` : ''}
-                                                </option>
-                                            );
-                                        })}
-                                    </select>
+                                    <SearchableSelect value={row.resource || ''}
+                                            onChange={(val) => handleFormChange(index, 'resource', val)}
+                                            placeholder="Оберіть ресурс..."
+                                            options={resourcesList.map(r => {
+                                                const rUnit = r.unit_name || r.unit;
+                                                return {value: r.id, label: `${r.name} ${rUnit ? `(${rUnit})` : ''}`.trim()};
+                                            })}
+                                            className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold outline-none"/>
                                 </div>
                                 <div className="w-full sm:w-28 text-left">
                                     <label
@@ -597,12 +663,11 @@ const RequestForm = ({
                                     <label
                                         className="text-[10px] font-bold text-slate-400 uppercase block mb-1 ml-1"><Target
                                         size={12} className="inline mr-1"/>Ціль</label>
-                                    <select value={row.purpose || ''}
-                                            onChange={(e) => handleFormChange(index, 'purpose', e.target.value)}
-                                            className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none">
-                                        <option value="">Ціль...</option>
-                                        {purposes.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                    </select>
+                                    <SearchableSelect value={row.purpose || ''}
+                                            onChange={(val) => handleFormChange(index, 'purpose', val)}
+                                            placeholder="Ціль..."
+                                            options={purposes.map(p => ({value: p.id, label: p.name}))}
+                                            className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium outline-none"/>
                                 </div>
                                 {formRows.length > 1 && (
                                     <div className="flex justify-end sm:self-end">

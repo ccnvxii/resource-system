@@ -42,7 +42,7 @@ const AdminLogs = ({ logs = [] }) => {
             <h3 className="font-black text-white uppercase text-xs tracking-wider leading-tight truncate">
               Журнал розподілу
             </h3>
-            <p className="text-slate-400 text-[10px] font-bold uppercase mt-0.5 truncate">
+            <p className="text-slate-400 text-[10px] font-normal uppercase mt-0.5 truncate">
               Система аудиту та логування
             </p>
           </div>

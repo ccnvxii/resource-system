@@ -78,7 +78,7 @@ const Header = ({onOpenForm, onOpenStockIn, onAddResource, currentUser, onLogout
                 {isAdmin && (
                     <button
                         onClick={onOpenStockIn}
-                        className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 active:scale-95 transition-all shadow-2xs"
+                        className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 active:scale-95 transition-all shadow-2xs"
                     >
                         <PlusCircle size={16}/>
                         <span>Поставка</span>
@@ -88,7 +88,7 @@ const Header = ({onOpenForm, onOpenStockIn, onAddResource, currentUser, onLogout
                 {/* Створення заявки */}
                 <button
                     onClick={onOpenForm}
-                    className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-blue-600 text-white hover:bg-slate-900 active:scale-95 transition-all shadow-md shadow-blue-100"
+                    className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-blue-600 text-white hover:bg-slate-900 active:scale-95 transition-all shadow-md shadow-blue-100"
                 >
                     <ClipboardList size={16}/>
                     <span>Створити заявку</span>

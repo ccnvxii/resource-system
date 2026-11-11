@@ -8,7 +8,7 @@ import FilterSelect from '../../UI/FilterSelect';
 
 const MOBILE_PAGE_SIZE = 5;
 
-const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) => {
+const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, onDeleteRequest}) => {
     const [requestTab, setRequestTab] = useState('active');
     const [statusFilter, setStatusFilter] = useState('all');
     const [resourceFilter, setResourceFilter] = useState('all');
@@ -32,6 +32,14 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
             return matchTab && matchStatus && matchResource;
         });
     }, [requests, requestTab, statusFilter, resourceFilter]);
+
+    const handleDeleteClick = (req) => {
+        if (!onDeleteRequest) return;
+        if (window.confirm(`Видалити заявку «${req.resource_name}» (${req.user_full_name || req.username || "користувач"})?
+Дію не можна скасувати.`)) {
+            onDeleteRequest(req.id);
+        }
+    };
 
     const hasActiveFilters = requestTab === 'active' && (statusFilter !== 'all' || resourceFilter !== 'all');
     const resetFilters = () => {
@@ -189,7 +197,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                     <>
                         {mobileVisibleRequests.map((req) => (
                             <RequestCard key={req.id} req={req} purposeMap={purposeMap} isAdmin={isAdmin}
-                                         onOpenModal={handleOpenModal}/>
+                                         onOpenModal={handleOpenModal} onDelete={handleDeleteClick}/>
                         ))}
                         {totalMobilePages > 1 && (
                             <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs font-medium text-slate-500 select-none">
@@ -224,7 +232,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser}) =
                     <>
                         {visibleRequests.map((req) => (
                             <RequestCard key={req.id} req={req} purposeMap={purposeMap} isAdmin={isAdmin}
-                                         onOpenModal={handleOpenModal}/>
+                                         onOpenModal={handleOpenModal} onDelete={handleDeleteClick}/>
                         ))}
                         {displayedRequests.length > visibleCount && (
                             <div className="pt-2 text-center">

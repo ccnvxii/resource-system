@@ -1,7 +1,7 @@
 import React from 'react';
-import { User, AlertCircle, Clock, CheckCircle2, MapPin, RefreshCw, Settings, Package } from '../../UI/icons';
+import { User, AlertCircle, Clock, CheckCircle2, MapPin, RefreshCw, Settings, Package, Trash2 } from '../../UI/icons';
 
-const RequestCard = ({ req, purposeMap, isAdmin, onOpenModal }) => {
+const RequestCard = ({ req, purposeMap, isAdmin, onOpenModal, onDelete }) => {
     const purposeData = purposeMap[req.purpose] || { label: 'Інше', icon: <Package size={13} />, color: 'bg-gray-100' };
     const isHistory = req.status === 'done';
     const hasAutoExtend = req.auto_extend ?? true;
@@ -88,6 +88,17 @@ const RequestCard = ({ req, purposeMap, isAdmin, onOpenModal }) => {
                     <span className="text-xs font-semibold uppercase text-slate-600">{statusDetails.label}</span>
                 </div>
 
+                <div className="flex items-center gap-2">
+                {isAdmin && onDelete && (
+                    <button
+                        onClick={() => onDelete(req)}
+                        className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                        title="Видалити заявку"
+                        aria-label="Видалити заявку"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+                )}
                 <button
                     disabled={isHistory}
                     onClick={() => onOpenModal(req)}
@@ -112,6 +123,7 @@ const RequestCard = ({ req, purposeMap, isAdmin, onOpenModal }) => {
                         </div>
                     )}
                 </button>
+                </div>
             </div>
         </div>
     );

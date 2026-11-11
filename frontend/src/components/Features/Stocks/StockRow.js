@@ -1,7 +1,7 @@
 import React from 'react';
-import { Edit3, Check } from '../../UI/icons';
+import { Edit3, Check, Trash2 } from '../../UI/icons';
 
-const StockRow = ({ stock, resource, isEditing, editValue, setEditValue, onStartEdit, onSaveEdit }) => {
+const StockRow = ({ stock, resource, isEditing, editValue, setEditValue, onStartEdit, onSaveEdit, onDelete }) => {
     return (
         <tr className="border-b border-slate-50 group hover:bg-blue-50/30 transition-colors">
             <td className="px-4 md:px-6 py-3.5 md:py-4 italic text-slate-500 text-xs md:text-sm">{stock.warehouse_name}</td>
@@ -47,6 +47,16 @@ const StockRow = ({ stock, resource, isEditing, editValue, setEditValue, onStart
                         </div>
                     )}
                 </div>
+            </td>
+            <td className="pr-3 md:pr-4 py-3.5 text-right w-10">
+                <button
+                    onClick={() => onDelete && onDelete(stock)}
+                    className="p-2 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                    title="Списати / видалити зі складу"
+                    aria-label="Видалити позицію зі складу"
+                >
+                    <Trash2 size={16}/>
+                </button>
             </td>
         </tr>
     );

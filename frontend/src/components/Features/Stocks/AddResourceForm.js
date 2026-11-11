@@ -1,5 +1,6 @@
+import SearchableSelect from '../../UI/SearchableSelect';
 import React, { useState, useEffect } from 'react';
-import { Tag, Ruler, Layers, Save, ChevronDown } from '../../UI/icons';
+import { Tag, Ruler, Layers, Save } from '../../UI/icons';
 import api from '../../../services/api';
 import { toast } from 'react-hot-toast';
 
@@ -79,22 +80,14 @@ const AddResourceForm = ({ units, onResourceAdded, onClose }) => {
             <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 mb-1.5 uppercase ml-1">
               <Ruler size={12} /> Одиниця
             </label>
-            <div className="relative">
-              <select
+            <SearchableSelect
                 required
                 value={formData.unit}
-                onChange={(e) => setFormData({...formData, unit: e.target.value})}
+                onChange={(val) => setFormData({...formData, unit: val})}
+                placeholder="Оберіть..."
+                options={(units || []).map(u => ({value: u.id, label: u.name}))}
                 className="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold text-slate-700 appearance-none cursor-pointer"
-              >
-                <option value="" disabled>Оберіть...</option>
-                {units && units.map(u => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            </div>
+              />
           </div>
 
           {/* КАТЕГОРІЯ (Вибір з довідника Category) */}
@@ -102,22 +95,14 @@ const AddResourceForm = ({ units, onResourceAdded, onClose }) => {
             <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 mb-1.5 uppercase ml-1">
               <Layers size={12} /> Категорія
             </label>
-            <div className="relative">
-              <select
+            <SearchableSelect
                 required
                 value={formData.category}
-                onChange={(e) => setFormData({...formData, category: e.target.value})}
+                onChange={(val) => setFormData({...formData, category: val})}
+                placeholder="Оберіть..."
+                options={categories.map(cat => ({value: cat.id, label: `${cat.name} (x${cat.criticality})`}))}
                 className="w-full p-3 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 text-sm font-medium appearance-none cursor-pointer"
-              >
-                <option value="" disabled>Оберіть...</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name} (x{cat.criticality})
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            </div>
+              />
           </div>
 
         </div>
