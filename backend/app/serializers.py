@@ -55,7 +55,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         }
 
     def validate_email(self, value):
-        # Формат уже перевірено EmailField; тут — унікальність без урахування регістру
+        # Формат уже перевірено EmailField; тут - унікальність без урахування регістру
         value = (value or '').strip().lower()
         if User.objects.filter(email__iexact=value).exists() or User.objects.filter(username__iexact=value).exists():
             raise serializers.ValidationError("Користувач з таким Email вже зареєстрований.")
@@ -163,7 +163,7 @@ class UserRequestSerializer(serializers.ModelSerializer):
         instance = self.instance
 
         if not is_staff:
-            # 1) Ліміт кількості: за один ресурс — сумарно по всіх активних заявках заявника
+            # 1) Ліміт кількості: за один ресурс - сумарно по всіх активних заявках заявника
             resource = attrs.get('resource') or (instance.resource if instance else None)
             qty = attrs.get('quantity_requested', instance.quantity_requested if instance else None)
             if resource is not None and qty is not None:
@@ -191,7 +191,7 @@ class UserRequestSerializer(serializers.ModelSerializer):
             # 2) Граничний термін існуючої заявки можна лише продовжувати, а не скорочувати
             if instance and 'due_date' in attrs and attrs['due_date'] < instance.due_date:
                 raise serializers.ValidationError({
-                    'due_date': 'Скоротити граничний термін не можна — лише продовжити.'
+                    'due_date': 'Скоротити граничний термін не можна - лише продовжити.'
                 })
 
         return attrs

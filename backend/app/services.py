@@ -324,7 +324,7 @@ class NovaPoshtaService:
             if addresses:
                 return res
 
-        # 2. Якщо не знайдено — пробуємо метод getStreet (для CityRef/DeliveryCity)
+        # 2. Якщо не знайдено - пробуємо метод getStreet (для CityRef/DeliveryCity)
         res_city = self._safe_request(
             "Address",
             "getStreet",

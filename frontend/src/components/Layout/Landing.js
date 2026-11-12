@@ -306,7 +306,7 @@ const Landing = ({onEnter, stats}) => {
                 <div className="max-w-7xl mx-auto px-8">
                     <div className="flex items-center justify-center gap-3 mb-6">
                         {/* invert-0 або invert залежно від кольорів вашого лого,
-                 якщо лого занадто темне — додаємо фільтр invert */}
+                 якщо лого занадто темне - додаємо фільтр invert */}
                         <img
                             src={process.env.PUBLIC_URL + '/logo.ico'}
                             alt="Logo"

@@ -74,7 +74,7 @@ const Header = ({onOpenForm, onOpenStockIn, onAddResource, currentUser, onLogout
 
             {/* Блок основних дій */}
             <div className="flex items-center gap-2 sm:gap-2.5 w-full md:w-auto">
-                {/* Поставка — для адміна */}
+                {/* Поставка - для адміна */}
                 {isAdmin && (
                     <button
                         onClick={onOpenStockIn}

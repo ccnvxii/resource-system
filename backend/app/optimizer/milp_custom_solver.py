@@ -49,7 +49,7 @@ def branch_and_bound_solve(base_A, base_b, base_sense, c_minimize, n_integer_var
                     max_fraction = frac
                     fractional_idx = idx
 
-        # 4. Якщо дробових змінних немає — знайдено цілочисельне рішення!
+        # 4. Якщо дробових змінних немає - знайдено цілочисельне рішення!
         if fractional_idx == -1:
             best_obj = current_obj
             best_x = x_sol.copy()

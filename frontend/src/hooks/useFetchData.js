@@ -18,21 +18,24 @@ export const useFetchData = (currentUser) => {
 
     // Використовуємо реф, щоб знати, чи це перше завантаження довідників
     const isStaticDataLoaded = useRef(false);
+    // true, доки не завершилось ПЕРШЕ завантаження даних з сервера (далі оновлення відбуваються непомітно)
+    const [isLoading, setIsLoading] = useState(true);
 
     const fetchData = useCallback(async () => {
         if (!currentUser) return;
+        if (!isStaticDataLoaded.current) setIsLoading(true);
 
         try {
             const requestsToMake = {};
 
-            // 1. Динамічні дані — оновлюємо ЗАВЖДИ при кожному виклику
+            // 1. Динамічні дані - оновлюємо ЗАВЖДИ при кожному виклику
             requestsToMake.requests = api.get('/requests/');
             if (currentUser?.is_admin) {
                 requestsToMake.stocks = api.get('/stocks/');
                 requestsToMake.logs = api.get('/logs/');
             }
 
-            // 2. Статичні дані — вантажимо ТІЛЬКИ ОДИН РАЗ при старті системи
+            // 2. Статичні дані - вантажимо ТІЛЬКИ ОДИН РАЗ при старті системи
             if (!isStaticDataLoaded.current) {
                 requestsToMake.resources = api.get('/resources/');
                 requestsToMake.units = api.get('/units/');
@@ -51,12 +54,12 @@ export const useFetchData = (currentUser) => {
                 results[key] = responses[index].data;
             });
 
-            // Сервер уже віддає лише власні заявки користувача (адміністратору — усі)
+            // Сервер уже віддає лише власні заявки користувача (адміністратору - усі)
             const filteredRequests = results.requests || [];
 
             // Оновлюємо стан React
             setData(prev => {
-                // Якщо статичні дані прийшли вперше — трансформуємо мапи, інакше — беремо старі з prev
+                // Якщо статичні дані прийшли вперше - трансформуємо мапи, інакше - беремо старі з prev
                 const resources = results.resources || prev.resourcesList;
                 const purposes = results.purposes || prev.purposes;
 
@@ -95,8 +98,10 @@ export const useFetchData = (currentUser) => {
 
         } catch (error) {
             console.error("Помилка завантаження даних:", error);
+        } finally {
+            setIsLoading(false);
         }
     }, [currentUser]);
 
-    return { data, fetchData };
+    return { data, fetchData, isLoading };
 };

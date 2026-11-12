@@ -64,7 +64,7 @@ const AppModals = ({ modals, closeModal, data, fetchData, currentUser, distribut
                             }`}
                         >
                             <Scale size={18} />
-                            Fairness
+                            Справедливий
                         </button>
 
                         <button
@@ -88,7 +88,7 @@ const AppModals = ({ modals, closeModal, data, fetchData, currentUser, distribut
                             }`}
                         >
                             <Zap size={18} />
-                            Тріаж
+                            Жорсткий пріоритет
                         </button>
                     </div>
 
@@ -100,7 +100,7 @@ const AppModals = ({ modals, closeModal, data, fetchData, currentUser, distribut
                                     <Scale size={20} />
                                 </div>
                                 <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                                    <strong className="text-slate-800">Лексикографічний розподіл (Симплекс):</strong> забезпечує рівномірне та справедливе задоволення потреб усіх заявників.
+                                    <strong className="text-slate-800">Справедливий розподіл (Fairness):</strong> лексикографічна оптимізація (симплекс-метод) забезпечує рівномірне та справедливе задоволення потреб усіх заявників.
                                 </p>
                             </div>
                         )}
@@ -110,7 +110,7 @@ const AppModals = ({ modals, closeModal, data, fetchData, currentUser, distribut
                                     <GitFork size={20} />
                                 </div>
                                 <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                                    <strong className="text-slate-800">Розумна маршрутизація:</strong> стратегічні вантажі йдуть у Тріаж, а товари життєзабезпечення — у Справедливість.
+                                    <strong className="text-slate-800">Розумна маршрутизація:</strong> стратегічні ресурси розподіляються за жорстким пріоритетом (Тріаж), решта - за справедливим розподілом.
                                 </p>
                             </div>
                         )}
@@ -120,7 +120,7 @@ const AppModals = ({ modals, closeModal, data, fetchData, currentUser, distribut
                                     <Zap size={20} />
                                 </div>
                                 <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                                    <strong className="text-slate-800">Екстрений тріаж (Жадібний):</strong> спрямовує всі ресурси на 100% закриття заявок з найвищим пріоритетом.
+                                    <strong className="text-slate-800">Жорсткий розподіл за пріоритетом (Тріаж):</strong> усі ресурси спершу повністю закривають заявки з найвищим пріоритетом. У гібридному режимі діє лише для стратегічних ресурсів.
                                 </p>
                             </div>
                         )}

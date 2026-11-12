@@ -72,3 +72,7 @@ export { default as Sparkles } from 'lucide-react/dist/esm/icons/sparkles.js';
 export { default as Cpu } from 'lucide-react/dist/esm/icons/cpu.js';
 export { default as Sliders } from 'lucide-react/dist/esm/icons/sliders.js';
 export { default as Dna } from 'lucide-react/dist/esm/icons/dna.js';
+export { default as Baby } from 'lucide-react/dist/esm/icons/baby.js';
+export { default as Accessibility } from 'lucide-react/dist/esm/icons/accessibility.js';
+export { default as Tent } from 'lucide-react/dist/esm/icons/tent.js';
+export { default as Siren } from 'lucide-react/dist/esm/icons/siren.js';

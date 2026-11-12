@@ -6,7 +6,8 @@ import {
   Zap,
   MapPin,
   Package,
-  LayoutGrid
+  LayoutGrid,
+  GitFork
 } from '../../UI/icons';
 import { exportPlanToExcel } from '../../../utils/excelExport';
 import DistributionCard from './DistributionCard';
@@ -39,15 +40,35 @@ const DistributionPlan = ({ plan, purposeMap, strategy = 'fairness' }) => {
 
   if (!plan || !plan.items || plan.items.length === 0) return null;
 
-  // Змінні для динамічного стилювання шапки в залежності від алгоритму
-  const isTriage = strategy === 'triage';
-  const headerIcon = isTriage ? <Zap className="text-white" size={24} /> : <PieChart className="text-white" size={24} />;
-  const headerBgColor = isTriage ? 'bg-red-600 shadow-red-100' : 'bg-blue-600 shadow-blue-100';
-  const algorithmName = isTriage ? 'Алгоритм екстреного тріажу (Жорсткий пріоритет)' : 'Алгоритм лексикографічного розподілу (Fairness)';
-  const exportBtnColor = isTriage ? 'text-red-600' : 'text-blue-600';
+  // Оформлення шапки залежно від режиму, з яким був сформований план
+  const STRATEGY_VIEW = {
+    fairness: {
+      icon: <PieChart className="text-white" size={24} />,
+      bg: 'bg-blue-600 shadow-blue-100',
+      title: 'Справедливий розподіл (Fairness): рівномірне задоволення потреб усіх заявників',
+      accent: 'text-slate-500', exportBtn: 'text-blue-600', border: 'border-slate-200',
+    },
+    hybrid: {
+      icon: <GitFork className="text-white" size={24} />,
+      bg: 'bg-purple-600 shadow-purple-100',
+      title: 'Гібридний режим: стратегічні ресурси - жорсткий пріоритет, решта - справедливий розподіл',
+      accent: 'text-purple-600', exportBtn: 'text-purple-600', border: 'border-purple-100',
+    },
+    triage: {
+      icon: <Zap className="text-white" size={24} />,
+      bg: 'bg-red-600 shadow-red-100',
+      title: 'Жорсткий розподіл за пріоритетом (Тріаж): спершу повністю закриваються найпріоритетніші заявки',
+      accent: 'text-red-500', exportBtn: 'text-red-600', border: 'border-red-100',
+    },
+  };
+  const view = STRATEGY_VIEW[strategy] || STRATEGY_VIEW.fairness;
+  const headerIcon = view.icon;
+  const headerBgColor = view.bg;
+  const algorithmName = view.title;
+  const exportBtnColor = view.exportBtn;
 
   return (
-    <div className={`animate-fade-in-up bg-slate-50 rounded-2xl sm:rounded-3xl border-2 p-4 sm:p-6 md:p-8 mb-10 text-left space-y-6 ${isTriage ? 'border-red-100' : 'border-slate-200'}`}>
+    <div className={`animate-fade-in-up bg-slate-50 rounded-2xl sm:rounded-3xl border-2 p-4 sm:p-6 md:p-8 mb-10 text-left space-y-6 ${view.border}`}>
 
       {/* Шапка */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-6">
@@ -57,7 +78,7 @@ const DistributionPlan = ({ plan, purposeMap, strategy = 'fairness' }) => {
           </div>
           <div>
             <h3 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">Результати оптимізації розподілу</h3>
-            <p className={`text-xs font-normal uppercase tracking-widest ${isTriage ? 'text-red-500' : 'text-slate-500'}`}>
+            <p className={`text-xs font-normal uppercase tracking-widest ${view.accent}`}>
                 {algorithmName}
             </p>
           </div>

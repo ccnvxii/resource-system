@@ -4,7 +4,7 @@ import { ChevronDown } from './icons';
 /**
  * Випадаючий список з пошуком за словами.
  * options: [{ value, label }]
- * onChange отримує value (рядок) — як і звичайний <select>, але не event.
+ * onChange отримує value (рядок) - як і звичайний <select>, але не event.
  */
 const SearchableSelect = ({
     options = [],

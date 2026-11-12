@@ -13,5 +13,5 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         created = seed_extra_catalog(force_stock=False)
         self.stdout.write(self.style.SUCCESS(
-            "Додано: " + ", ".join(f"{k} — {v}" for k, v in created.items())
+            "Додано: " + ", ".join(f"{k} - {v}" for k, v in created.items())
         ))

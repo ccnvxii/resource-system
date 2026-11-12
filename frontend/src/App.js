@@ -12,13 +12,13 @@ import { useFetchData } from './hooks/useFetchData';
 import Header from './components/Layout/Header';
 import SidebarNav from './components/Layout/SidebarNav';
 import RequestList from './components/Features/Requests/RequestList';
+import StockTable from './components/Features/Stocks/StockTable';
 import ScrollToTop from './components/UI/ScrollToTop';
 import Landing from './components/Layout/Landing';
 
 // Ліниве завантаження важких внутрішніх модулів (завантажуються тільки після входу)
 const Dashboard = lazy(() => import('./components/Features/Analytics/Dashboard'));
 const AdminLogs = lazy(() => import('./components/Features/Analytics/AdminLogs'));
-const StockTable = lazy(() => import('./components/Features/Stocks/StockTable'));
 const DistributionPlan = lazy(() => import('./components/Features/Distribution/DistributionPlan'));
 const AppModals = lazy(() => import('./components/Features/Modals/AppModals'));
 const AuthModal = lazy(() => import('./components/Auth/Auth'));
@@ -28,6 +28,7 @@ function App() {
     const [isLandingMode, setIsLandingMode] = useState(() => localStorage.getItem('isLandingMode') !== 'false');
     const [loading, setLoading] = useState(false);
     const [plan, setPlan] = useState(null);
+    const [planStrategy, setPlanStrategy] = useState('hybrid'); // режим, з яким сформовано поточний план
     const [distributionStrategy, setDistributionStrategy] = useState('hybrid');
     const [activeAdminTab, setActiveAdminTab] = useState('stocks');
 
@@ -40,9 +41,9 @@ function App() {
         distribute: false
     });
 
-    const { data, fetchData } = useFetchData(currentUser);
+    const { data, fetchData, isLoading: isDataLoading } = useFetchData(currentUser);
 
-    // Публічна статистика для лендингу — доступна й без авторизації
+    // Публічна статистика для лендингу - доступна й без авторизації
     const [publicStats, setPublicStats] = useState({ stocks: 0, requests: 0, warehouses: 0 });
     useEffect(() => {
         if (!isLandingMode) return;
@@ -106,6 +107,7 @@ function App() {
             } else {
                 toast.success("План розподілу сформовано", { id: lid });
                 setPlan(Array.isArray(res.data) ? { items: res.data } : res.data);
+                setPlanStrategy(distributionStrategy);
             }
             await fetchData();
         } catch (e) {
@@ -206,7 +208,7 @@ function App() {
                     <div className={`grid gap-4 sm:gap-6 md:gap-8 ${currentUser?.is_admin ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
                         {currentUser?.is_admin && (
                             <div className={`w-full ${activeAdminTab === 'stocks' ? 'block' : 'hidden md:block'}`}>
-                                <Suspense fallback={null}><StockTable stocks={data.stocks} resourcesMap={data.resourcesMap} onRefresh={fetchData} /></Suspense>
+                                <StockTable stocks={data.stocks} resourcesMap={data.resourcesMap} onRefresh={fetchData} isLoading={isDataLoading} />
                             </div>
                         )}
                         <div className={`w-full ${currentUser?.is_admin && activeAdminTab !== 'requests' ? 'hidden md:block' : 'block'}`}>
@@ -216,6 +218,7 @@ function App() {
                                 onRefresh={fetchData}
                                 currentUser={currentUser}
                                 onDeleteRequest={handleDeleteRequest}
+                                isLoading={isDataLoading}
                             />
                         </div>
                     </div>
@@ -242,7 +245,7 @@ function App() {
                         </div>
 
                         {plan && (
-                            <Suspense fallback={null}><DistributionPlan plan={plan} purposeMap={data.purposeMap} strategy={distributionStrategy} /></Suspense>
+                            <Suspense fallback={null}><DistributionPlan plan={plan} purposeMap={data.purposeMap} strategy={planStrategy} /></Suspense>
                         )}
                     </div>
                 )}

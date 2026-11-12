@@ -1,10 +1,10 @@
 import React from 'react';
-import { Edit3, Warehouse, Trash2 } from '../../UI/icons';
+import { Edit3, Warehouse } from '../../UI/icons';
 
-const StockMobileCard = ({ stock, resource, onStartEdit, onDelete }) => {
+const StockMobileCard = ({ stock, resource, onStartEdit }) => {
     return (
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm transition-all hover:border-blue-200">
-            <div className="flex items-start justify-between gap-2.5">
+            <div className="flex items-center justify-between gap-2.5">
                 {/* Ліва колонка: Назва, категорія, склад */}
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-col items-start gap-1">
@@ -42,13 +42,6 @@ const StockMobileCard = ({ stock, resource, onStartEdit, onDelete }) => {
                                 aria-label="Редагувати кількість"
                             >
                                 <Edit3 size={15} />
-                            </button>
-                            <button
-                                onClick={() => onDelete && onDelete(stock)}
-                                className="p-2 bg-red-50 text-red-500 hover:bg-red-100 rounded-xl transition-colors active:scale-95 border border-red-100"
-                                aria-label="Видалити позицію зі складу"
-                            >
-                                <Trash2 size={15} />
                             </button>
                         </div>
                 </div>

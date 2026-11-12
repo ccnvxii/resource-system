@@ -1,5 +1,5 @@
 import React, {useState, useMemo, useEffect} from 'react';
-import {PackageSearch, Filter, ChevronUp, ChevronDown, Download, RotateCcw, Settings} from '../../UI/icons';
+import {PackageSearch, Filter, ChevronUp, ChevronDown, Download, RotateCcw, Settings, Trash2} from '../../UI/icons';
 import {exportResourcesToExcel} from '../../../utils/excelExport';
 import api from '../../../services/api';
 import { toast } from 'react-hot-toast';
@@ -7,16 +7,19 @@ import StockRow from './StockRow';
 import StockMobileCard from './StockMobileCard';
 import FilterSelect from '../../UI/FilterSelect';
 import Modal from '../../UI/Modal';
+import ConfirmModal from '../../UI/ConfirmModal';
 
 const INITIAL_ROWS_COUNT = 30;
 const MOBILE_STOCK_PAGE_SIZE = 6;
 
-const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
+const StockTable = ({stocks = [], resourcesMap = {}, onRefresh, isLoading = false}) => {
     const [filterCategory, setFilterCategory] = useState('all');
     const [filterWarehouse, setFilterWarehouse] = useState('all');
     const [sortOrder, setSortOrder] = useState('none');
     const [editingStock, setEditingStock] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [confirmStock, setConfirmStock] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [editValue, setEditValue] = useState("");
     const [visibleCount, setVisibleCount] = useState(INITIAL_ROWS_COUNT);
     const [mobilePage, setMobilePage] = useState(1);
@@ -69,6 +72,13 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
         setFilterCategory('all');
         setFilterWarehouse('all');
     };
+    const renderLoading = (padding) => (
+        <div className={`flex flex-col items-center justify-center text-center ${padding} text-slate-400`} role="status" aria-live="polite">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3"/>
+            <p className="text-xs font-medium uppercase tracking-widest">Завантаження запасів...</p>
+        </div>
+    );
+
     const renderEmpty = (padding) => (
         <div className={`flex flex-col items-center justify-center text-center ${padding} text-slate-400`}>
             <PackageSearch size={40} className="text-slate-200 mb-2"/>
@@ -83,21 +93,27 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                     </button>
                 </>
             ) : (
-                <p className="text-xs font-medium uppercase tracking-widest">Запасів не знайдено</p>
+                <p className="text-xs font-medium uppercase tracking-widest">Запасів поки немає</p>
             )}
         </div>
     );
 
-    const handleDelete = async (stock) => {
-        const name = resourcesMap[stock.resource]?.name || stock.resource_name || 'ресурс';
-        const ok = window.confirm(`Списати та видалити «${name}» (${stock.warehouse_name}) зі складу?\nКількість ${Math.round(Number(stock.amount))} буде втрачена. Дію не можна скасувати.`);
-        if (!ok) return;
+    // Запит на видалення: спочатку відкриваємо модальне підтвердження
+    const handleDelete = (stock) => setConfirmStock(stock);
+
+    const performDelete = async () => {
+        if (!confirmStock) return;
+        setIsDeleting(true);
         try {
-            await api.delete(`/stocks/${stock.id}/`);
+            await api.delete(`/stocks/${confirmStock.id}/`);
             toast.success('Позицію видалено зі складу');
+            setConfirmStock(null);
+            setEditingStock(null);
             if (onRefresh) onRefresh();
         } catch (e) {
             console.error(e);
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -118,7 +134,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
             if (roundedValue === 0) {
                 // Нульовий залишок = позицію списано: видаляємо її зі складу
                 await api.delete(`/stocks/${editingStock.id}/`);
-                toast.success("Залишок 0 — позицію списано зі складу");
+                toast.success("Залишок 0 - позицію списано зі складу");
             } else {
                 await api.patch(`/stocks/${editingStock.id}/update_amount/`, {amount: roundedValue});
             }
@@ -139,6 +155,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                     <div className="flex items-center gap-2 text-slate-800 min-w-0">
                         <PackageSearch size={22} className="text-blue-600 shrink-0"/>
                         <h2 className="text-base sm:text-lg font-bold truncate">Запаси на складах</h2>
+                        <span className="text-[11px] font-normal text-slate-400 shrink-0 whitespace-nowrap" title="Кількість позицій з урахуванням фільтрів">{sortedStocks.length} поз.</span>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
@@ -204,9 +221,9 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                 <table className="w-full text-sm text-left">
                     <thead className="bg-slate-50 sticky top-0 uppercase text-[10px] font-medium text-slate-400">
                     <tr>
-                        <th className="px-6 py-4">Склад</th>
-                        <th className="px-6 py-4">Ресурс</th>
-                        <th className="px-6 py-4 text-right">
+                        <th className="px-6 py-2">Склад</th>
+                        <th className="px-6 py-2">Ресурс</th>
+                        <th className="px-6 py-2 text-right">
                             <button
                                 onClick={toggleSort}
                                 className="inline-flex items-center gap-1.5 ml-auto hover:text-blue-600 transition-colors uppercase cursor-pointer select-none group"
@@ -220,7 +237,6 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                                 </span>
                             </button>
                         </th>
-                        <th className="w-10"></th>
                     </tr>
                     </thead>
                     <tbody>
@@ -234,12 +250,11 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                                 unit_name: '?'
                             }}
                             onStartEdit={openEdit}
-                            onDelete={handleDelete}
                         />
                     ))}
                     </tbody>
                 </table>
-                {visibleStocks.length === 0 && renderEmpty('py-24')}
+                {visibleStocks.length === 0 && (isLoading ? renderLoading('py-24') : renderEmpty('py-24'))}
             </div>
 
             {/* 2. Спеціальний мобільний формат: акуратні картки без скрол-трепу */}
@@ -256,7 +271,6 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                                     unit_name: '?'
                                 }}
                             onStartEdit={openEdit}
-                            onDelete={handleDelete}
                             />
                         ))}
                         {totalMobilePages > 1 && (
@@ -282,7 +296,7 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                         )}
                     </>
                 ) : (
-                    renderEmpty('py-10')
+                    (isLoading ? renderLoading('py-10') : renderEmpty('py-10'))
                 )}
             </div>
 
@@ -291,21 +305,21 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                 <div className="hidden md:block p-3 text-center border-t border-slate-100 bg-slate-50/50">
                     <button
                         onClick={() => setVisibleCount(prev => prev + 30)}
-                        className="text-xs font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors py-1.5 px-4 rounded-xl bg-blue-50 hover:bg-blue-100"
+                        className="text-xs font-semibold tracking-wide text-blue-600 hover:text-blue-800 transition-colors py-1.5 px-4 rounded-xl bg-blue-50 hover:bg-blue-100"
                     >
                         Показати ще (+30 з {sortedStocks.length})
                     </button>
                 </div>
             )}
 
-            {/* Модалка редагування — той самий формат, що й для заявок */}
+            {/* Модалка редагування - той самий формат, що й для заявок */}
             <Modal
                 isOpen={!!editingStock}
-                onClose={() => setEditingStock(null)}
+                onClose={() => { if (!confirmStock) setEditingStock(null); }}
                 title={editingStock ? `Редагування: ${resourcesMap[editingStock.resource]?.name || editingStock.resource_name}` : "Редагування запасу"}
                 subtitle="Конфігурація обсягів на складі"
                 icon={Settings}
-                maxWidth="max-w-md"
+                maxWidth="max-w-xl"
             >
                 {editingStock && (
                     <div className="space-y-6 text-left">
@@ -328,17 +342,32 @@ const StockTable = ({stocks = [], resourcesMap = {}, onRefresh}) => {
                         </div>
 
                         <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 justify-end pt-4 border-t border-slate-100">
+                            <button onClick={() => handleDelete(editingStock)}
+                                    className="w-full sm:w-auto sm:mr-auto whitespace-nowrap px-4 py-2.5 flex items-center justify-center gap-2 text-red-500 bg-red-50 hover:bg-red-100 rounded-xl font-semibold transition-colors text-sm">
+                                <Trash2 size={16}/> Видалити зі складу
+                            </button>
                             <button onClick={() => setEditingStock(null)}
-                                    className="w-full sm:w-auto px-5 py-2.5 text-slate-400 font-medium hover:text-slate-600 transition-colors text-sm">Скасувати
+                                    className="w-full sm:w-auto whitespace-nowrap px-5 py-2.5 text-slate-400 font-medium hover:text-slate-600 transition-colors text-sm">Скасувати
                             </button>
                             <button onClick={handleSaveEdit} disabled={isSaving}
-                                    className="w-full sm:w-auto px-8 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-slate-900 shadow-xl transition-all text-sm">
+                                    className="w-full sm:w-auto whitespace-nowrap px-7 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-slate-900 shadow-xl transition-all text-sm">
                                 {isSaving ? "ЗБЕРЕЖЕННЯ..." : "ЗБЕРЕГТИ ЗМІНИ"}
                             </button>
                         </div>
                     </div>
                 )}
             </Modal>
+
+            <ConfirmModal
+                isOpen={!!confirmStock}
+                title="Видалити позицію зі складу?"
+                message={confirmStock ? `«${resourcesMap[confirmStock.resource]?.name || confirmStock.resource_name}» (${confirmStock.warehouse_name})` : ''}
+                details={confirmStock ? `Кількість ${Math.round(Number(confirmStock.amount))} буде списано та втрачено.` : ''}
+                confirmText="Видалити"
+                loading={isDeleting}
+                onConfirm={performDelete}
+                onCancel={() => setConfirmStock(null)}
+            />
         </section>
     );
 };

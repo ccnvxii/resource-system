@@ -31,7 +31,7 @@ const saveRecentAddress = (entry) => {
         const rest = loadRecentAddresses().filter(a => a.key !== entry.key);
         localStorage.setItem(RECENT_ADDRESSES_KEY, JSON.stringify([entry, ...rest].slice(0, 3)));
     } catch (e) {
-        // localStorage недоступний — просто не зберігаємо
+        // localStorage недоступний - просто не зберігаємо
     }
 };
 
@@ -385,7 +385,7 @@ const RequestForm = ({
 
             {/* 1. СТРУКТУРНИЙ БЛОК: АДМІНІСТРУВАННЯ ТА ТЕРМІНОВІСТЬ */}
             <div className="grid grid-cols-1 gap-4">
-                {/* ЗАЯВНИК — Тільки для admin */}
+                {/* ЗАЯВНИК - Тільки для admin */}
                 {currentUser?.is_admin && (
                     <div className="bg-blue-50/40 p-5 rounded-2xl border border-blue-100 shadow-sm flex flex-col justify-between gap-3">
                         <label
@@ -454,7 +454,7 @@ const RequestForm = ({
 
                 {recentAddresses.length > 0 && (
                     <div className="space-y-1.5">
-                        <p className="text-[9px] font-medium uppercase text-slate-500 ml-1">Останні адреси — швидкий вибір</p>
+                        <p className="text-[9px] font-medium uppercase text-slate-500 ml-1">Останні адреси - швидкий вибір</p>
                         <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
                             {recentAddresses.map(a => (
                                 <button

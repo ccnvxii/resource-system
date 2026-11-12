@@ -1,15 +1,16 @@
 import React, {useState, useMemo, useEffect} from 'react';
-import {ListChecks, Filter, Package, Inbox, RotateCcw, Settings, RefreshCw, Download} from '../../UI/icons';
+import {ListChecks, Filter, Package, Inbox, RotateCcw, Settings, RefreshCw, Download, Trash2} from '../../UI/icons';
 import {exportRequestsToExcel} from '../../../utils/excelExport';
 import api, {extractErrorMessage} from '../../../services/api';
 import {toast} from 'react-hot-toast';
 import Modal from '../../UI/Modal';
+import ConfirmModal from '../../UI/ConfirmModal';
 import RequestCard from './RequestCard';
 import FilterSelect from '../../UI/FilterSelect';
 
 const MOBILE_PAGE_SIZE = 5;
 
-const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, onDeleteRequest}) => {
+const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, onDeleteRequest, isLoading = false}) => {
     const [requestTab, setRequestTab] = useState('active');
     const [statusFilter, setStatusFilter] = useState('all');
     const [resourceFilter, setResourceFilter] = useState('all');
@@ -19,6 +20,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
     const [editQuantity, setEditQuantity] = useState("");
     const [editAutoExtend, setEditAutoExtend] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [confirmReq, setConfirmReq] = useState(null);
     const [visibleCount, setVisibleCount] = useState(25);
     const [mobilePage, setMobilePage] = useState(1);
 
@@ -34,12 +36,17 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
         });
     }, [requests, requestTab, statusFilter, resourceFilter]);
 
+    // Запит на видалення: спочатку відкриваємо модальне підтвердження
     const handleDeleteClick = (req) => {
         if (!onDeleteRequest) return;
-        if (window.confirm(`Видалити заявку «${req.resource_name}» (${req.user_full_name || req.username || "користувач"})?
-Дію не можна скасувати.`)) {
-            onDeleteRequest(req.id);
-        }
+        setConfirmReq(req);
+    };
+
+    const performDeleteRequest = () => {
+        if (!confirmReq) return;
+        onDeleteRequest(confirmReq.id);
+        setConfirmReq(null);
+        setIsModalOpen(false);
     };
 
     const hasActiveFilters = requestTab === 'active' && (statusFilter !== 'all' || resourceFilter !== 'all');
@@ -47,6 +54,13 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
         setStatusFilter('all');
         setResourceFilter('all');
     };
+    const renderLoading = (iconSize, padding) => (
+        <div className={`flex flex-col items-center justify-center text-center ${padding} text-slate-400`} role="status" aria-live="polite">
+            <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3"/>
+            <p className="text-xs font-medium uppercase tracking-widest">Завантаження заявок...</p>
+        </div>
+    );
+
     const renderEmpty = (iconSize, padding) => (
         <div className={`flex flex-col items-center justify-center text-center ${padding} text-slate-400`}>
             <Inbox size={iconSize} className="text-slate-200 mb-2"/>
@@ -61,7 +75,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
                     </button>
                 </>
             ) : (
-                <p className="text-xs font-medium uppercase tracking-widest">Немає заявок</p>
+                <p className="text-xs font-medium uppercase tracking-widest">Заявок поки немає</p>
             )}
         </div>
     );
@@ -83,7 +97,8 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
     }, [displayedRequests, mobilePage]);
 
     const handleOpenModal = (req) => {
-        if (req.status === 'done') return;
+        // Виконані заявки може відкривати лише адміністратор (щоб видалити з архіву)
+        if (req.status === 'done' && !isAdmin) return;
         setSelectedReq(req);
         setEditQuantity(Math.round(req.quantity_requested).toString());
         setEditAutoExtend(req.auto_extend !== false);
@@ -119,6 +134,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
                     <div className="flex items-center gap-2 text-slate-800">
                         <ListChecks size={22} className="text-blue-600"/>
                         <h2 className="text-base sm:text-lg font-bold">Черга заявок</h2>
+                        <span className="text-[11px] font-normal text-slate-400 whitespace-nowrap" title="Кількість заявок з урахуванням вкладки та фільтрів">{displayedRequests.length} заяв.</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                     {isAdmin && (
@@ -199,7 +215,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
                     <>
                         {mobileVisibleRequests.map((req) => (
                             <RequestCard key={req.id} req={req} purposeMap={purposeMap} isAdmin={isAdmin}
-                                         onOpenModal={handleOpenModal} onDelete={handleDeleteClick}/>
+                                         onOpenModal={handleOpenModal}/>
                         ))}
                         {totalMobilePages > 1 && (
                             <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs font-medium text-slate-500 select-none">
@@ -224,7 +240,7 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
                         )}
                     </>
                 ) : (
-                    renderEmpty(40, 'py-10')
+                    (isLoading ? renderLoading(40, 'py-10') : renderEmpty(40, 'py-10'))
                 )}
             </div>
 
@@ -234,13 +250,13 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
                     <>
                         {visibleRequests.map((req) => (
                             <RequestCard key={req.id} req={req} purposeMap={purposeMap} isAdmin={isAdmin}
-                                         onOpenModal={handleOpenModal} onDelete={handleDeleteClick}/>
+                                         onOpenModal={handleOpenModal}/>
                         ))}
                         {displayedRequests.length > visibleCount && (
                             <div className="pt-2 text-center">
                                 <button
                                     onClick={() => setVisibleCount(prev => prev + 25)}
-                                    className="text-xs font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-800 transition-colors py-2 px-5 rounded-xl bg-blue-50 hover:bg-blue-100"
+                                    className="text-xs font-semibold tracking-wide text-blue-600 hover:text-blue-800 transition-colors py-2 px-5 rounded-xl bg-blue-50 hover:bg-blue-100"
                                 >
                                     Показати ще (+25 з {displayedRequests.length})
                                 </button>
@@ -248,18 +264,18 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
                         )}
                     </>
                 ) : (
-                    renderEmpty(48, 'py-24')
+                    (isLoading ? renderLoading(48, 'py-24') : renderEmpty(48, 'py-24'))
                 )}
             </div>
 
             {/* Модалка редагування */}
             <Modal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => { if (!confirmReq) setIsModalOpen(false); }}
                 title={selectedReq ? `Редагування: ${selectedReq.resource_name}` : "Редагування запиту"}
                 subtitle="Конфігурація обсягів та параметрів дефіциту"
                 icon={Settings}
-                maxWidth="max-w-md"
+                maxWidth="max-w-xl"
             >
                 {selectedReq && (
                     <div className="space-y-6 text-left">
@@ -271,8 +287,9 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
                                 type="text"
                                 inputMode="numeric"
                                 value={editQuantity}
+                                disabled={selectedReq.status === 'done'}
                                 onChange={(e) => setEditQuantity(e.target.value.replace(/[^0-9]/g, ''))}
-                                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-lg text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20"
+                                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-lg text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-100 disabled:text-slate-400"
                             />
                         </div>
 
@@ -299,17 +316,35 @@ const RequestList = ({requests = [], purposeMap = {}, onRefresh, currentUser, on
                         </div>
 
                         <div className="flex flex-col-reverse sm:flex-row gap-2.5 sm:gap-3 justify-end pt-4 border-t border-slate-100">
+                            {onDeleteRequest && (
+                                <button onClick={() => handleDeleteClick(selectedReq)}
+                                        className="w-full sm:w-auto sm:mr-auto whitespace-nowrap px-4 py-2.5 flex items-center justify-center gap-2 text-red-500 bg-red-50 hover:bg-red-100 rounded-xl font-semibold transition-colors text-sm">
+                                    <Trash2 size={16}/> Видалити заявку
+                                </button>
+                            )}
                             <button onClick={() => setIsModalOpen(false)}
-                                    className="w-full sm:w-auto px-5 py-2.5 text-slate-400 font-medium hover:text-slate-600 transition-colors text-sm">Скасувати
+                                    className="w-full sm:w-auto whitespace-nowrap px-5 py-2.5 text-slate-400 font-medium hover:text-slate-600 transition-colors text-sm">{selectedReq.status === 'done' ? 'Закрити' : 'Скасувати'}
                             </button>
-                            <button onClick={handleSaveChanges} disabled={isSaving}
-                                    className="w-full sm:w-auto px-8 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-slate-900 shadow-xl transition-all text-sm">
-                                {isSaving ? "ЗБЕРЕЖЕННЯ..." : "ЗБЕРЕГТИ ЗМІНИ"}
-                            </button>
+                            {selectedReq.status !== 'done' && (
+                                <button onClick={handleSaveChanges} disabled={isSaving}
+                                        className="w-full sm:w-auto whitespace-nowrap px-7 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-slate-900 shadow-xl transition-all text-sm">
+                                    {isSaving ? "ЗБЕРЕЖЕННЯ..." : "ЗБЕРЕГТИ ЗМІНИ"}
+                                </button>
+                            )}
                         </div>
                     </div>
                 )}
             </Modal>
+
+            <ConfirmModal
+                isOpen={!!confirmReq}
+                title="Видалити заявку?"
+                message={confirmReq ? `«${confirmReq.resource_name}» (${confirmReq.user_full_name || confirmReq.username || 'користувач'})` : ''}
+                details={confirmReq ? `Запитувана кількість: ${Math.round(Number(confirmReq.quantity_requested))}. Заявку буде видалено остаточно.` : ''}
+                confirmText="Видалити"
+                onConfirm={performDeleteRequest}
+                onCancel={() => setConfirmReq(null)}
+            />
         </section>
     );
 };

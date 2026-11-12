@@ -125,7 +125,7 @@ SPECTACULAR_SETTINGS = {
 }
 
 # --- EMAIL (відновлення пароля) ---
-# Якщо EMAIL_HOST не задано — листи друкуються в консоль/логи сервера (зручно для розробки).
+# Якщо EMAIL_HOST не задано - листи друкуються в консоль/логи сервера (зручно для розробки).
 EMAIL_HOST = config('EMAIL_HOST', default='')
 if EMAIL_HOST:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -136,7 +136,7 @@ if EMAIL_HOST:
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 def _clean_from_email(value, fallback):
-    """Повертає коректний рядок "Ім'я <email>", інакше — запасний адрес (логін SMTP)."""
+    """Повертає коректний рядок "Ім'я <email>", інакше - запасний адрес (логін SMTP)."""
     from email.utils import parseaddr
     from django.core.validators import validate_email
     from django.core.exceptions import ValidationError
@@ -148,7 +148,7 @@ def _clean_from_email(value, fallback):
         return fallback or 'ResQ System <no-reply@resq.ua>'
 
 
-# Пароль додатка Google часто копіюють з пробілами ("abcd efgh ...") — прибираємо їх
+# Пароль додатка Google часто копіюють з пробілами ("abcd efgh ...") - прибираємо їх
 if EMAIL_HOST:
     EMAIL_HOST_PASSWORD = EMAIL_HOST_PASSWORD.replace(' ', '')
 

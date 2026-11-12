@@ -126,7 +126,7 @@ class UserRequestViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = UserRequest.objects.select_related('user', 'resource__unit', 'purpose')
-        # Звичайний користувач бачить і змінює лише власні заявки; адміністратор — усі
+        # Звичайний користувач бачить і змінює лише власні заявки; адміністратор - усі
         if self.request.user.is_staff:
             return qs
         return qs.filter(user=self.request.user)
@@ -489,11 +489,11 @@ class PasswordResetRequestView(APIView):
             }, PASSWORD_RESET_TTL)
             try:
                 send_mail(
-                    subject="ResQ System — код для скидання пароля",
+                    subject="ResQ System - код для скидання пароля",
                     message=(
                         f"Ваш код для скидання пароля: {code}\n\n"
                         f"Код дійсний {PASSWORD_RESET_TTL // 60} хвилин. "
-                        f"Якщо ви не запитували скидання — просто проігноруйте цей лист."
+                        f"Якщо ви не запитували скидання - просто проігноруйте цей лист."
                     ),
                     from_email=None,
                     recipient_list=[user.email],
@@ -504,7 +504,7 @@ class PasswordResetRequestView(APIView):
                 logging.getLogger(__name__).exception("Не вдалося надіслати лист зі скиданням пароля")
                 cache.delete(key)
                 return Response(
-                    {"error": "Не вдалося надіслати лист. Пошту на сервері не налаштовано або вона недоступна — зверніться до адміністратора."},
+                    {"error": "Не вдалося надіслати лист. Пошту на сервері не налаштовано або вона недоступна - зверніться до адміністратора."},
                     status=503,
                 )
 

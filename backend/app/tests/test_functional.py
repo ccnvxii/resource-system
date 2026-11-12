@@ -121,7 +121,7 @@ class FunctionalAndIntegrationTests(APITestCase):
     # --- МОДУЛЬ 2: ВАЛІДАЦІЯ ВХІДНИХ ДАНИХ (ТЕСТИ 3–5) ---
 
     def test_3_request_validation_rejects_negative_amounts(self):
-        """Функціональний тест 3: Валідація форм — відхилення невалідних або від'ємних обсягів"""
+        """Функціональний тест 3: Валідація форм - відхилення невалідних або від'ємних обсягів"""
         payload = {
             'resource': self.resource.id,
             'quantity_requested': -15,
@@ -133,7 +133,7 @@ class FunctionalAndIntegrationTests(APITestCase):
         self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY])
 
     def test_4_boundary_validation_nonexistent_resource(self):
-        """Функціональний тест 4: Гранична валідація зв'язків — передача неіснуючого ID ресурсу"""
+        """Функціональний тест 4: Гранична валідація зв'язків - передача неіснуючого ID ресурсу"""
         payload = {
             'resource': 999999,
             'quantity_requested': 10,
@@ -145,7 +145,7 @@ class FunctionalAndIntegrationTests(APITestCase):
         self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY, status.HTTP_404_NOT_FOUND])
 
     def test_5_due_date_validation_rejects_past_dates(self):
-        """Функціональний тест 5: Валідація дедлайну — заборона вибору дати у минулому"""
+        """Функціональний тест 5: Валідація дедлайну - заборона вибору дати у минулому"""
         past_date = date.today() - timedelta(days=2)
         payload = {
             'resource': self.resource.id,
@@ -158,7 +158,7 @@ class FunctionalAndIntegrationTests(APITestCase):
         response = self.client.post(self.requests_url, payload, format='json')
         self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY])
 
-    # --- МОДУЛЬ 3: ЖИТТЄВИЙ ЦИКЛ УСІХ СУТНОСТЕЙ — CRUD (ТЕСТИ 6–14) ---
+    # --- МОДУЛЬ 3: ЖИТТЄВИЙ ЦИКЛ УСІХ СУТНОСТЕЙ - CRUD (ТЕСТИ 6–14) ---
 
     def test_6_crud_unit_entity(self):
         """Функціональний тест 6: CRUD-цикл сутності Unit (Одиниці виміру)"""
@@ -271,7 +271,7 @@ class FunctionalAndIntegrationTests(APITestCase):
     # --- МОДУЛЬ 4: БІЗНЕС-ЛОГІКА ТА РОЗШИРЕНІ СЦЕНАРІЇ (ТЕСТИ 15–19) ---
 
     def test_15_request_business_logic_exceeding_stock(self):
-        """Функціональний тест 15: Бізнес-логіка — реєстрація дефіцитного запиту (перевищення запасів)"""
+        """Функціональний тест 15: Бізнес-логіка - реєстрація дефіцитного запиту (перевищення запасів)"""
         excessive_payload = {
             "resource": self.resource.id,
             "quantity_requested": 5000,

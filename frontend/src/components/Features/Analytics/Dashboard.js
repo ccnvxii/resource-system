@@ -17,7 +17,7 @@ const useWindowWidth = () => {
 };
 
 const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
-  // На телефонах (< 768px) за замовчуванням приховано, на комп'ютері — розкрито
+  // На телефонах (< 768px) за замовчуванням приховано, на комп'ютері - розкрито
   const [isVisible, setIsVisible] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 768 : false));
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 640;
@@ -95,7 +95,7 @@ const Dashboard = ({ stocks = [], requests = [], resourcesMap = {} }) => {
     const isZero = itemData ? itemData.isZero : false;
     const fullName = payload.value;
 
-    // На мобільних — коротші рядки (7 символів), на десктопі — 11
+    // На мобільних - коротші рядки (7 символів), на десктопі - 11
     const maxChars = isMobile ? 7 : 11;
     const tickFontSize = isMobile ? 8 : 10;
 

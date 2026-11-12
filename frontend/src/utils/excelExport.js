@@ -14,7 +14,7 @@ const formatExcelDate = (dateString) => {
 export const exportPlanToExcel = async (plan, strategy = 'hybrid') => {
   if (!plan || !plan.items || plan.items.length === 0) return;
 
-  // Динамічний імпорт xlsx — виключає важку бібліотеку з головного бандлу
+  // Динамічний імпорт xlsx - виключає важку бібліотеку з головного бандлу
   const XLSX = await import('xlsx');
 
   const dataToExport = plan.items.map(item => {

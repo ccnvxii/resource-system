@@ -9,7 +9,7 @@ import Modal from '../UI/Modal';
 
 const nameRegex = /^[\p{L}\s'-]+$/u;
 
-// Маска телефона: +380 (XX) XXX-XX-XX — приймає лише цифри
+// Маска телефона: +380 (XX) XXX-XX-XX - приймає лише цифри
 const phoneDigits = (v) => (v || '').replace(/\D/g, '');
 
 const formatPhone = (raw) => {
@@ -124,7 +124,7 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
                     password: data.password
                 });
 
-                // Не показуємо тост тут — App.js вже очистить тости та покаже одне "Вітаємо, ..."
+                // Не показуємо тост тут - App.js вже очистить тости та покаже одне "Вітаємо, ..."
                 onSuccess({username: data.identifier, email: data.identifier}, response.data);
             } else {
                 // --- РЕЄСТРАЦІЯ ---
@@ -216,7 +216,7 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
         setIsSendingReset(true);
         try {
             await axios.post('/api/password-reset/', {email});
-            toast.success("Якщо акаунт існує — код надіслано на вашу пошту");
+            toast.success("Якщо акаунт існує - код надіслано на вашу пошту");
             setResetStep(2);
             setCooldown(60);
         } catch (e) {
@@ -270,7 +270,7 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
         } catch (e) {
             const msg = errText(e, "Не вдалося змінити пароль");
             toast.error(msg);
-            // Якщо код вже недійсний — повертаємо на крок введення коду
+            // Якщо код вже недійсний - повертаємо на крок введення коду
             if (/Код недійсний|спроб/.test(msg)) {
                 setResetCode('');
                 setResetStep(2);
@@ -365,7 +365,7 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
                             <span className="text-[9px] text-red-500 font-bold">{errors.password.message}</span>}
                     </div>
 
-                    {/* Посилання "Забули пароль?" — тільки для форми входу */}
+                    {/* Посилання "Забули пароль?" - тільки для форми входу */}
                     {isLogin && (
                         <div className="text-right -mt-2">
                             <button
@@ -403,7 +403,7 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
                 isOpen={showForgotModal}
                 onClose={closeForgotModal}
                 title="Скидання пароля"
-                subtitle={resetStep === 1 ? "Крок 1 з 3 — підтвердження пошти" : resetStep === 2 ? "Крок 2 з 3 — код з листа" : "Крок 3 з 3 — новий пароль"}
+                subtitle={resetStep === 1 ? "Крок 1 з 3 - підтвердження пошти" : resetStep === 2 ? "Крок 2 з 3 - код з листа" : "Крок 3 з 3 - новий пароль"}
                 icon={Lock}
             >
                 {resetStep === 1 ? (
@@ -439,7 +439,7 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
                 ) : resetStep === 2 ? (
                     <div className="space-y-5 text-left">
                         <p className="text-sm text-slate-500 leading-relaxed">
-                            Код надіслано на <b className="text-slate-700">{forgotEmail}</b>. Він дійсний 10 хвилин. Якщо листа немає — перевірте «Спам» і правильність пошти.
+                            Код надіслано на <b className="text-slate-700">{forgotEmail}</b>. Він дійсний 10 хвилин. Якщо листа немає - перевірте «Спам» і правильність пошти.
                         </p>
                         <div>
                             <label className="text-[10px] font-semibold uppercase text-slate-400 ml-1">Код з листа</label>
@@ -546,7 +546,7 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
                     <div className="border-t border-slate-100 pt-4">
                         <h5 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Можна не чекати</h5>
                         <p className="text-sm text-slate-600 leading-relaxed">
-                            Напишіть адміністратору самостійно та прикріпіть підтверджуючі документи — це прискорить перевірку:
+                            Напишіть адміністратору самостійно та прикріпіть підтверджуючі документи - це прискорить перевірку:
                         </p>
                         <a
                             href={adminMailto}
@@ -580,7 +580,7 @@ const AuthModal = ({isOpen, onClose, onSuccess}) => {
                     <div className="bg-amber-50 border-2 border-amber-100 p-4 rounded-2xl">
                         <h4 className="font-bold text-amber-900 text-base">Ваш обліковий запис ще не підтверджено адміністратором.</h4>
                         <p className="text-xs text-amber-700 mt-2 leading-relaxed">
-                            Вхід стане доступним після перевірки. Якщо ви ще не надсилали документи, що підтверджують вашу організацію, —
+                            Вхід стане доступним після перевірки. Якщо ви ще не надсилали документи, що підтверджують вашу організацію, -
                             напишіть адміністратору, і він прискорить підтвердження.
                         </p>
                     </div>
