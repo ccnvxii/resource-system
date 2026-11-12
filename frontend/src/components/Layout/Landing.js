@@ -4,7 +4,9 @@ import {
     Zap,
     BarChart3,
     ArrowRight,
-    ClipboardCheck
+    ClipboardCheck,
+    Scale,
+    GitFork
 } from '../UI/icons';
 
 const Landing = ({onEnter, stats}) => {
@@ -39,17 +41,13 @@ const Landing = ({onEnter, stats}) => {
             <header className="relative pt-16 pb-32 overflow-hidden">
                 <div className="max-w-7xl mx-auto px-8 grid lg:grid-cols-2 gap-12 items-center">
                     <div className="relative z-10">
-            <span
-                className="inline-block px-4 py-1.5 bg-blue-50 text-blue-600 rounded-full text-xs font-black uppercase tracking-widest mb-6 border border-blue-100">
-              Humanitarian Response v3.0
-            </span>
                         <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black text-slate-900 leading-[1.15] mb-6">
-                            Справедливий <br/>
+                            Прозорий <br/>
                             <span className="text-blue-600">розподіл</span> допомоги.
                         </h1>
                         <p className="text-lg text-slate-500 max-w-lg mb-10 leading-relaxed">
                             Інтелектуальна система підтримки прийняття рішень для розподілу гуманітарних ресурсів в
-                            Україні на основі матриці пріоритетів та Weighted Max-Min Fairness.
+                            Україні на основі матриці пріоритетів та двох алгоритмів оптимізації: справедливого розподілу і жорсткого розподілу за пріоритетом.
                         </p>
                         <div className="flex flex-wrap gap-4">
                             <button
@@ -182,14 +180,46 @@ const Landing = ({onEnter, stats}) => {
                 <div className="max-w-7xl mx-auto px-8 relative z-10">
                     <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-6">
                         <div className="max-w-xl">
-                            <h2 className="text-4xl font-black mb-6">Алгоритм справедливості</h2>
+                            <h2 className="text-4xl font-black mb-6">Алгоритми розподілу</h2>
                             <p className="text-slate-400 font-medium">Ми автоматизували процес прийняття рішень, щоб
-                                виключити корупцію та помилки при розподілі ресурсів.</p>
+                                виключити корупцію та помилки при розподілі ресурсів. Оберіть режим під ситуацію: справедливий,
+                                жорсткий за пріоритетом або гібридний.</p>
                         </div>
                         <div className="hidden md:block">
                             <span
                                 className="text-[100px] font-black text-white/5 leading-none select-none">STEP-BY-STEP</span>
                         </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-3 gap-6 mb-16">
+                        {[
+                            {
+                                icon: <Scale className="text-blue-400" size={22}/>,
+                                accent: "border-blue-500/30 bg-blue-500/5",
+                                title: "Справедливий",
+                                desc: "Рівномірне задоволення потреб усіх заявників з урахуванням пріоритету."
+                            },
+                            {
+                                icon: <GitFork className="text-purple-400" size={22}/>,
+                                accent: "border-purple-500/30 bg-purple-500/5",
+                                title: "Гібридний",
+                                desc: "Стратегічні ресурси розподіляються за жорстким пріоритетом, решта - за справедливим розподілом."
+                            },
+                            {
+                                icon: <Zap className="text-red-400" size={22}/>,
+                                accent: "border-red-500/30 bg-red-500/5",
+                                title: "Жорсткий пріоритет",
+                                desc: "Спершу повністю закриваються найпріоритетніші заявки, решта отримує залишок."
+                            }
+                        ].map((m, i) => (
+                            <div key={i} className={`p-6 rounded-2xl border ${m.accent}`}>
+                                <div className="flex items-center gap-3 mb-3">
+                                    {m.icon}
+                                    <h3 className="text-lg font-bold">{m.title}</h3>
+                                </div>
+                                <p className="text-slate-400 text-sm leading-relaxed">{m.desc}</p>
+                            </div>
+                        ))}
                     </div>
 
                     <div className="grid md:grid-cols-4 gap-12">
@@ -206,8 +236,8 @@ const Landing = ({onEnter, stats}) => {
                             },
                             {
                                 step: "03",
-                                title: "Max-Min Розрахунок",
-                                desc: "Алгоритм обчислює оптимальну частку для кожного запиту при дефіциті."
+                                title: "Розрахунок розподілу",
+                                desc: "Залежно від режиму: справедлива частка для кожного запиту або жорсткий пріоритет для стратегічних ресурсів."
                             },
                             {
                                 step: "04",
@@ -243,7 +273,11 @@ const Landing = ({onEnter, stats}) => {
                             },
                             {
                                 q: "Як система бореться з дефіцитом?",
-                                a: "Якщо товару менше, ніж загальний запит, вмикається алгоритм розподілу Weighted Max-Min Fairness, який задовольняє мінімальні потреби кожного згідно з пріоритетом."
+                                a: "Якщо товару менше, ніж загальний запит, адміністратор обирає режим: справедливий розподіл рівномірно задовольняє потреби згідно з пріоритетом, а жорсткий розподіл спершу повністю закриває найпріоритетніші заявки."
+                            },
+                            {
+                                q: "Які режими розподілу доступні?",
+                                a: "Три: «Справедливий» - рівномірне задоволення потреб усіх заявників; «Жорсткий пріоритет» - найпріоритетніші заявки закриваються першими; «Гібридний» - стратегічні ресурси йдуть за жорстким пріоритетом, решта - за справедливим розподілом."
                             },
                             {
                                 q: "Чи можна змінити рішення системи вручну?",
