@@ -25,7 +25,9 @@ from app.optimizer.distribute import (
 from app.tests.helpers import (
     EuclidRouting, FakeFront, FlatRouting, allocated_by_request, check_invariants, random_instance,
 )
-from app.utils import calculate_front_multiplier, calculate_request_priority, calculate_time_multiplier
+from app.utils import (
+    calculate_front_multiplier, calculate_request_priority, calculate_time_multiplier, priority_to_display,
+)
 
 KM_PER_DEG_LAT = 111.19
 FRONT_POINT = (50.0, 36.0)
@@ -85,13 +87,15 @@ class PriorityModelTests(TestCase):
         self.assertAlmostEqual(calculate_request_priority(0.8, 0.6, lat, lon, day(5), 2), round(expected, 3), places=3)
         self.assertGreater(calculate_request_priority(1.0, 0.5, lat, lon, day(5), 0),
                            calculate_request_priority(0.6, 0.5, lat, lon, day(5), 0))   # вага призначення
+        self.assertEqual((priority_to_display(0.22), priority_to_display(0.65), priority_to_display(1.0)), (2.2, 6.5, 10.0))
+        self.assertEqual((priority_to_display(0.1), priority_to_display(0.03), priority_to_display(None)), (1.0, 1.0, 1.0))   # нижня межа 1
         for purpose in (0.0, 0.5, 1.0):
             for km in (0, 150, 1000):
                 for days in (-5, 0, 7, 100):
                     for ext in (0, 3, 20):
                         la, lo = point_at_km(km)
                         p = calculate_request_priority(purpose, purpose, la, lo, day(days), ext)
-                        self.assertTrue(0.025 <= p <= 1.0, (purpose, km, days, ext, p))
+                        self.assertTrue(0.1 <= p <= 1.0, (purpose, km, days, ext, p))
 
     def test_04_deadline_and_extension_effect(self):
         """Строк і продовження: ближчий дедлайн підвищує пріоритет, продовження знижує (штраф до 0.05)"""
