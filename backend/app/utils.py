@@ -18,11 +18,6 @@ def priority_to_display(priority):
     return round(DISPLAY_PRIORITY_MIN + p * (DISPLAY_PRIORITY_MAX - DISPLAY_PRIORITY_MIN), 1)
 
 
-def priority_level(priority, levels=10):
-    """Ціле «відро» пріоритету 0..levels для жорсткого розподілу (Тріаж)."""
-    return int(round(max(0.0, min(1.0, float(priority))) * levels, 6))
-
-
 def calculate_front_multiplier(user_lat, user_lon):
     """
     СППР-модель динамічної гео-пріоритезації

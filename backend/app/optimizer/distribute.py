@@ -1,6 +1,5 @@
 import numpy as np
 from ..services import DistanceMatrixService
-from ..utils import priority_level
 
 
 # -----------------------------
@@ -80,9 +79,7 @@ def discretize_with_greedy_remainders(exact_distribution, stocks, requests_list)
         for j in range(n_req):
             fraction = exact_distribution[i, j] - np.floor(exact_distribution[i, j])
             if fraction > 0.001:
-                # пріоритет [0; 1] має вищу вагу, ніж дробова частка (вона менша за 0.1 пріоритетного кроку)
-                score = requests_list[j]['priority'] + fraction / 10.0
-                remainder_candidates.append((score, i, j))
+                remainder_candidates.append(((requests_list[j]['priority'], fraction), i, j))
 
     remainder_candidates.sort(key=lambda x: x[0], reverse=True)
 
@@ -371,13 +368,12 @@ def calculate_strict_priority(requests, stocks, routing_service=None):
 
         dist_matrix = build_distance_matrix(s_sub, r_sub, routing_service)
 
-        for p in range(10, -1, -1):
+        # Групи заявок з однаковим пріоритетом [0; 1], від найвищого до найнижчого
+        for level in sorted({float(r['priority']) for r in r_sub}, reverse=True):
             if sum(stock_available.values()) == 0:
                 break
 
-            p_requests = [r for r in r_sub if priority_level(r['priority']) == p]
-            if not p_requests:
-                continue
+            p_requests = [r for r in r_sub if float(r['priority']) == level]
 
             needs_dist_recalc = True
 
