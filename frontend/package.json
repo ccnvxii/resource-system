@@ -37,6 +37,16 @@
     ],
     "rules": {}
   },
+  "jest": {
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(lucide-react)/)"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/index.js",
+      "!src/__tests__/**"
+    ]
+  },
   "browserslist": {
     "production": [
       ">0.2%",

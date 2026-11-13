@@ -50,7 +50,7 @@ def calculate_scipy_distribution(requests, stocks):
             row = np.zeros(n_vars)
             for i in range(n_stk):
                 row[i * n_req + j] = -1.0
-            weight = (r_sub[j]['amount_needed'] * r_sub[j]['priority']) / 10.0
+            weight = r_sub[j]['amount_needed'] * r_sub[j]['priority']      # пріоритет у шкалі [0; 1]
             row[-1] = weight
             A_ub.append(row)
             b_ub.append(0.0)

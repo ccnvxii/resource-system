@@ -7,6 +7,7 @@ from .models import (
     Resource, Warehouse, Stock, UserRequest, Category,
     DistributionPlan, DistributionItem, Unit, RequestPurpose, UserProfile
 )
+from .utils import priority_to_display
 
 class UnitSerializer(serializers.ModelSerializer):
     """Серіалізатор для довідника одиниць виміру (кг, шт, л)"""
@@ -53,6 +54,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             'password': {'write_only': True},
             'email': {'required': True}
         }
+
+    def validate_password(self, value):
+        # Політика паролів: мінімум 8 символів, не з поширених та не лише з цифр
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages))
+        return value
 
     def validate_email(self, value):
         # Формат уже перевірено EmailField; тут - унікальність без урахування регістру
@@ -143,11 +154,8 @@ class UserRequestSerializer(serializers.ModelSerializer):
         return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
 
     def get_priority(self, obj):
-        if obj.priority is None:
-            return 0.0
-        val = float(obj.priority)
-        # В БД зберігається [0.0 - 1.0], для фронтенду і відображення виводимо [0.0 - 10.0]
-        return round(val * 10.0, 1) if val <= 1.0 else round(val, 1)
+        # В БД та в алгоритмах пріоритет у шкалі [0; 1], в інтерфейс виводиться [1; 10]
+        return priority_to_display(obj.priority)
 
     def get_priority_score(self, obj):
         return self.get_priority(obj)
@@ -232,10 +240,9 @@ class DistributionItemSerializer(serializers.ModelSerializer):
         ]
 
     def get_priority(self, obj):
-        if not obj.request or obj.request.priority is None:
-            return 0.0
-        val = float(obj.request.priority)
-        return round(val * 10.0, 1) if val <= 1.0 else round(val, 1)
+        if not obj.request:
+            return priority_to_display(None)
+        return priority_to_display(obj.request.priority)
 
     def get_recipient_name(self, obj):
         user = obj.request.user

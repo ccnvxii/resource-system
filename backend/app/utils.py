@@ -4,6 +4,24 @@ import numpy as np
 from django.utils import timezone
 from .services import GeoFrontService
 
+# Внутрішня шкала пріоритету (БД, алгоритми розподілу) - [0.0; 1.0].
+# Користувачеві пріоритет показується за шкалою [1; 10].
+DISPLAY_PRIORITY_MIN = 1.0
+DISPLAY_PRIORITY_MAX = 10.0
+
+
+def priority_to_display(priority):
+    """Перетворює пріоритет [0; 1] у шкалу інтерфейсу [1; 10] (лінійно, 0 -> 1, 1 -> 10)."""
+    if priority is None:
+        return DISPLAY_PRIORITY_MIN
+    p = max(0.0, min(1.0, float(priority)))
+    return round(DISPLAY_PRIORITY_MIN + p * (DISPLAY_PRIORITY_MAX - DISPLAY_PRIORITY_MIN), 1)
+
+
+def priority_level(priority, levels=10):
+    """Ціле «відро» пріоритету 0..levels для жорсткого розподілу (Тріаж)."""
+    return int(round(max(0.0, min(1.0, float(priority))) * levels, 6))
+
 
 def calculate_front_multiplier(user_lat, user_lon):
     """

@@ -1,5 +1,6 @@
 import numpy as np
 from ..services import DistanceMatrixService
+from ..utils import priority_level
 
 
 # -----------------------------
@@ -79,7 +80,8 @@ def discretize_with_greedy_remainders(exact_distribution, stocks, requests_list)
         for j in range(n_req):
             fraction = exact_distribution[i, j] - np.floor(exact_distribution[i, j])
             if fraction > 0.001:
-                score = requests_list[j]['priority'] * 10.0 + fraction
+                # пріоритет [0; 1] має вищу вагу, ніж дробова частка (вона менша за 0.1 пріоритетного кроку)
+                score = requests_list[j]['priority'] + fraction / 10.0
                 remainder_candidates.append((score, i, j))
 
     remainder_candidates.sort(key=lambda x: x[0], reverse=True)
@@ -280,7 +282,7 @@ def calculate_distribution(requests, stocks, routing_service=None):
             for i in range(n_stk):
                 row[i * n_req + j] = 1
             effective_need = min(r_sub[j]['amount_needed'], total_supply)
-            weight = (effective_need * r_sub[j]['priority']) / 10.0
+            weight = effective_need * r_sub[j]['priority']      # пріоритет у шкалі [0; 1]
             row[-1] = -weight
             base_A.append(row)
             base_b.append(0)
@@ -289,9 +291,13 @@ def calculate_distribution(requests, stocks, routing_service=None):
         # ЕТАП 1: Максимізація Z (Справедливість)
         c_stage1 = np.zeros(n_vars)
         c_stage1[-1] = -1.0
-        status_s1, res_s1 = simplex_solve(np.array(base_A), np.array(base_b), c_stage1, base_sense)
+        status_s1, res_s1 = simplex_solve(np.array(base_A), np.array(base_b), c_stage1, base_sense, max_iters=None)
 
         if status_s1 != 'optimal' or res_s1 is None:
+            # Симплекс не дав оптимуму (числова нестабільність тощо): не лишаємо ресурс без розподілу,
+            # а розподіляємо його за пріоритетом (резервний жадібний алгоритм).
+            print(f"[Fairness] Симплекс повернув '{status_s1}' для ресурсу {res_id}; резервний розподіл за пріоритетом")
+            final_plan.extend(calculate_strict_priority(r_sub, s_sub, routing_service))
             continue
 
         opt_Z = res_s1[-1]
@@ -318,7 +324,7 @@ def calculate_distribution(requests, stocks, routing_service=None):
                 c_stage2[idx] = -(0.0001 + distance_bonus + full_order_bonus)
 
         c_stage2[-1] = 0.0
-        status_s2, best_x = simplex_solve(np.array(A_stage2), np.array(b_stage2), c_stage2, sense_stage2)
+        status_s2, best_x = simplex_solve(np.array(A_stage2), np.array(b_stage2), c_stage2, sense_stage2, max_iters=None)
 
         if status_s2 != 'optimal' or best_x is None:
             best_x = res_s1
@@ -369,7 +375,7 @@ def calculate_strict_priority(requests, stocks, routing_service=None):
             if sum(stock_available.values()) == 0:
                 break
 
-            p_requests = [r for r in r_sub if int(r['priority']) == p]
+            p_requests = [r for r in r_sub if priority_level(r['priority']) == p]
             if not p_requests:
                 continue
 

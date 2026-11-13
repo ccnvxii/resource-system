@@ -6,28 +6,7 @@ import axios from 'axios';
 import {toast} from 'react-hot-toast';
 import {Mail, Lock, Phone, Building2, ArrowRight, ShieldCheck, CheckCircle2, Eye, EyeOff} from '../UI/icons';
 import Modal from '../UI/Modal';
-
-const nameRegex = /^[\p{L}\s'-]+$/u;
-
-// Маска телефона: +380 (XX) XXX-XX-XX - приймає лише цифри
-const phoneDigits = (v) => (v || '').replace(/\D/g, '');
-
-const formatPhone = (raw) => {
-    let d = phoneDigits(raw);
-    if (d.startsWith('380')) d = d.slice(3);
-    else if (d.startsWith('80')) d = d.slice(2);
-    else if (d.startsWith('0')) d = d.slice(1);
-    d = d.slice(0, 9);
-    if (!d) return '';
-    let out = '+380 (' + d.slice(0, 2);
-    if (d.length > 2) out += ') ' + d.slice(2, 5);
-    if (d.length > 5) out += '-' + d.slice(5, 7);
-    if (d.length > 7) out += '-' + d.slice(7, 9);
-    return out;
-};
-
-// Email: щось@домен.зона (без пробілів, з крапкою в домені)
-const EMAIL_REGEX = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
+import {NAME_REGEX as nameRegex, EMAIL_REGEX, MIN_PASSWORD_LENGTH, phoneDigits, formatPhone} from '../../utils/validation';
 
 const schema = z.object({
     identifier: z.string().min(3, "Мінімум 3 символи"),
@@ -38,6 +17,10 @@ const schema = z.object({
     organization: z.string().optional(),
 }).superRefine((data, ctx) => {
     if (!window.isLoginModeGlobal) {
+        // політика паролів діє лише при реєстрації (щоб не блокувати вхід зі старими паролями)
+        if ((data.password || '').length < MIN_PASSWORD_LENGTH) {
+            ctx.addIssue({code: z.ZodIssueCode.custom, message: `Пароль має містити щонайменше ${MIN_PASSWORD_LENGTH} символів`, path: ['password']});
+        }
         if (!EMAIL_REGEX.test((data.identifier || '').trim())) {
             ctx.addIssue({code: z.ZodIssueCode.custom, message: "Введіть коректний email, наприклад name@example.com", path: ['identifier']});
         }

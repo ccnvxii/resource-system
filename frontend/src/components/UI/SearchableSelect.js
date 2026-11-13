@@ -121,6 +121,7 @@ const SearchableSelect = ({
                 <ul
                     ref={listRef}
                     id="searchable-select-list"
+                    role="listbox"
                     className="absolute left-0 right-0 z-[9999] mt-1 max-h-56 overflow-y-auto bg-white border-2 border-blue-100 rounded-xl shadow-xl py-1 text-left"
                 >
                     {filtered.length === 0 ? (
@@ -129,6 +130,8 @@ const SearchableSelect = ({
                         filtered.map((o, i) => (
                             <li
                                 key={o.value}
+                                role="option"
+                                aria-selected={String(o.value) === String(value)}
                                 onMouseDown={(e) => { e.preventDefault(); pick(o); }}
                                 onMouseEnter={() => setHighlight(i)}
                                 className={`px-4 py-2.5 text-sm cursor-pointer ${

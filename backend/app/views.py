@@ -14,6 +14,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -51,6 +52,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
     serializer_class = CustomTokenObtainPairSerializer
 
 
@@ -72,6 +75,8 @@ class RequestPurposeViewSet(viewsets.ReadOnlyModelViewSet):
 
 class RegisterView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -130,6 +135,14 @@ class UserRequestViewSet(viewsets.ModelViewSet):
         if self.request.user.is_staff:
             return qs
         return qs.filter(user=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        # Блокуємо рядок користувача на час перевірки та створення: паралельні запити
+        # одного заявника виконуються послідовно, і ліміт кількості не обходиться «гонкою».
+        with transaction.atomic():
+            if not request.user.is_staff:
+                User.objects.select_for_update().get(pk=request.user.pk)
+            return super().create(request, *args, **kwargs)
 
     def perform_update(self, serializer):
         # Не-адміністратор не може «передати» заявку іншому користувачеві
@@ -202,7 +215,10 @@ class StockViewSet(viewsets.ModelViewSet):
             return Response({"error": "Доступ заборонено"}, status=status.HTTP_403_FORBIDDEN)
         stock = self.get_object()
         try:
-            stock.amount = int(request.data.get('amount'))
+            new_amount = int(request.data.get('amount'))
+            if new_amount < 0:
+                return Response({"error": "Кількість не може бути від'ємною"}, status=status.HTTP_400_BAD_REQUEST)
+            stock.amount = new_amount
             stock.save()
             return Response({"status": "success", "new_amount": stock.amount})
         except Exception as e:
@@ -223,6 +239,8 @@ class StockViewSet(viewsets.ModelViewSet):
         try:
             with transaction.atomic():
                 amount_int = int(amount_to_add)
+                if amount_int <= 0:
+                    return Response({"error": "Кількість для поповнення має бути більшою за нуль"}, status=400)
                 stock, created = Stock.objects.get_or_create(
                     warehouse_id=warehouse_id,
                     resource_id=resource_id,
@@ -274,15 +292,15 @@ class DistributeResourcesView(APIView):
                 for r in active_requests_qs:
                     needed = int(r.quantity_requested - r.quantity_allocated)
                     if needed > 0:
-                        raw_p = float(r.priority) if r.priority is not None else 0.5
-                        # Алгоритми оптимізації очікують 10-бальну шкалу [0.0 - 10.0]
-                        priority_10 = round(raw_p * 10.0, 2) if raw_p <= 1.0 else round(raw_p, 2)
+                        # Алгоритми оптимізації працюють зі шкалою пріоритету [0.0; 1.0]
+                        norm_p = float(r.priority) if r.priority is not None else 0.5
+                        norm_p = max(0.0, min(1.0, norm_p))
                         requests_data.append({
                             'id': r.id,
                             'resource_id': r.resource_id,
                             'is_strategic': r.resource.is_strategic,
                             'amount_needed': needed,
-                            'priority': priority_10,
+                            'priority': norm_p,
                             'lat': float(r.latitude) if r.latitude else None,
                             'lng': float(r.longitude) if r.longitude else None
                         })
@@ -456,6 +474,8 @@ class PasswordResetRequestView(APIView):
     """Крок 1: надсилає 6-значний код на пошту, вказану при реєстрації."""
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     def post(self, request):
         from django.core.cache import cache
@@ -516,6 +536,8 @@ class PasswordResetConfirmView(APIView):
     """Крок 2: перевіряє код і встановлює новий пароль."""
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     def post(self, request):
         from django.core.cache import cache
@@ -565,6 +587,8 @@ class PasswordResetVerifyView(APIView):
     """Крок 2: лише перевіряє код (не змінює пароль і не «спалює» код)."""
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     def post(self, request):
         from django.core.cache import cache

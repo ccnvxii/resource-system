@@ -103,7 +103,18 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Обмеження частоти для чутливих ендпоінтів (вхід, реєстрація, відновлення пароля) - захист від перебору
+    'DEFAULT_THROTTLE_RATES': {
+        'auth': config('AUTH_THROTTLE_RATE', default='20/min'),
+    },
 }
+
+# Політика паролів (застосовується при реєстрації та відновленні пароля)
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator', 'OPTIONS': {'min_length': 8}},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+]
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
@@ -161,3 +172,7 @@ DEFAULT_FROM_EMAIL = _clean_from_email(
 # --- ЛІМІТИ ЗАЯВОК ---
 # Максимум одиниць ресурсу в заявках одного (не адміністратора) заявника, якщо у ресурсу не задано власний ліміт.
 DEFAULT_MAX_PER_REQUEST = config('DEFAULT_MAX_PER_REQUEST', default=1000, cast=int)
+
+
+# Запуск тестів зі зведеним звітом (CSV та Markdown у backend/test_reports/)
+TEST_RUNNER = 'app.tests.report_runner.ReportRunner'

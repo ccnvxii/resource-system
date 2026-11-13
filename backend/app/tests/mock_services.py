@@ -1,5 +1,4 @@
 from app.services import DistanceMatrixService, _ROUTING_CACHE
-from .test_routing import RoutingServiceTests
 
 
 # --- 1. МОК-СЕРВІС ДЛЯ ІМІТАЦІЇ ЛОГІСТИЧНИХ ВІДСТАНЕЙ (OSRM) ---

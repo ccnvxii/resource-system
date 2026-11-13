@@ -1,378 +1,426 @@
-from rest_framework.test import APITestCase
-from rest_framework import status
-import unittest
-from datetime import date, timedelta
+"""
+ФУНКЦІОНАЛЬНЕ ТЕСТУВАННЯ (API системи).
+
+Категорії: автентифікація та акаунти, відновлення пароля, CRUD довідників і складу,
+заявки (валідація, життєвий цикл, ліміти, права), розподіл ресурсів, інтеграція з Новою Поштою.
+Оформлення для звіту: перший рядок докстрінга класу - категорія, test_NN - номер, докстрінг - назва.
+"""
+import re
+from datetime import timedelta
 from unittest.mock import patch
-from app.tests.mock_services import MockDistanceService
+
+from django.contrib.auth.models import User
+from django.core import mail
+from django.core.cache import cache
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 from app.models import (
-    Unit, Category, Resource, Warehouse, Stock,
-    RequestPurpose, UserRequest, UserProfile,
-    DistributionPlan, DistributionItem
+    Category, DistributionItem, DistributionPlan, RequestPurpose, Resource, Stock, Unit, UserProfile, UserRequest,
+    Warehouse,
 )
-from django.contrib.auth.models import User
+from app.tests.helpers import FakeFront
+from app.tests.mock_services import MockDistanceService
 
 
-class FunctionalAndIntegrationTests(APITestCase):
-    """Повний набір функціональних та інтеграційних тестів бекенду"""
+class FunctionalBase(APITestCase):
+    """Спільні дані: адміністратор, підтверджений користувач, довідники, один склад."""
 
     def setUp(self):
-        """Підготовка базових даних для тестування з урахуванням архітектури БД"""
-        self.user = User.objects.create_superuser(
-            username='volunteer_test',
-            email='test@example.com',
-            password='SecurePassword123!'
-        )
-        self.user.is_active = True
-        self.user.save()
+        cache.clear()  # лічильники обмеження частоти не переходять між тестами
+        UserRequest.objects.all().delete()
+        Stock.objects.all().delete()
+        self.today = timezone.now().date()
+        self.admin = User.objects.create_user('ft_admin', email='ft_admin@example.com', password='Str0ng-Pass-77', is_staff=True)
+        self.user = User.objects.create_user('ft_user', email='ft_user@example.com', password='Str0ng-Pass-77')
+        UserProfile.objects.create(user=self.user, is_approved=True)
+        self.other = User.objects.create_user('ft_other', email='ft_other@example.com', password='Str0ng-Pass-77')
+        UserProfile.objects.create(user=self.other, is_approved=True)
 
-        profile, _ = UserProfile.objects.get_or_create(user=self.user)
-        profile.is_approved = True
-        profile.save()
+        self.unit, _ = Unit.objects.get_or_create(name='ft-шт')
+        self.cat, _ = Category.objects.get_or_create(slug='ft-cat', defaults={'name': 'FT', 'criticality': 0.7})
+        self.p_hi, _ = RequestPurpose.objects.get_or_create(code='ft_hi', defaults={'name': 'Високий', 'weight': 1.0})
+        self.p_lo, _ = RequestPurpose.objects.get_or_create(code='ft_lo', defaults={'name': 'Низький', 'weight': 0.2})
+        self.regular = Resource.objects.create(name='FT звичайний', unit=self.unit, category=self.cat, max_per_request=100)
+        self.strategic = Resource.objects.create(name='FT стратегічний', unit=self.unit, category=self.cat, is_strategic=True)
+        self.wh = Warehouse.objects.create(name='FT склад', location='Київ', latitude=50.0, longitude=30.0)
 
-        self.client.force_authenticate(user=self.user)
-
-        self.unit, _ = Unit.objects.get_or_create(name='штуки')
-        self.category, _ = Category.objects.get_or_create(
-            slug='meds',
-            defaults={'name': 'Медикаменти', 'criticality': 0.8}
-        )
-        self.purpose, _ = RequestPurpose.objects.get_or_create(
-            code='HUMANITARIAN',
-            defaults={'name': 'Гуманітарна допомога', 'weight': 1.0}
-        )
-
-        self.resource = Resource.objects.create(
-            name='Медикаменти',
-            is_strategic=True,
-            unit=self.unit,
-            category=self.category
-        )
-
-        self.warehouse = Warehouse.objects.create(
-            name='Головний склад',
-            location='м. Дніпро',
-            latitude=50.4501,
-            longitude=30.5234
-        )
-
-        self.stock, _ = Stock.objects.get_or_create(
-            warehouse=self.warehouse,
-            resource=self.resource,
-            defaults={'amount': 100}
-        )
-
-        self.requests_url = '/api/requests/'
-        self.geo_patcher = patch('app.services.GeoFrontService.get_front_line_points', return_value=[(49.95, 36.85), (48.45, 37.95)])
-        self.geo_patcher.start()
-        self.addCleanup(self.geo_patcher.stop)
-
-    # --- МОДУЛЬ 1: АВТЕНТИФІКАЦІЯ ТА JWT ТОКЕНИ (ТЕСТИ 1–2) ---
-
-    def test_1_jwt_authentication_success(self):
-        """Функціональний тест 1: Успішна аутентифікація та отримання JWT-токенів"""
-        print("\n" + "=" * 90)
-        print(" [ФУНКЦІОНАЛЬНИЙ ТЕСТ 1] Успішна JWT-аутентифікація користувача")
-        print("=" * 90)
-
-        self.client.logout()
-        login_url = '/api/token/'
-        response = self.client.post(login_url, {
-            'username': 'volunteer_test',
-            'password': 'SecurePassword123!'
-        }, format='json')
-
-        print(f" • Статус відповіді: {response.status_code} OK")
-        print(f" • Access Token отримано : {'[АКТИВНИЙ JWT]' if 'access' in response.data else 'ВІДСУТНІЙ'}")
-        print(f" • Refresh Token отримано: {'[АКТИВНИЙ JWT]' if 'refresh' in response.data else 'ВІДСУТНІЙ'}")
-        print("-" * 90)
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('access', response.data)
-        self.assertIn('refresh', response.data)
-        print(" [УСПІХ] Токени доступу успішно згенеровано.")
-        print("=" * 90)
-
-    def test_2_jwt_token_refresh_success(self):
-        """Функціональний тест 2: Оновлення сеансового токена (JWT Refresh Token)"""
-        print("\n" + "=" * 90)
-        print(" [ФУНКЦІОНАЛЬНИЙ ТЕСТ 2] Оновлення сеансового токена (JWT Refresh)")
-        print("=" * 90)
-
-        login_url = '/api/token/'
-        login_resp = self.client.post(login_url, {
-            'username': 'volunteer_test',
-            'password': 'SecurePassword123!'
-        }, format='json')
-
-        refresh_token = login_resp.data.get('refresh')
-        refresh_url = '/api/token/refresh/'
-        response = self.client.post(refresh_url, {'refresh': refresh_token}, format='json')
-
-        print(f" • Статус відповіді refresh: {response.status_code}")
-        print(f" • Новий Access Token отримано: {'[АКТИВНИЙ JWT]' if 'access' in response.data else 'ВІДСУТНІЙ'}")
-        print("-" * 90)
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('access', response.data)
-        print(" [УСПІХ] Сеансовий токен успішно оновлено.")
-        print("=" * 90)
-
-    # --- МОДУЛЬ 2: ВАЛІДАЦІЯ ВХІДНИХ ДАНИХ (ТЕСТИ 3–5) ---
-
-    def test_3_request_validation_rejects_negative_amounts(self):
-        """Функціональний тест 3: Валідація форм - відхилення невалідних або від'ємних обсягів"""
-        payload = {
-            'resource': self.resource.id,
-            'quantity_requested': -15,
-            'purpose': self.purpose.id,
-            'latitude': 50.46,
-            'longitude': 30.53
+    def req_payload(self, qty=10, days=5, **extra):
+        data = {
+            'resource': self.regular.id, 'quantity_requested': qty, 'purpose': self.p_hi.id,
+            'city': 'Київ', 'warehouse_address': 'Відділення 1', 'warehouse_ref': 'ADDRESS_DELIVERY',
+            'due_date': str(self.today + timedelta(days=days)),
         }
-        response = self.client.post(self.requests_url, payload, format='json')
-        self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY])
+        data.update(extra)
+        return data
 
-    def test_4_boundary_validation_nonexistent_resource(self):
-        """Функціональний тест 4: Гранична валідація зв'язків - передача неіснуючого ID ресурсу"""
-        payload = {
-            'resource': 999999,
-            'quantity_requested': 10,
-            'purpose': self.purpose.id,
-            'latitude': 50.45,
-            'longitude': 30.52
-        }
-        response = self.client.post(self.requests_url, payload, format='json')
-        self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY, status.HTTP_404_NOT_FOUND])
+    def make_request(self, owner=None, resource=None, qty=10, purpose=None, days=5, **kw):
+        return UserRequest.objects.create(
+            user=owner or self.user, resource=resource or self.regular, quantity_requested=qty,
+            purpose=purpose or self.p_hi, due_date=self.today + timedelta(days=days), status='new',
+            latitude=50.1, longitude=30.1, city='Київ', **kw)
 
-    def test_5_due_date_validation_rejects_past_dates(self):
-        """Функціональний тест 5: Валідація дедлайну - заборона вибору дати у минулому"""
-        past_date = date.today() - timedelta(days=2)
-        payload = {
-            'resource': self.resource.id,
-            'quantity_requested': 10,
-            'purpose': self.purpose.id,
-            'due_date': past_date.strftime("%Y-%m-%d"),
-            'latitude': 50.45,
-            'longitude': 30.52
-        }
-        response = self.client.post(self.requests_url, payload, format='json')
-        self.assertIn(response.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_422_UNPROCESSABLE_ENTITY])
 
-    # --- МОДУЛЬ 3: ЖИТТЄВИЙ ЦИКЛ УСІХ СУТНОСТЕЙ - CRUD (ТЕСТИ 6–14) ---
+@patch('app.utils.GeoFrontService', FakeFront)
+class AuthenticationTests(FunctionalBase):
+    """Автентифікація та акаунти"""
 
-    def test_6_crud_unit_entity(self):
-        """Функціональний тест 6: CRUD-цикл сутності Unit (Одиниці виміру)"""
-        unit_obj = Unit.objects.create(name='Ящик тест')
-        self.assertIsNotNone(unit_obj.id)
-        fetched = Unit.objects.get(id=unit_obj.id)
-        self.assertEqual(fetched.name, 'Ящик тест')
-        unit_obj.name = 'Ящик оновлений'
-        unit_obj.save()
-        self.assertEqual(Unit.objects.get(id=unit_obj.id).name, 'Ящик оновлений')
-        unit_obj.delete()
-        self.assertFalse(Unit.objects.filter(id=fetched.id).exists())
+    def _register(self, email='new_user@example.com', password='Str0ng-Pass-77'):
+        return self.client.post('/api/register/', {
+            'username': email, 'email': email, 'password': password, 'first_name': 'Іван', 'last_name': 'Петренко',
+            'phone': '+380671234567', 'organization': 'Підрозділ 1'}, format='json')
 
-    def test_7_crud_category_entity(self):
-        """Функціональний тест 7: CRUD-цикл сутності Category (Категорії)"""
-        cat = Category.objects.create(name='Тест Категорія', slug='test-cat', criticality=0.7)
-        self.assertIsNotNone(cat.id)
-        cat.criticality = 0.9
-        cat.save()
-        self.assertEqual(Category.objects.get(id=cat.id).criticality, 0.9)
-        cat.delete()
-        self.assertFalse(Category.objects.filter(id=cat.id).exists())
+    def _login(self, username, password='Str0ng-Pass-77'):
+        return self.client.post('/api/token/', {'username': username, 'password': password}, format='json')
 
-    def test_8_crud_resource_entity(self):
-        """Функціональний тест 8: CRUD-цикл сутності Resource (Ресурси)"""
-        res = Resource.objects.create(name='Тест Ресурс', unit=self.unit, category=self.category, is_strategic=False)
-        self.assertIsNotNone(res.id)
-        res.is_strategic = True
-        res.save()
-        self.assertTrue(Resource.objects.get(id=res.id).is_strategic)
-        res.delete()
-        self.assertFalse(Resource.objects.filter(id=res.id).exists())
+    def test_01_jwt_login_and_refresh(self):
+        """Вхід за логіном і паролем, отримання та оновлення JWT, відхилення неправильного пароля"""
+        resp = self._login('ft_user')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('access', resp.data)
+        refreshed = self.client.post('/api/token/refresh/', {'refresh': resp.data['refresh']}, format='json')
+        self.assertEqual(refreshed.status_code, status.HTTP_200_OK)
+        self.assertIn('access', refreshed.data)
+        self.assertEqual(self._login('ft_user', 'Wrong-Pass-1').status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_9_crud_warehouse_entity(self):
-        """Функціональний тест 9: CRUD-цикл сутності Warehouse (Склади)"""
-        wh = Warehouse.objects.create(name='Тест Склад', location='м. Львів', latitude=49.84, longitude=24.03)
-        self.assertIsNotNone(wh.id)
-        wh.location = 'м. Київ'
-        wh.save()
-        self.assertEqual(Warehouse.objects.get(id=wh.id).location, 'м. Київ')
-        wh.delete()
-        self.assertFalse(Warehouse.objects.filter(id=wh.id).exists())
+    def test_02_registration_and_admin_approval(self):
+        """Реєстрація, блокування входу до підтвердження, вхід після підтвердження адміністратором"""
+        self.assertEqual(self._register().status_code, status.HTTP_201_CREATED)
+        user = User.objects.get(email='new_user@example.com')
+        self.assertFalse(user.profile.is_approved)
+        blocked = self._login('new_user@example.com')
+        self.assertEqual(blocked.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(blocked.data.get('code'), 'not_approved')
+        user.profile.is_approved = True
+        user.profile.save()
+        self.assertEqual(self._login('new_user@example.com').status_code, status.HTTP_200_OK)
 
-    def test_10_crud_request_purpose_entity(self):
-        """Функціональний тест 10: CRUD-цикл сутності RequestPurpose (Типи призначення)"""
-        purp = RequestPurpose.objects.create(name='Тест Призначення', code='TEST_CODE', weight=0.5)
-        self.assertIsNotNone(purp.id)
-        purp.weight = 1.0
-        purp.save()
-        self.assertEqual(RequestPurpose.objects.get(id=purp.id).weight, 1.0)
-        purp.delete()
-        self.assertFalse(RequestPurpose.objects.filter(id=purp.id).exists())
+    def test_03_registration_validation(self):
+        """Валідація реєстрації: повторний email (без урахування регістру), некоректний формат, адмін входить без підтвердження"""
+        self.assertEqual(self._register('dup@example.com').status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self._register('DUP@example.com').status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._register('abc').status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._login('ft_admin').status_code, status.HTTP_200_OK)
 
-    def test_11_crud_stock_entity(self):
-        """Функціональний тест 11: CRUD-цикл сутності Stock (Запаси на складах)"""
-        stk = self.stock
-        stk.amount = 75
-        stk.save()
-        self.assertEqual(Stock.objects.get(id=stk.id).amount, 75)
 
-        another_warehouse = Warehouse.objects.create(
-            name='Додатковий склад', location='м. Львів', latitude=49.84, longitude=24.03
-        )
-        stk_new = Stock.objects.create(warehouse=another_warehouse, resource=self.resource, amount=30)
-        stk_new.delete()
+class PasswordResetTests(FunctionalBase):
+    """Відновлення пароля"""
 
-    def test_12_crud_user_profile_entity(self):
-        """Функціональний тест 12: CRUD-цикл сутності UserProfile (Профілі користувачів)"""
-        sub_user = User.objects.create_user(username='sub_volunteer', password='Password123!')
-        prof, _ = UserProfile.objects.get_or_create(user=sub_user)
-        prof.organization = 'Благодійний фонд'
-        prof.is_approved = True
-        prof.save()
-        sub_user.delete()
+    URL = '/api/password-reset/'
 
-    def test_13_request_crud_lifecycle_create_update_delete(self):
-        """Функціональний тест 13: Повний CRUD-цикл сутності UserRequest (Заявки)"""
-        payload = {
-            'resource': self.resource.id,
-            'quantity_requested': 25,
-            'purpose': self.purpose.id,
-            'latitude': 50.47,
-            'longitude': 30.54
-        }
-        response = self.client.post(self.requests_url, payload, format='json')
-        req_id = response.data.get('id')
+    def _code(self):
+        return re.search(r'\b(\d{6})\b', mail.outbox[-1].body).group(1)
 
-        update_url = f"{self.requests_url}{req_id}/"
-        patch_resp = self.client.patch(update_url, {"quantity_requested": 45}, format='json')
-        self.assertEqual(patch_resp.data.get('quantity_requested'), 45)
+    def test_01_full_flow(self):
+        """Повний сценарій: код на пошту, перевірка коду, зміна пароля, одноразовість коду"""
+        self.assertEqual(self.client.post(self.URL, {'email': 'ft_user@example.com'}, format='json').status_code, 200)
+        self.assertEqual(mail.outbox[-1].to, ['ft_user@example.com'])
+        code = self._code()
+        verify = self.client.post(self.URL + 'verify/', {'email': 'ft_user@example.com', 'code': code}, format='json')
+        self.assertEqual(verify.status_code, 200)                                  # перевірка не «спалює» код
+        done = self.client.post(self.URL + 'confirm/', {'email': 'ft_user@example.com', 'code': code,
+                                                         'new_password': 'BrandNewPass123'}, format='json')
+        self.assertEqual(done.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('BrandNewPass123'))
+        again = self.client.post(self.URL + 'confirm/', {'email': 'ft_user@example.com', 'code': code,
+                                                          'new_password': 'AnotherPass123'}, format='json')
+        self.assertEqual(again.status_code, 400)
 
-        self.client.delete(update_url)
+    def test_02_protection_scenarios(self):
+        """Захисні сценарії: некоректний email, невідомий акаунт, невірний код та ліміт спроб, слабкий пароль, пауза між запитами"""
+        self.assertEqual(self.client.post(self.URL, {'email': 'not-an-email'}, format='json').status_code, 400)
+        unknown = self.client.post(self.URL, {'email': 'nobody@example.com'}, format='json')
+        self.assertEqual(unknown.status_code, 200)                                 # однакова відповідь, лист не надсилається
+        self.assertEqual(len(mail.outbox), 0)
 
-    def test_14_crud_distribution_plan_and_item(self):
-        """Функціональний тест 14: CRUD-цикл сутностей DistributionPlan та DistributionItem (Плани розподілу)"""
-        req_instance = UserRequest.objects.create(
-            user=self.user,
-            resource=self.resource,
-            purpose=self.purpose,
-            quantity_requested=10,
-            latitude=50.45,
-            longitude=30.52
-        )
-        plan = DistributionPlan.objects.create(executed=False)
-        item = DistributionItem.objects.create(plan=plan, request=req_instance, warehouse=self.warehouse, amount=10)
-        plan.executed = True
-        plan.save()
-        plan.delete()
+        self.client.post(self.URL, {'email': 'ft_user@example.com'}, format='json')
+        self.assertEqual(self.client.post(self.URL, {'email': 'ft_user@example.com'}, format='json').status_code, 429)
+        code = self._code()
+        weak = self.client.post(self.URL + 'confirm/', {'email': 'ft_user@example.com', 'code': code, 'new_password': '123'}, format='json')
+        self.assertEqual(weak.status_code, 400)
+        wrong = '000000' if code != '000000' else '111111'
+        for _ in range(5):
+            bad = self.client.post(self.URL + 'confirm/', {'email': 'ft_user@example.com', 'code': wrong, 'new_password': 'BrandNewPass123'}, format='json')
+            self.assertEqual(bad.status_code, 400)
+        late = self.client.post(self.URL + 'confirm/', {'email': 'ft_user@example.com', 'code': code, 'new_password': 'BrandNewPass123'}, format='json')
+        self.assertEqual(late.status_code, 400)                                    # після 5 спроб навіть правильний код не діє
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('Str0ng-Pass-77'))
 
-    # --- МОДУЛЬ 4: БІЗНЕС-ЛОГІКА ТА РОЗШИРЕНІ СЦЕНАРІЇ (ТЕСТИ 15–19) ---
+    def test_03_mail_failure_is_reported(self):
+        """Збій поштового сервера: зрозуміла помилка 503, повтор можливий одразу"""
+        with patch('django.core.mail.send_mail', side_effect=OSError('smtp down')):
+            resp = self.client.post(self.URL, {'email': 'ft_user@example.com'}, format='json')
+        self.assertEqual(resp.status_code, 503)
+        self.assertEqual(self.client.post(self.URL, {'email': 'ft_user@example.com'}, format='json').status_code, 200)
 
-    def test_15_request_business_logic_exceeding_stock(self):
-        """Функціональний тест 15: Бізнес-логіка - реєстрація дефіцитного запиту (перевищення запасів)"""
-        excessive_payload = {
-            "resource": self.resource.id,
-            "quantity_requested": 5000,
-            "latitude": 50.45,
-            "longitude": 30.52,
-            "purpose": self.purpose.id,
-            "city": "Київ"
-        }
-        response = self.client.post(self.requests_url, excessive_payload, format='json')
-        self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK])
 
-    def test_16_workflow_status_transitions(self):
-        """Функціональний тест 16: Перевірка життєвого циклу статусів заявки (Workflow Transitions)"""
-        req_obj = UserRequest.objects.create(
-            user=self.user,
-            resource=self.resource,
-            purpose=self.purpose,
-            quantity_requested=20,
-            latitude=50.45,
-            longitude=30.52,
-            status='new'
-        )
+class ReferenceDataTests(FunctionalBase):
+    """Довідники, склад та інтеграція з Новою Поштою"""
 
-        req_obj.status = 'partial'
-        req_obj.save()
-        req_obj.refresh_from_db()
-        self.assertEqual(req_obj.status, 'partial')
+    def test_01_crud_via_api(self):
+        """Створення, читання, зміна та видалення категорій, ресурсів і складів через API (адміністратор)"""
+        self.client.force_authenticate(self.admin)
+        cases = [
+            ('/api/categories/', {'name': 'Нова категорія', 'slug': 'new-cat', 'criticality': 0.6}, {'criticality': 0.9}),
+            ('/api/resources/', {'name': 'Новий ресурс', 'unit': self.unit.id, 'category': self.cat.id, 'is_strategic': False},
+             {'is_strategic': True}),
+            ('/api/warehouses/', {'name': 'Новий склад', 'location': 'Львів', 'latitude': 49.8, 'longitude': 24.0}, {'location': 'Одеса'}),
+        ]
+        for url, payload, change in cases:
+            created = self.client.post(url, payload, format='json')
+            self.assertEqual(created.status_code, 201, (url, created.data))
+            item_url = f'{url}{created.data["id"]}/'
+            self.assertEqual(self.client.get(item_url).status_code, 200)
+            patched = self.client.patch(item_url, change, format='json')
+            self.assertEqual(patched.status_code, 200)
+            for key, value in change.items():
+                self.assertEqual(patched.data[key], value)
+            self.assertEqual(self.client.delete(item_url).status_code, 204)
+            self.assertEqual(self.client.get(item_url).status_code, 404)
+        for url in ('/api/units/', '/api/purposes/'):                                # довідники лише для читання
+            self.assertEqual(self.client.get(url).status_code, 200)
+            self.assertEqual(self.client.post(url, {}, format='json').status_code, 405)
 
-        req_obj.status = 'done'
-        req_obj.save()
-        req_obj.refresh_from_db()
-        self.assertEqual(req_obj.status, 'done')
+    def test_02_reference_data_is_admin_only(self):
+        """Права: звичайний користувач бачить довідники, але не може їх змінювати"""
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.get('/api/resources/').status_code, 200)
+        resp = self.client.post('/api/warehouses/', {'name': 'X', 'location': 'Y', 'latitude': 1, 'longitude': 1}, format='json')
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(self.client.get('/api/users/').status_code, 403)
 
-    def test_17_api_filtering_and_sorting(self):
-        """Функціональний тест 17: Перевірка фільтрації та пошуку через API-ендпоінт"""
-        UserRequest.objects.create(
-            user=self.user, resource=self.resource, purpose=self.purpose,
-            quantity_requested=10, status='new', latitude=50.45, longitude=30.52
-        )
-        UserRequest.objects.create(
-            user=self.user, resource=self.resource, purpose=self.purpose,
-            quantity_requested=15, status='done', latitude=50.45, longitude=30.52
-        )
+    def test_03_stock_management(self):
+        """Запаси: зміна кількості, поповнення (існуючий і новий склад), відхилення некоректних значень, видалення"""
+        stock = Stock.objects.create(warehouse=self.wh, resource=self.regular, amount=10)
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self.client.patch(f'/api/stocks/{stock.id}/update_amount/', {'amount': 25}, format='json').status_code, 200)
+        stock.refresh_from_db()
+        self.assertEqual(stock.amount, 25)
+        for bad in (-5, 'abc'):
+            self.assertEqual(self.client.patch(f'/api/stocks/{stock.id}/update_amount/', {'amount': bad}, format='json').status_code, 400)
 
-        response = self.client.get(f"{self.requests_url}?status=new", format='json')
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        add = self.client.post('/api/stocks/add_resource/', {'warehouse': self.wh.id, 'resource': self.regular.id, 'amount': 5}, format='json')
+        self.assertEqual(add.status_code, 200)
+        stock.refresh_from_db()
+        self.assertEqual(stock.amount, 30)
+        wh2 = Warehouse.objects.create(name='FT склад 2', location='Одеса', latitude=46.4, longitude=30.7)
+        self.client.post('/api/stocks/add_resource/', {'warehouse': wh2.id, 'resource': self.regular.id, 'amount': 7}, format='json')
+        self.assertEqual(Stock.objects.get(warehouse=wh2, resource=self.regular).amount, 7)
+        self.assertEqual(self.client.post('/api/stocks/add_resource/', {'warehouse': self.wh.id}, format='json').status_code, 400)
+        self.assertEqual(self.client.post('/api/stocks/add_resource/', {'warehouse': self.wh.id, 'resource': self.regular.id, 'amount': -50}, format='json').status_code, 400)
 
-    @unittest.skip("Ендпоінт /api/export-excel/ заплановано, але ще не реалізовано в API")
-    def test_18_excel_export_endpoint(self):
-        """Функціональний тест 18: Перевірка експорту звітів розподілу у формат Excel (.xlsx)"""
-        export_url = '/api/export-excel/'
-        response = self.client.get(export_url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.client.force_authenticate(self.user)                                    # права звичайного користувача
+        self.assertEqual(self.client.patch(f'/api/stocks/{stock.id}/update_amount/', {'amount': 1}, format='json').status_code, 403)
+        self.assertEqual(self.client.delete(f'/api/stocks/{stock.id}/').status_code, 403)
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self.client.delete(f'/api/stocks/{stock.id}/').status_code, 204)
 
-    def test_19_stock_rollback_on_request_cancellation(self):
-        """Функціональний тест 19: Перевірка повернення ресурсів на склад при видаленні/скасуванні заявки"""
-        initial_stock_amount = self.stock.amount
-        req = UserRequest.objects.create(
-            user=self.user,
-            resource=self.resource,
-            purpose=self.purpose,
-            quantity_requested=30,
-            quantity_allocated=30,
-            latitude=50.45,
-            longitude=30.52,
-            status='partial'
-        )
 
-        self.stock.amount -= 30
-        self.stock.save()
 
-        allocated_qty = req.quantity_allocated
-        req.delete()
+    def test_04_nova_poshta_proxy(self):
+        """Доступ лише для авторизованих, підтримка дій get_cities / get_warehouses / get_streets, відхилення невідомої дії"""
+        self.assertEqual(self.client.post("/api/novaposhta/", {'action': 'get_cities'}, format='json').status_code, 401)
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.post("/api/novaposhta/", {'action': 'hack'}, format='json').status_code, 400)
+        with patch('app.views.NovaPoshtaService') as svc:
+            svc.return_value.get_cities.return_value = {'data': [{'Addresses': [{'Present': 'м. Київ', 'Ref': 'abc'}]}]}
+            svc.return_value.get_warehouses.return_value = {'data': [{'Ref': 'w1', 'Description': 'Відділення №1'}]}
+            svc.return_value.get_streets.return_value = {'data': [{'Addresses': [{'Present': 'вул. Соборна', 'Ref': 's1'}]}]}
+            cities = self.client.post("/api/novaposhta/", {'action': 'get_cities', 'search': 'Київ'}, format='json')
+            warehouses = self.client.post("/api/novaposhta/", {'action': 'get_warehouses', 'city_ref': 'abc'}, format='json')
+            streets = self.client.post("/api/novaposhta/", {'action': 'get_streets', 'city_ref': 'abc', 'search': 'Соб'}, format='json')
+        self.assertEqual(cities.data[0]['Present'], 'м. Київ')
+        self.assertEqual(warehouses.data[0]['Description'], 'Відділення №1')
+        self.assertEqual(streets.data[0]['Presentation'], 'вул. Соборна')
 
-        self.stock.amount += allocated_qty
-        self.stock.save()
-        self.stock.refresh_from_db()
 
-        self.assertEqual(self.stock.amount, initial_stock_amount)
+@patch('app.utils.GeoFrontService', FakeFront)
+class RequestTests(FunctionalBase):
+    """Заявки"""
 
-    # --- МОДУЛЬ 5: ІНТЕГРАЦІЯ ТА КОНТРОЛЬ ДОСТУПУ (ТЕСТИ 20–21) ---
+    def test_01_validation(self):
+        """Валідація: від'ємна кількість, неіснуючий ресурс, дата у минулому, надто довгий текст"""
+        self.client.force_authenticate(self.user)
+        for payload in (self.req_payload(qty=-15), self.req_payload(resource=999999),
+                        self.req_payload(days=-2), self.req_payload(city='А' * 100_000)):
+            self.assertEqual(self.client.post('/api/requests/', payload, format='json').status_code, 400, payload)
 
-    @patch('app.optimizer.distribute.DistanceMatrixService', MockDistanceService)
-    def test_20_distribution_trigger_endpoint(self):
-        """Інтеграційний тест 20: Перевірка успішного запуску процесу розподілу через API"""
-        response = self.client.post('/api/distribute/', {}, format='json')
-        self.assertIn(response.status_code, [
-            status.HTTP_200_OK,
-            status.HTTP_201_CREATED,
-            status.HTTP_400_BAD_REQUEST,
-            status.HTTP_404_NOT_FOUND
-        ])
+    def test_02_lifecycle_and_automatic_owner(self):
+        """Життєвий цикл: створення (заявник визначається автоматично), зміна кількості та автопродовження, видалення"""
+        self.client.force_authenticate(self.user)
+        created = self.client.post('/api/requests/', self.req_payload(qty=25), format='json')
+        self.assertEqual(created.status_code, 201)
+        req = UserRequest.objects.get(id=created.data['id'])
+        self.assertEqual((req.user_id, req.status, req.quantity_allocated), (self.user.id, 'new', 0))
+        url = f'/api/requests/{req.id}/'
+        patched = self.client.patch(url, {'quantity_requested': 45, 'auto_extend': False}, format='json')
+        self.assertEqual((patched.data['quantity_requested'], patched.data['auto_extend']), (45, False))
+        self.assertEqual(self.client.delete(url).status_code, 204)
+        self.assertFalse(UserRequest.objects.filter(id=req.id).exists())
 
-    @patch('app.optimizer.distribute.DistanceMatrixService', MockDistanceService)
-    def test_21_volunteer_role_restrictions(self):
-        """Функціональний тест 21: Перевірка обмеження прав ролі волонтера (Access Control)"""
-        volunteer = User.objects.create_user(username='ordinary_volunteer', password='Password123!')
-        volunteer.is_staff = False
-        volunteer.is_superuser = False
-        volunteer.save()
+    def test_03_quantity_limits(self):
+        """Ліміти кількості: на одну заявку, сумарно по активних заявках, при збільшенні; адміністратор без обмежень"""
+        self.client.force_authenticate(self.user)
+        self.assertEqual(self.client.post('/api/requests/', self.req_payload(qty=101), format='json').status_code, 400)
+        self.assertEqual(self.client.post('/api/requests/', self.req_payload(qty=60), format='json').status_code, 201)
+        self.assertEqual(self.client.post('/api/requests/', self.req_payload(qty=50), format='json').status_code, 400)
+        self.assertEqual(self.client.post('/api/requests/', self.req_payload(qty=40), format='json').status_code, 201)
+        req = UserRequest.objects.filter(user=self.user).first()
+        self.assertEqual(self.client.patch(f'/api/requests/{req.id}/', {'quantity_requested': 500}, format='json').status_code, 400)
+        self.client.force_authenticate(self.admin)
+        big = self.client.post('/api/requests/', self.req_payload(qty=5000, user=self.user.id), format='json')
+        self.assertEqual(big.status_code, 201)
 
-        self.client.force_authenticate(user=volunteer)
-        response = self.client.post('/api/distribute/', {}, format='json')
-        self.assertIn(response.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED])
+    def test_04_access_rights(self):
+        """Права доступу: користувач бачить і змінює лише свої заявки, адміністратор - усі; термін лише продовжується"""
+        mine, theirs = self.make_request(self.user), self.make_request(self.other)
+        self.client.force_authenticate(self.user)
+        ids = [r['id'] for r in self.client.get('/api/requests/').data]
+        self.assertIn(mine.id, ids)
+        self.assertNotIn(theirs.id, ids)
+        self.assertEqual(self.client.patch(f'/api/requests/{theirs.id}/', {'quantity_requested': 5}, format='json').status_code, 404)
+        self.assertEqual(self.client.delete(f'/api/requests/{theirs.id}/').status_code, 404)
+        self.client.patch(f'/api/requests/{mine.id}/', {'user': self.other.id}, format='json')
+        mine.refresh_from_db()
+        self.assertEqual(mine.user_id, self.user.id)                                 # передати заявку іншому не можна
+        shorter = self.client.patch(f'/api/requests/{mine.id}/', {'due_date': str(self.today + timedelta(days=1))}, format='json')
+        self.assertEqual(shorter.status_code, 400)
+        longer = self.client.patch(f'/api/requests/{mine.id}/', {'due_date': str(self.today + timedelta(days=9))}, format='json')
+        self.assertEqual(longer.status_code, 200)
+        self.client.force_authenticate(self.admin)
+        ids = {r['id'] for r in self.client.get('/api/requests/').data}
+        self.assertTrue({mine.id, theirs.id} <= ids)
+
+    def test_05_unapproved_applicant_is_rejected(self):
+        """Адміністратор не може створити заявку на непідтвердженого користувача"""
+        pending = User.objects.create_user('ft_pending', email='ft_pending@example.com', password='x')
+        UserProfile.objects.create(user=pending, is_approved=False)
+        self.client.force_authenticate(self.admin)
+        resp = self.client.post('/api/requests/', self.req_payload(user=pending.id), format='json')
+        self.assertEqual(resp.status_code, 403)
+
+
+@patch('app.utils.GeoFrontService', FakeFront)
+@patch('app.optimizer.distribute.DistanceMatrixService', MockDistanceService)
+class DistributionTests(FunctionalBase):
+    """Розподіл ресурсів"""
+
+    URL = '/api/distribute/'
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_authenticate(self.admin)
+
+    def _stock(self, resource, amount):
+        return Stock.objects.create(warehouse=self.wh, resource=resource, amount=amount)
+
+    def _run(self, strategy=None):
+        return self.client.post(self.URL, {} if strategy is None else {'strategy': strategy}, format='json')
+
+    def _alloc(self, req):
+        req.refresh_from_db()
+        return req.quantity_allocated
+
+    def test_01_fairness_applies_plan(self):
+        """Fairness: застосування плану до складів і заявок, статуси «частково» та «виконано», збереження кількості"""
+        stock = self._stock(self.regular, 10)
+        a, b = self.make_request(qty=10), self.make_request(qty=10)
+        resp = self._run('fairness')
+        self.assertEqual(resp.status_code, 201)
+        stock.refresh_from_db()
+        self.assertEqual(self._alloc(a) + self._alloc(b), 10)
+        self.assertEqual(stock.amount, 0)                                            # видане = початковий запас - залишок
+        self.assertEqual(DistributionPlan.objects.count(), 1)
+        self.assertEqual(DistributionItem.objects.count(), len(resp.data['items']))
+        a.refresh_from_db()
+        self.assertEqual(a.status, 'partial')
+        Stock.objects.update(amount=50)
+        UserRequest.objects.update(quantity_allocated=0, status='new', quantity_requested=10)
+        self._run('fairness')
+        a.refresh_from_db()
+        self.assertEqual((a.quantity_allocated, a.status), (10, 'done'))
+
+    def test_02_triage_and_hybrid_modes(self):
+        """Тріаж і гібридний режим: жорсткий пріоритет для стратегічних ресурсів, справедливий розподіл для решти"""
+        self._stock(self.regular, 10)
+        self._stock(self.strategic, 10)
+        reg_a, reg_b = self.make_request(qty=10), self.make_request(qty=10)
+        st_top = self.make_request(resource=self.strategic, qty=10, purpose=self.p_hi)
+        st_low = self.make_request(resource=self.strategic, qty=10, purpose=self.p_lo)
+        self.assertEqual(self._run('hybrid').status_code, 201)
+        self.assertEqual((self._alloc(reg_a), self._alloc(reg_b)), (5, 5))           # звичайний ресурс - порівну
+        self.assertEqual((self._alloc(st_top), self._alloc(st_low)), (10, 0))        # стратегічний - за пріоритетом
+
+        Stock.objects.update(amount=10)
+        UserRequest.objects.update(quantity_allocated=0, status='new')
+        self.assertEqual(self._run('triage').status_code, 201)                       # чистий Тріаж: і для звичайного
+        self.assertEqual(self._alloc(reg_a) + self._alloc(reg_b), 10)
+        self.assertTrue(self._alloc(reg_a) == 10 or self._alloc(reg_b) == 10)
+
+        Stock.objects.update(amount=10)
+        UserRequest.objects.update(quantity_allocated=0, status='new')
+        self.assertEqual(self._run().status_code, 201)                               # режим за замовчуванням - гібридний
+        self.assertEqual((self._alloc(reg_a), self._alloc(reg_b)), (5, 5))
+
+    def test_03_repeated_run_and_empty_plan(self):
+        """Повторний запуск розподіляє лише залишок; без запасів плану немає"""
+        self.make_request(qty=5)
+        empty = self._run('fairness')
+        self.assertEqual(empty.status_code, 200)
+        self.assertIn('message', empty.data)
+        self.assertEqual(DistributionPlan.objects.count(), 0)
+        UserRequest.objects.all().delete()
+        stock = self._stock(self.regular, 4)
+        req = self.make_request(qty=10)
+        self._run('fairness')
+        self.assertEqual(self._alloc(req), 4)
+        stock.refresh_from_db()
+        stock.amount = 20
+        stock.save()
+        self._run('fairness')
+        req.refresh_from_db()
+        self.assertEqual((req.quantity_allocated, req.status), (10, 'done'))
+        stock.refresh_from_db()
+        self.assertEqual(stock.amount, 14)
+
+    def test_04_overdue_requests(self):
+        """Прострочені заявки: без автопродовження - «протермінована», з автопродовженням - +5 днів і обслуговується"""
+        self._stock(self.regular, 20)
+        expired = self.make_request(qty=5, days=-2, auto_extend=False)
+        extended = self.make_request(qty=5, days=-2, auto_extend=True)
+        self.assertEqual(self._run('fairness').status_code, 201)
+        expired.refresh_from_db(), extended.refresh_from_db()
+        self.assertEqual((expired.status, expired.quantity_allocated), ('expired', 0))
+        self.assertEqual(extended.due_date, self.today + timedelta(days=5))
+        self.assertEqual((extended.extension_count, extended.quantity_allocated), (1, 5))
+
+    def test_05_atomic_rollback_on_failure(self):
+        """Атомарність: при збої оптимізатора відкочуються всі зміни (залишки, статуси, плани)"""
+        stock = self._stock(self.regular, 10)
+        overdue = self.make_request(qty=5, days=-2, auto_extend=False)
+        ok = self.make_request(qty=5)
+        with patch('app.views.calculate_distribution', side_effect=RuntimeError('збій оптимізатора')):
+            resp = self._run('fairness')
+        self.assertEqual(resp.status_code, status.HTTP_423_LOCKED)
+        stock.refresh_from_db(), overdue.refresh_from_db(), ok.refresh_from_db()
+        self.assertEqual((stock.amount, overdue.status, ok.quantity_allocated), (10, 'new', 0))
+        self.assertEqual((DistributionPlan.objects.count(), DistributionItem.objects.count()), (0, 0))
+
+    def test_06_audit_log(self):
+        """Журнал розподілу: перелік операцій з деталями (звідки, куди, кому), доступ лише адміністратору"""
+        self._stock(self.regular, 10)
+        self.make_request(qty=10)
+        plan_id = self._run('fairness').data['id']
+        rows = self.client.get('/api/logs/').data
+        rows = rows if isinstance(rows, list) else rows.get('results', [])
+        self.assertTrue(rows)
+        for field in ('plan_id', 'resource_name', 'warehouse_name', 'amount', 'user_full_name', 'city',
+                      'quantity_requested', 'purpose_name'):
+            self.assertIn(field, rows[0])
+        self.assertEqual(rows[0]['plan_id'], plan_id)
+        self.client.force_authenticate(self.user)
+        self.assertIn(self.client.get('/api/logs/').status_code, (401, 403))
+        self.assertEqual(self._run('fairness').status_code, 403)                     # запуск лише для адміністратора
