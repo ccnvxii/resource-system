@@ -109,6 +109,7 @@ function App() {
                 setPlan(Array.isArray(res.data) ? { items: res.data } : res.data);
                 setPlanStrategy(distributionStrategy);
             }
+            (res.data.warnings || []).forEach(w => toast.error(w, { duration: 8000 }));
             await fetchData();
         } catch (e) {
             toast.error("Помилка алгоритму розподілу", { id: lid });

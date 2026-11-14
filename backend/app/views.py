@@ -316,13 +316,15 @@ class DistributeResourcesView(APIView):
                     })
 
                 strategy = request.data.get('strategy', 'hybrid')
+                solver_failures = []   # ресурси, для яких не вдалося розв'язати задачу справедливого розподілу
 
                 if strategy == 'hybrid':
                     triage_reqs = [r for r in requests_data if r.get('is_strategic')]
                     fairness_reqs = [r for r in requests_data if not r.get('is_strategic')]
 
                     plan_triage = calculate_strict_priority(triage_reqs, stocks_data) if triage_reqs else []
-                    plan_fairness = calculate_distribution(fairness_reqs, stocks_data) if fairness_reqs else []
+                    plan_fairness = (calculate_distribution(fairness_reqs, stocks_data, warnings=solver_failures)
+                                     if fairness_reqs else [])
 
                     plan_items_data = plan_triage + plan_fairness
 
@@ -330,10 +332,23 @@ class DistributeResourcesView(APIView):
                     plan_items_data = calculate_strict_priority(requests_data, stocks_data)
 
                 else:
-                    plan_items_data = calculate_distribution(requests_data, stocks_data)
+                    plan_items_data = calculate_distribution(requests_data, stocks_data, warnings=solver_failures)
+
+                warnings = []
+                if solver_failures:
+                    names = dict(Resource.objects.filter(
+                        id__in=[w['resource_id'] for w in solver_failures]).values_list('id', 'name'))
+                    warnings = [
+                        f"Ресурс «{names.get(w['resource_id'], w['resource_id'])}» не розподілено: "
+                        f"помилка розрахунку ({w['status']}). Повторіть запуск."
+                        for w in solver_failures
+                    ]
 
                 if not plan_items_data:
-                    return Response({"message": "Немає доступних комбінацій для розподілу ресурсів"}, status=200)
+                    payload = {"message": "Немає доступних комбінацій для розподілу ресурсів"}
+                    if warnings:
+                        payload["warnings"] = warnings
+                    return Response(payload, status=200)
 
                 new_plan = DistributionPlan.objects.create()
 
@@ -382,7 +397,10 @@ class DistributeResourcesView(APIView):
                 if stocks_to_update:
                     Stock.objects.bulk_update(list(stocks_to_update), ['amount'])
 
-                return Response(DistributionPlanSerializer(new_plan).data, status=status.HTTP_201_CREATED)
+                plan_data = DistributionPlanSerializer(new_plan).data
+                if warnings:
+                    plan_data = {**plan_data, "warnings": warnings}
+                return Response(plan_data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
             print(f"Критична помилка розрахунку: {e}")

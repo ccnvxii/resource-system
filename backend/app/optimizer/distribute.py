@@ -1,5 +1,9 @@
+import logging
+
 import numpy as np
 from ..services import DistanceMatrixService
+
+logger = logging.getLogger(__name__)
 
 
 # -----------------------------
@@ -103,9 +107,11 @@ def pivot_step(tableau, pivot_row, pivot_col):
         raise ZeroDivisionError('Pivot value almost 0.')
 
     tableau[pivot_row, :] /= pivot_val
-    for r in range(tableau.shape[0]):
-        if r != pivot_row:
-            tableau[r, :] -= tableau[r, pivot_col] * tableau[pivot_row, :]
+    factors = tableau[:, pivot_col].copy()
+    factors[pivot_row] = 0.0
+    rows = np.flatnonzero(factors)          # рядки з нульовим множником не змінюються
+    if rows.size:
+        tableau[rows, :] -= factors[rows, None] * tableau[pivot_row, :]
 
 
 def find_entering_var(tableau, tol=1e-9):
@@ -119,15 +125,11 @@ def find_entering_var(tableau, tol=1e-9):
 def find_leaving_var(tableau, pivot_col, tol=1e-12):
     col = tableau[:-1, pivot_col]
     rhs = tableau[:-1, -1]
-    ratios = []
-    for i in range(len(col)):
-        if col[i] > tol:
-            ratios.append(rhs[i] / col[i])
-        else:
-            ratios.append(np.inf)
-    m = np.min(ratios)
-    if np.isinf(m):
+    mask = col > tol
+    if not mask.any():
         return None
+    ratios = np.full(len(col), np.inf)
+    ratios[mask] = rhs[mask] / col[mask]
     return int(np.argmin(ratios))
 
 
@@ -136,6 +138,8 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
     blocks = [A.copy()]
     art_cols = []
     var_names = [f'x{j}' for j in range(n)]
+    # Початковий базис відомий під час побудови: слек-змінна для рядка «<=» і штучна змінна для «>=».
+    basic_vars = [None] * m
 
     for i, s in enumerate(ineq_sense):
         if s == '<=':
@@ -143,6 +147,7 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
             col[i, 0] = 1
             blocks.append(col)
             var_names.append(f's{i}')
+            basic_vars[i] = len(var_names) - 1
         elif s == '>=':
             col_sur = np.zeros((m, 1))
             col_sur[i, 0] = -1
@@ -153,6 +158,7 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
             blocks.append(col_art)
             var_names.append(f'a{i}')
             art_cols.append(len(var_names) - 1)
+            basic_vars[i] = len(var_names) - 1
 
     A_ext = np.hstack(blocks)
     total_vars = A_ext.shape[1]
@@ -165,19 +171,8 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
     for j in art_cols:
         tableau[-1, j] = -M_val
 
-    basic_vars = []
-    for i in range(m):
-        found = False
-        for j in range(n, total_vars):
-            col = tableau[:m, j]
-            unit = np.zeros(m)
-            unit[i] = 1
-            if np.allclose(col, unit, atol=1e-7):
-                basic_vars.append(j)
-                found = True
-                break
-        if not found:
-            raise RuntimeError(f"Basis error at row {i}")
+    if any(bi is None for bi in basic_vars):
+        raise RuntimeError("Basis error: unknown inequality sense")
 
     for i, bi in enumerate(basic_vars):
         if var_names[bi].startswith('a'):
@@ -186,7 +181,7 @@ def build_tableau_M(A, b, c_minimize, ineq_sense):
     return tableau, basic_vars, var_names
 
 
-def simplex_solve(A, b, c_minimize, ineq_sense, max_iters=500):
+def simplex_solve(A, b, c_minimize, ineq_sense, max_iters=300):
     try:
         m, n = A.shape
         if max_iters is None:
@@ -233,11 +228,28 @@ def simplex_solve(A, b, c_minimize, ineq_sense, max_iters=500):
         return 'error', None
 
 
-def calculate_distribution(requests, stocks, routing_service=None):
-    """Розподіл для стандартних ресурсів (триетапна модель)."""
+def _own_solver_limit():
+    """Максимальна кількість заявок на один ресурс, для якої застосовується власний симплекс-метод."""
+    from django.conf import settings
+    return int(getattr(settings, 'FAIRNESS_OWN_SOLVER_MAX_REQUESTS', 300))
+
+
+def calculate_distribution(requests, stocks, routing_service=None, warnings=None, own_solver_max_requests=None):
+    """
+    Розподіл для стандартних ресурсів (триетапна модель).
+
+    Власний симплекс-метод використовується, поки кількість заявок на ресурс не перевищує порогу
+    (own_solver_max_requests або settings.FAIRNESS_OWN_SOLVER_MAX_REQUESTS, за замовчуванням 300).
+    Для більших черг етапи 1-2 розв'язує HiGHS (scipy.optimize.linprog) за тією самою моделлю,
+    а дискретизація спільна для обох вирішувачів.
+
+    Якщо для ресурсу не вдалося розв'язати задачу етапу 1, він пропускається, а в список `warnings`
+    (якщо його передано) додається запис {'resource_id': ..., 'status': ...}.
+    """
     final_plan = []
     if routing_service is None:
         routing_service = DistanceMatrixService()
+    own_limit = _own_solver_limit() if own_solver_max_requests is None else own_solver_max_requests
 
     common_ids = get_common_resource_ids(requests, stocks)
 
@@ -248,10 +260,31 @@ def calculate_distribution(requests, stocks, routing_service=None):
         if not r_sub or not s_sub:
             continue
 
+        # Без запасу розподіляти нічого (і ваги w_j стали б нульовими, а задача - необмеженою)
+        total_supply = sum(s['amount'] for s in s_sub)
+        if total_supply <= 0:
+            continue
+
         n_req, n_stk = len(r_sub), len(s_sub)
         n_vars = n_stk * n_req + 1
 
         dist_matrix = build_distance_matrix(s_sub, r_sub, routing_service)
+
+        # Велика черга на один ресурс: власний щільний симплекс стає надто повільним - застосовуємо HiGHS
+        if n_req > own_limit:
+            try:
+                from .scipy_solver import solve_resource_scipy
+            except ImportError:
+                logger.warning("SciPy недоступний: ресурс %s (%d заявок) розв'язується власним симплекс-методом", res_id, n_req)
+            else:
+                plan_items, status, _ = solve_resource_scipy(r_sub, s_sub, dist_matrix)
+                if status != 'optimal':
+                    logger.error("HiGHS не знайшов оптимум для ресурсу %s; ресурс пропущено", res_id)
+                    if warnings is not None:
+                        warnings.append({'resource_id': res_id, 'status': 'highs_failed'})
+                else:
+                    final_plan.extend(plan_items)
+                continue
 
         base_A, base_b, base_sense = [], [], []
 
@@ -272,8 +305,6 @@ def calculate_distribution(requests, stocks, routing_service=None):
 
         # Для вагової частки потреба не може перевищувати загальний наявний запас:
         # завищена заявка не отримує більшої частки лише за рахунок «роздутої» кількості.
-        total_supply = sum(s['amount'] for s in s_sub)
-
         for j in range(n_req):
             row = np.zeros(n_vars)
             for i in range(n_stk):
@@ -291,10 +322,12 @@ def calculate_distribution(requests, stocks, routing_service=None):
         status_s1, res_s1 = simplex_solve(np.array(base_A), np.array(base_b), c_stage1, base_sense, max_iters=None)
 
         if status_s1 != 'optimal' or res_s1 is None:
-            # Симплекс не дав оптимуму (числова нестабільність тощо): не лишаємо ресурс без розподілу,
-            # а розподіляємо його за пріоритетом (резервний жадібний алгоритм).
-            print(f"[Fairness] Симплекс повернув '{status_s1}' для ресурсу {res_id}; резервний розподіл за пріоритетом")
-            final_plan.extend(calculate_strict_priority(r_sub, s_sub, routing_service))
+            # Задача етапу 1 завжди допустима (x = 0, Z = 0) і обмежена, тому не-оптимальний статус означає
+            # чисельний збій. Інша математична модель не підміняється: ресурс пропускається, збій фіксується
+            # в журналі та повертається адміністратору, решта ресурсів розподіляється як зазвичай.
+            logger.error("Етап 1 для ресурсу %s завершився зі статусом '%s'; ресурс пропущено", res_id, status_s1)
+            if warnings is not None:
+                warnings.append({'resource_id': res_id, 'status': status_s1})
             continue
 
         opt_Z = res_s1[-1]

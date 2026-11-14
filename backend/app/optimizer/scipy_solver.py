@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.optimize import linprog
+from scipy.sparse import coo_matrix, csr_matrix, vstack
+
 from app.optimizer.distribute import (
     get_common_resource_ids,
     build_distance_matrix,
@@ -9,121 +11,91 @@ from app.optimizer.distribute import (
 )
 
 
-def calculate_scipy_distribution(requests, stocks):
+def solve_resource_scipy(r_sub, s_sub, dist_matrix):
     """
-    Гібридна модель розподілу із використанням індустріального вирішувача SciPy linprog (HiGHS).
-    Повністю синхронізована за логікою, обмеженнями та нормалізацією з основним вирішувачем.
-    Етапи 1 і 2 розв'язуються як неперервна LP-задача, Етап 3 - жадібна дискретизація залишків.
+    Розв'язує справедливий розподіл одного ресурсу (Етапи 1 і 2 - LP за допомогою SciPy linprog / HiGHS,
+    Етап 3 - спільна з власним вирішувачем жадібна дискретизація).
+    Модель повністю збігається з calculate_distribution: ті самі обмеження, вага w_j = P_j * min(d_j, Q),
+    допуск 0.001 для Z, ті самі бонуси логістичного критерію.
+
+    Повертає кортеж (позиції_плану, статус, Z*): статус 'optimal' або 'failed'.
+    """
+    n_req, n_stk = len(r_sub), len(s_sub)
+    n_vars = n_stk * n_req + 1                       # x_ij (за рядками: i * n_req + j) та Z
+    total_supply = sum(s['amount'] for s in s_sub)
+
+    i_idx = np.repeat(np.arange(n_stk), n_req)
+    j_idx = np.tile(np.arange(n_req), n_stk)
+    col = i_idx * n_req + j_idx
+    ones = np.ones(len(col))
+
+    weights = np.array([min(r['amount_needed'], total_supply) * r['priority'] for r in r_sub], dtype=float)
+    fair_rows = n_stk + n_req + np.arange(n_req)
+
+    rows = np.concatenate([i_idx, n_stk + j_idx, n_stk + n_req + j_idx, fair_rows])
+    cols = np.concatenate([col, col, col, np.full(n_req, n_vars - 1)])
+    data = np.concatenate([ones, ones, -ones, weights])
+    # sum_j x_ij <= q_i ;  sum_i x_ij <= d_j ;  -sum_i x_ij + w_j * Z <= 0
+    A_ub = coo_matrix((data, (rows, cols)), shape=(n_stk + 2 * n_req, n_vars)).tocsr()
+    b_ub = np.concatenate([
+        [s['amount'] for s in s_sub],
+        [r['amount_needed'] for r in r_sub],
+        np.zeros(n_req),
+    ]).astype(float)
+    bounds = [(0, None)] * n_vars
+
+    # ЕТАП 1: максимізація Z
+    c1 = np.zeros(n_vars)
+    c1[-1] = -1.0
+    res1 = linprog(c=c1, A_ub=A_ub, b_ub=b_ub, bounds=bounds, method='highs')
+    if not res1.success:
+        return [], 'failed', None
+    opt_z = res1.x[-1]
+
+    # ЕТАП 2: логістика за зафіксованого Z (Z >= Z* - 0.001)
+    z_row = csr_matrix(([-1.0], ([0], [n_vars - 1])), shape=(1, n_vars))
+    A2 = vstack([A_ub, z_row], format='csr')
+    b2 = np.concatenate([b_ub, [-max(0.0, opt_z - 0.001)]])
+
+    max_dist = np.max(dist_matrix) if np.max(dist_matrix) >= 1.0 else 1.0
+    distance_bonus = 0.005 * (1.0 - np.asarray(dist_matrix, dtype=float) / max_dist)
+    stock_amount = np.array([s['amount'] for s in s_sub], dtype=float).reshape(-1, 1)
+    need = np.array([r['amount_needed'] for r in r_sub], dtype=float).reshape(1, -1)
+    full_bonus = np.where(stock_amount >= need, 0.01, 0.0)
+    c2 = np.zeros(n_vars)
+    c2[:-1] = -(0.0001 + distance_bonus + full_bonus).reshape(-1)
+
+    res2 = linprog(c=c2, A_ub=A2, b_ub=b2, bounds=bounds, method='highs')
+    best_x = res2.x if res2.success else res1.x
+
+    # ЕТАП 3: дискретизація залишків (та сама функція, що й у власному вирішувачі)
+    exact = best_x[:-1].reshape(n_stk, n_req)
+    allocated = discretize_with_greedy_remainders(exact, s_sub, r_sub)
+
+    plan = []
+    for i in range(n_stk):
+        for j in range(n_req):
+            if allocated[i, j] > 0:
+                plan.append(create_plan_item(r_sub[j], s_sub[i], allocated[i, j]))
+    return plan, 'optimal', opt_z
+
+
+def calculate_scipy_distribution(requests, stocks, routing_service=None):
+    """
+    Справедливий розподіл усіх ресурсів із використанням індустріального вирішувача SciPy linprog (HiGHS).
+    Еталон для перевірки власної реалізації (див. test_fair_comp.py та compare_solvers.py).
     """
     final_plan = []
-    routing_service = DistanceMatrixService()
-    common_ids = get_common_resource_ids(requests, stocks)
+    if routing_service is None:
+        routing_service = DistanceMatrixService()
 
-    for res_id in common_ids:
+    for res_id in get_common_resource_ids(requests, stocks):
         r_sub = [r for r in requests if r['resource_id'] == res_id]
         s_sub = [s for s in stocks if s['resource_id'] == res_id]
-
-        n_req, n_stk = len(r_sub), len(s_sub)
-        n_vars = n_stk * n_req + 1  # x_ij + Z
-
-        dist_matrix = build_distance_matrix(s_sub, r_sub, routing_service)
-
-        A_ub, b_ub = [], []
-
-        # 1. Обмеження складських запасів: sum_j x_ij <= q_i
-        for i in range(n_stk):
-            row = np.zeros(n_vars)
-            row[i * n_req: (i + 1) * n_req] = 1.0
-            A_ub.append(row)
-            b_ub.append(s_sub[i]['amount'])
-
-        # 2. Обмеження потреб заявок: sum_i x_ij <= d_j
-        for j in range(n_req):
-            row = np.zeros(n_vars)
-            for i in range(n_stk):
-                row[i * n_req + j] = 1.0
-            A_ub.append(row)
-            b_ub.append(r_sub[j]['amount_needed'])
-
-        # 3. Обмеження зваженої справедливості: sum_i x_ij - w_j * Z >= 0  ==>  -sum_i x_ij + w_j * Z <= 0
-        for j in range(n_req):
-            row = np.zeros(n_vars)
-            for i in range(n_stk):
-                row[i * n_req + j] = -1.0
-            weight = r_sub[j]['amount_needed'] * r_sub[j]['priority']      # пріоритет у шкалі [0; 1]
-            row[-1] = weight
-            A_ub.append(row)
-            b_ub.append(0.0)
-
-        bounds = [(0, None) for _ in range(n_vars)]
-
-        # ЕТАП 1: Максимізація Z (Мінімізація -Z)
-        c_stage1 = np.zeros(n_vars)
-        c_stage1[-1] = -1.0
-
-        res1 = linprog(
-            c=c_stage1,
-            A_ub=np.array(A_ub),
-            b_ub=np.array(b_ub),
-            bounds=bounds,
-            method='highs'
-        )
-
-        if not res1.success:
+        if not r_sub or not s_sub or sum(s['amount'] for s in s_sub) <= 0:
             continue
-
-        opt_Z = res1.x[-1]
-
-        # ЕТАП 2: Мінімізація логістичного плеча за зафіксованого opt_Z з урахуванням Min-Max нормалізації
-        A_ub_s2 = list(A_ub)
-        b_ub_s2 = list(b_ub)
-
-        # Обмеження Z >= opt_Z - 0.001  ==>  -Z <= -(opt_Z - 0.001)
-        z_row = np.zeros(n_vars)
-        z_row[-1] = -1.0
-        A_ub_s2.append(z_row)
-        b_ub_s2.append(-max(0.0, opt_Z - 0.001))
-
-        # Визначаємо максимальну відстань у матриці для лінійної нормалізації
-        max_dist = np.max(dist_matrix) if np.max(dist_matrix) >= 1.0 else 1.0
-
-        c_stage2 = np.zeros(n_vars)
-        for i in range(n_stk):
-            for j in range(n_req):
-                idx = i * n_req + j
-                dist = dist_matrix[i, j]
-
-                # Синхронізований розрахунок бонусів (Min-Max Scaling замість жорсткої стелі)
-                dist_norm = dist / max_dist
-                distance_bonus = 0.005 * (1.0 - dist_norm)
-
-                full_order_bonus = 0.01 if s_sub[i]['amount'] >= r_sub[j]['amount_needed'] else 0.0
-                c_stage2[idx] = -(0.0001 + distance_bonus + full_order_bonus)
-
-        c_stage2[-1] = 0.0
-
-        res2 = linprog(
-            c=c_stage2,
-            A_ub=np.array(A_ub_s2),
-            b_ub=np.array(b_ub_s2),
-            bounds=bounds,
-            method='highs'
-        )
-
-        best_x_vars = res2.x if res2.success else res1.x
-
-        # ЕТАП 3: Дискретизація залишків та формування підсумкового плану
-        if best_x_vars is not None:
-            exact_distribution = np.zeros((n_stk, n_req))
-            for i in range(n_stk):
-                for j in range(n_req):
-                    exact_distribution[i, j] = best_x_vars[i * n_req + j]
-
-            allocated = discretize_with_greedy_remainders(exact_distribution, s_sub, r_sub)
-
-            for i in range(n_stk):
-                for j in range(n_req):
-                    if allocated[i, j] > 0:
-                        final_plan.append(create_plan_item(r_sub[j], s_sub[i], allocated[i, j]))
+        dist_matrix = build_distance_matrix(s_sub, r_sub, routing_service)
+        plan, status, _ = solve_resource_scipy(r_sub, s_sub, dist_matrix)
+        final_plan.extend(plan)
 
     return final_plan

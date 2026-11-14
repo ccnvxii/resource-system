@@ -67,3 +67,6 @@ test_reports/
 *.docx
 *.doc
 ~$*
+
+# Схеми для дипломної роботи (PNG/draw.io)
+thesis_schemes/

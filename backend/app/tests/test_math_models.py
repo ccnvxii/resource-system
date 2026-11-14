@@ -245,16 +245,38 @@ class FairDistributionTests(unittest.TestCase):
         self.assertLessEqual(abs(got[1] - got[2]), 2)                              # завищена заявка не забирає більше
 
     def test_08_large_queue_and_solver_failure(self):
-        """Велика черга та збій розв'язувача: план не порожній, резервний розподіл за пріоритетом"""
+        """Велика черга та збій розв'язувача: план не порожній; при збої ресурс пропускається з попередженням"""
         stocks, requests = _big(250)
-        plan = calculate_distribution(requests, stocks, routing_service=FlatRouting())
+        plan = calculate_distribution(requests, stocks, routing_service=FlatRouting(), own_solver_max_requests=10 ** 9)
         self.assertTrue(plan, 'раніше ліміт ітерацій симплексу давав порожній план')
         check_invariants(self, plan, stocks, requests)
         self.assertAlmostEqual(sum(i['amount'] for i in plan), sum(s['amount'] for s in stocks), delta=1.0)
+
+        # Черга понад поріг: розв'язує HiGHS (власний симплекс не викликається), підсумок збігається з власним
+        stocks, requests = _big(40)
+        own = calculate_distribution(requests, stocks, routing_service=FlatRouting(), own_solver_max_requests=10 ** 9)
+        with patch('app.optimizer.distribute.simplex_solve', side_effect=AssertionError('власний симплекс не мав викликатися')):
+            highs = calculate_distribution(requests, stocks, routing_service=FlatRouting(), own_solver_max_requests=20)
+        check_invariants(self, highs, stocks, requests)
+        self.assertEqual(round(sum(i['amount'] for i in highs)), round(sum(i['amount'] for i in own)))
+
+        # Збій на першому ресурсі (велика задача): він пропускається, другий ресурс розподіляється як зазвичай
+        from app.optimizer import distribute as dist
+        real_solver = dist.simplex_solve
+
+        def flaky(A, b, c, sense, max_iters=500):
+            return ('iteration_limit_reached', None) if A.shape[1] > 50 else real_solver(A, b, c, sense, max_iters)
+
         stocks, requests = _big(30)
-        with patch('app.optimizer.distribute.simplex_solve', return_value=('iteration_limit_reached', None)):
-            plan = calculate_distribution(requests, stocks, routing_service=FlatRouting())
+        stocks.append({'resource_id': 2, 'warehouse_id': 99, 'amount': 10, 'lat': 50.0, 'lng': 30.0})
+        requests += [{'id': 1000, 'resource_id': 2, 'amount_needed': 4, 'priority': 0.5, 'lat': 50.1, 'lng': 30.1},
+                     {'id': 1001, 'resource_id': 2, 'amount_needed': 4, 'priority': 0.5, 'lat': 50.2, 'lng': 30.2}]
+        warnings = []
+        with patch('app.optimizer.distribute.simplex_solve', side_effect=flaky):
+            plan = calculate_distribution(requests, stocks, routing_service=FlatRouting(), warnings=warnings)
+        self.assertEqual(warnings, [{'resource_id': 1, 'status': 'iteration_limit_reached'}])
         self.assertTrue(plan)
+        self.assertEqual({p['request_id'] for p in plan}, {1000, 1001})           # ресурс 1 не розподілено
         check_invariants(self, plan, stocks, requests)
 
     def test_09_invariants_and_determinism(self):

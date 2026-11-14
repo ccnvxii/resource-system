@@ -173,6 +173,11 @@ DEFAULT_FROM_EMAIL = _clean_from_email(
 # Максимум одиниць ресурсу в заявках одного (не адміністратора) заявника, якщо у ресурсу не задано власний ліміт.
 DEFAULT_MAX_PER_REQUEST = config('DEFAULT_MAX_PER_REQUEST', default=1000, cast=int)
 
+# --- РОЗВ'ЯЗУВАЧ СПРАВЕДЛИВОГО РОЗПОДІЛУ ---
+# Власний симплекс-метод застосовується, поки на один ресурс припадає не більше стількох заявок;
+# для більших черг етапи 1-2 розв'язує HiGHS (SciPy linprog) за тією самою моделлю.
+FAIRNESS_OWN_SOLVER_MAX_REQUESTS = config('FAIRNESS_OWN_SOLVER_MAX_REQUESTS', default=300, cast=int)
+
 
 # Запуск тестів зі зведеним звітом (CSV та Markdown у backend/test_reports/)
 TEST_RUNNER = 'app.tests.report_runner.ReportRunner'

@@ -356,7 +356,7 @@ class PerformanceTests(TestCase):
 
     def test_02_fair_distribution_scaling(self):
         """Крива масштабування Fairness (симплекс): 25 / 50 / 100 / 200 заявок"""
-        times = self._measure(lambda r, s: calculate_distribution(r, s, routing_service=FlatRouting()), self.FAIR_SIZES)
+        times = self._measure(lambda r, s: calculate_distribution(r, s, routing_service=FlatRouting(), own_solver_max_requests=10 ** 9), self.FAIR_SIZES)
         print_curve('Справедливий розподіл (симплекс)', self.FAIR_SIZES, times, self.FAIR_LIMITS)
         for n, t in zip(self.FAIR_SIZES, times):
             self.assertLess(t, self.FAIR_LIMITS[n], f'Fairness на {n} заявках: {t:.2f} с')
@@ -369,7 +369,7 @@ class PerformanceTests(TestCase):
         calculate_strict_priority(reqs, stocks, FlatRouting())
         strict = time.perf_counter() - t0
         t0 = time.perf_counter()
-        calculate_distribution(reqs, stocks, routing_service=FlatRouting())
+        calculate_distribution(reqs, stocks, routing_service=FlatRouting(), own_solver_max_requests=10 ** 9)
         fair = time.perf_counter() - t0
         print(f"\n Порівняння часу на 200 заявках: Тріаж {strict:.3f} с | Fairness {fair:.3f} с")
         self.assertLess(strict, fair)
